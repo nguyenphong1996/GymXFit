@@ -10,6 +10,8 @@ import {
   RefreshControl,
   Animated,
   Alert,
+  TextInput,
+  Keyboard,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -521,6 +523,8 @@ const HomeScreen = ({ navigation }) => {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [quickActionLoading, setQuickActionLoading] = useState(null);
+  const [isSearchActive, setIsSearchActive] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState('');
 
   const fetchHomeData = useCallback(async (isPullToRefresh = false) => {
     if (isPullToRefresh) {
@@ -600,6 +604,29 @@ const HomeScreen = ({ navigation }) => {
     },
     [navigation],
   );
+
+  const handleSearchIconPress = useCallback(() => {
+    setIsSearchActive(true);
+  }, []);
+
+  const handleCancelSearch = useCallback(() => {
+    setIsSearchActive(false);
+    setSearchKeyword('');
+    Keyboard.dismiss();
+  }, []);
+
+  const handleSubmitSearch = useCallback(() => {
+    const trimmedKeyword = searchKeyword.trim();
+    if (!trimmedKeyword) return;
+    Keyboard.dismiss();
+    setIsSearchActive(false);
+    setSearchKeyword('');
+    navigation.navigate('WorkoutScreen', { keyword: trimmedKeyword });
+  }, [navigation, searchKeyword]);
+
+  const handleSearchChange = useCallback((value) => {
+    setSearchKeyword(value);
+  }, []);
 
   const navigateToSearchCalendar = useCallback(
     (params) => {
@@ -714,19 +741,64 @@ const HomeScreen = ({ navigation }) => {
   const listHeader = (
     <View>
       <View style={styles.headerContainer}>
-        <View>
-          <Text style={styles.headerText}>Xin chào {userName}!</Text>
-          <Text style={styles.headerSubText}>Cùng GymXFit hoàn thành mục tiêu hôm nay nhé.</Text>
+        <View style={styles.headerContent}>
+          {isSearchActive ? (
+            <View style={styles.searchBar}>
+              <MaterialIcons name="search" size={20} color="#3a6043" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Tìm kiếm video..."
+                placeholderTextColor="#6a7c6f"
+                value={searchKeyword}
+                onChangeText={handleSearchChange}
+                autoFocus
+                returnKeyType="search"
+                onSubmitEditing={handleSubmitSearch}
+                blurOnSubmit={false}
+              />
+              {searchKeyword.trim().length ? (
+                <TouchableOpacity
+                  style={styles.searchSubmitIcon}
+                  onPress={handleSubmitSearch}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <MaterialIcons name="arrow-forward" size={20} color="#1e6f3d" />
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                style={styles.searchCancelIcon}
+                onPress={handleCancelSearch}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialIcons name="close" size={20} color="#6a7c6f" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.headerText}>Xin chào {userName}!</Text>
+              <Text style={styles.headerSubText}>Cùng GymXFit hoàn thành mục tiêu hôm nay nhé.</Text>
+            </>
+          )}
         </View>
 
-        <View style={styles.headerRight}>
-          <TouchableOpacity onPress={() => navigation.navigate('WorkoutScreen')}>
-            <MaterialCommunityIcons name="magnify" size={24} color="#145724" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Notification')}>
-            <MaterialCommunityIcons name="bell-outline" size={24} color="#145724" />
-          </TouchableOpacity>
-        </View>
+        {!isSearchActive ? (
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.headerActionIcon}
+              onPress={handleSearchIconPress}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialIcons name="search" size={24} color="#145724" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerActionIcon}
+              onPress={() => navigation.navigate('Notification')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialIcons name="notifications-none" size={24} color="#145724" />
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </View>
 
       <QuickActions
@@ -817,6 +889,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  headerContent: {
+    flex: 1,
+  },
   headerText: {
     fontSize: 24,
     fontWeight: '700',
@@ -826,9 +901,38 @@ const styles = StyleSheet.create({
     marginTop: 6,
     color: '#4f4f4f',
   },
-  headerRight: {
+  headerActions: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 16,
+  },
+  headerActionIcon: {
+    padding: 6,
+    borderRadius: 12,
+    backgroundColor: '#e7f4eb',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f5f1',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1b2d1f',
+    paddingVertical: 0,
+  },
+  searchSubmitIcon: {
+    padding: 4,
+    borderRadius: 10,
+    backgroundColor: '#d8f2e0',
+  },
+  searchCancelIcon: {
+    padding: 4,
   },
   tabBarContainer: {
     paddingHorizontal: 20,
