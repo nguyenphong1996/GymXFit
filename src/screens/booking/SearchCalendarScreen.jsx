@@ -1,4 +1,4 @@
-import React, { useState, useContext, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useContext, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -200,6 +200,7 @@ const SearchCalendarScreen = () => {
   const [classes, setClasses] = useState([]);
   const [classesLoading, setClassesLoading] = useState(false);
   const [classesError, setClassesError] = useState(null);
+  const skipNextClassFetchRef = useRef(false);
 
   const [enrollments, setEnrollments] = useState([]);
   const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
@@ -221,6 +222,14 @@ const SearchCalendarScreen = () => {
 
     return () => clearTimeout(handler);
   }, [searchKeyword]);
+
+  const normalizeClasses = useCallback((items = []) => {
+    if (!Array.isArray(items)) return [];
+    return items.map((item) => ({
+      ...item,
+      classId: item.classId || item.id || item._id || item.class_id,
+    }));
+  }, []);
 
   const fetchClasses = useCallback(async () => {
     if (!selectedDay) {
@@ -246,7 +255,7 @@ const SearchCalendarScreen = () => {
       });
 
       if (response?.success) {
-        setClasses(response.data || []);
+        setClasses(normalizeClasses(response.data));
       } else {
         setClasses([]);
         setClassesError(response?.message || 'Không tìm thấy lớp phù hợp.');
@@ -257,7 +266,7 @@ const SearchCalendarScreen = () => {
     } finally {
       setClassesLoading(false);
     }
-  }, [selectedDay, debouncedSearch]);
+  }, [selectedDay, debouncedSearch, normalizeClasses]);
 
   const fetchEnrollments = useCallback(async () => {
     setEnrollmentsLoading(true);
@@ -281,7 +290,23 @@ const SearchCalendarScreen = () => {
   }, []);
 
   useEffect(() => {
+    const hasPrefetched = !!route.params && Object.prototype.hasOwnProperty.call(route.params, 'prefetchedClasses');
+
+    if (hasPrefetched) {
+      const prefetched = normalizeClasses(route.params.prefetchedClasses);
+      setClasses(prefetched);
+      setClassesError(null);
+      setClassesLoading(false);
+      skipNextClassFetchRef.current = true;
+    }
+  }, [route.params?.prefetchedClasses, normalizeClasses]);
+
+  useEffect(() => {
     if (selectedTab === 'Danh sách lớp') {
+      if (skipNextClassFetchRef.current) {
+        skipNextClassFetchRef.current = false;
+        return;
+      }
       fetchClasses();
     }
   }, [selectedTab, fetchClasses]);

@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useContext, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Text,
   View,
@@ -8,6 +8,8 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
+  Animated,
+  Alert,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -151,6 +153,8 @@ const CATEGORY_CONFIG = {
 
 const DEFAULT_CATEGORY_KEY = 'other';
 const CATEGORY_ORDER = ['workout', 'cardio', 'stretching', 'nutrition', 'yoga', 'other'];
+const PRIMARY_VIDEO_FETCH_LIMIT = Math.max(CATEGORY_ORDER.length * 8, 48);
+const ADDITIONAL_CATEGORY_FETCH_LIMIT = 12;
 
 const normalizeKey = (value) =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -235,7 +239,23 @@ const getVideoCategoryInfo = (video) => {
   };
 };
 
-const QuickActions = ({ navigation, onNavigateBooking, onNavigateTrainer }) => (
+const collectCategoryKeysFromVideos = (list) => {
+  const categoryKeys = new Set();
+  list.forEach((video) => {
+    const info = getVideoCategoryInfo(video);
+    if (info.categoryKey) {
+      categoryKeys.add(info.categoryKey);
+    }
+  });
+  return categoryKeys;
+};
+
+const QuickActions = ({
+  navigation,
+  onNavigateBooking,
+  onNavigateTrainer,
+  quickActionLoading,
+}) => (
   <View style={styles.tabBarContainer}>
     <View style={styles.tabBar}>
       <TouchableOpacity
@@ -250,6 +270,17 @@ const QuickActions = ({ navigation, onNavigateBooking, onNavigateTrainer }) => (
 
       <TouchableOpacity
         style={styles.itemTabBar}
+        onPress={() => navigation.navigate('CalendarScreen')}
+        disabled={quickActionLoading === 'booking' || quickActionLoading === 'trainer'}
+      >
+        <View style={styles.bgImage}>
+          <MaterialCommunityIcons name="calendar-check" size={26} color="#08843a" />
+        </View>
+        <Text style={styles.itemText}>Lịch học</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.itemTabBar}
         onPress={() => {
           if (onNavigateBooking) {
             onNavigateBooking();
@@ -257,9 +288,14 @@ const QuickActions = ({ navigation, onNavigateBooking, onNavigateTrainer }) => (
             navigation.navigate('SearchCalendarScreen');
           }
         }}
+        disabled={quickActionLoading === 'booking'}
       >
         <View style={styles.bgImage}>
-          <MaterialCommunityIcons name="calendar-plus" size={26} color="#08843a" />
+          {quickActionLoading === 'booking' ? (
+            <ActivityIndicator size="small" color="#08843a" />
+          ) : (
+            <MaterialCommunityIcons name="calendar-plus" size={26} color="#08843a" />
+          )}
         </View>
         <Text style={styles.itemText}>Đặt lịch tập</Text>
       </TouchableOpacity>
@@ -273,21 +309,16 @@ const QuickActions = ({ navigation, onNavigateBooking, onNavigateTrainer }) => (
             navigation.navigate('SearchCalendarScreen');
           }
         }}
+        disabled={quickActionLoading === 'trainer'}
       >
         <View style={styles.bgImage}>
-          <MaterialCommunityIcons name="account-tie" size={26} color="#08843a" />
+          {quickActionLoading === 'trainer' ? (
+            <ActivityIndicator size="small" color="#08843a" />
+          ) : (
+            <MaterialCommunityIcons name="account-tie" size={26} color="#08843a" />
+          )}
         </View>
         <Text style={styles.itemText}>Đặt lịch HLV</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.itemTabBar}
-        onPress={() => navigation.navigate('CalendarScreen')}
-      >
-        <View style={styles.bgImage}>
-          <MaterialCommunityIcons name="calendar-check" size={26} color="#08843a" />
-        </View>
-        <Text style={styles.itemText}>Lịch học</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -386,11 +417,31 @@ const VideoCard = ({ video, onPress }) => {
     Number.isFinite(caloriesValue) && caloriesValue > 0 ? `${Math.round(caloriesValue)} kcal` : null;
   const hasMeta = Boolean(durationLabel || caloriesLabel);
 
+  const badgeScale = useRef(new Animated.Value(1)).current;
+
+  const animateBadge = useCallback(
+    (toValue) => {
+      Animated.spring(badgeScale, {
+        toValue,
+        useNativeDriver: true,
+        friction: 6,
+        tension: 160,
+      }).start();
+    },
+    [badgeScale],
+  );
+
+  const handlePressIn = useCallback(() => animateBadge(0.92), [animateBadge]);
+  const handlePressOut = useCallback(() => animateBadge(1), [animateBadge]);
+  const handlePress = useCallback(() => onPress(video), [onPress, video]);
+
   return (
     <TouchableOpacity
       style={styles.videoCard}
       activeOpacity={0.85}
-      onPress={() => onPress(video)}
+      onPress={handlePress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
     >
       <View style={styles.videoCardImageWrapper}>
         {video.thumbnail ? (
@@ -398,10 +449,11 @@ const VideoCard = ({ video, onPress }) => {
         ) : (
           <Image style={styles.videoCardImage} source={require('@assets/images/lesmils1.jpg')} />
         )}
-        <View style={styles.videoBadge}>
+        <Animated.View style={[styles.videoBadge, { transform: [{ scale: badgeScale }] }]}>
+          <View pointerEvents="none" style={styles.videoBadgeHighlight} />
           <MaterialCommunityIcons name="play-circle" size={14} color="#fff" />
           <Text style={styles.videoBadgeText}>Xem ngay</Text>
-        </View>
+        </Animated.View>
       </View>
 
       <View style={styles.videoCardContent}>
@@ -468,6 +520,7 @@ const HomeScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [quickActionLoading, setQuickActionLoading] = useState(null);
 
   const fetchHomeData = useCallback(async (isPullToRefresh = false) => {
     if (isPullToRefresh) {
@@ -479,12 +532,37 @@ const HomeScreen = ({ navigation }) => {
 
     try {
       const [videosResponse, classesResponse] = await Promise.all([
-        getAllVideos({ limit: 12 }),
+        getAllVideos({ limit: PRIMARY_VIDEO_FETCH_LIMIT }),
         searchAvailableClasses({ limit: 6, sortBy: 'startTime', sortOrder: 'asc' }),
       ]);
 
       if (videosResponse?.success) {
-        const fetchedVideos = videosResponse.videos || [];
+        let fetchedVideos = videosResponse.videos || [];
+        const existingIds = new Set(fetchedVideos.map((video) => video.id));
+        const categoryPresence = collectCategoryKeysFromVideos(fetchedVideos);
+        const missingCategoryKeys = CATEGORY_ORDER.filter(
+          (categoryKey) => !categoryPresence.has(categoryKey),
+        );
+
+        if (missingCategoryKeys.length) {
+          const additionalResponses = await Promise.allSettled(
+            missingCategoryKeys.map((categoryKey) =>
+              getAllVideos({ limit: ADDITIONAL_CATEGORY_FETCH_LIMIT, category: categoryKey }),
+            ),
+          );
+
+          additionalResponses.forEach((result) => {
+            if (result.status === 'fulfilled' && result.value?.success) {
+              (result.value.videos || []).forEach((video) => {
+                if (!existingIds.has(video.id)) {
+                  existingIds.add(video.id);
+                  fetchedVideos.push(video);
+                }
+              });
+            }
+          });
+        }
+
         setVideos(fetchedVideos);
       } else {
         setVideos([]);
@@ -540,14 +618,49 @@ const HomeScreen = ({ navigation }) => {
     [navigation],
   );
 
+  const fetchQuickClassesAndNavigate = useCallback(
+    async (actionType) => {
+      if (quickActionLoading) return;
+      setQuickActionLoading(actionType);
+      try {
+        const today = new Date();
+        const startDate = new Date(today);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(today);
+        endDate.setHours(23, 59, 59, 999);
+
+        const response = await searchAvailableClasses({
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          sortBy: 'startTime',
+          sortOrder: 'asc',
+          limit: 50,
+        });
+
+        if (response?.success) {
+          navigateToSearchCalendar({ prefetchedClasses: response.data || [] });
+        } else {
+          Alert.alert('Không thể tải lớp', response?.message || 'Vui lòng thử lại sau.');
+          navigateToSearchCalendar();
+        }
+      } catch (err) {
+        Alert.alert('Không thể tải lớp', err.message || 'Vui lòng thử lại sau.');
+        navigateToSearchCalendar();
+      } finally {
+        setQuickActionLoading(null);
+      }
+    },
+    [quickActionLoading, navigateToSearchCalendar],
+  );
+
   const handleNavigateBooking = useCallback(
-    () => navigateToSearchCalendar(),
-    [navigateToSearchCalendar],
+    () => fetchQuickClassesAndNavigate('booking'),
+    [fetchQuickClassesAndNavigate],
   );
 
   const handleNavigateTrainer = useCallback(
-    () => navigateToSearchCalendar(),
-    [navigateToSearchCalendar],
+    () => fetchQuickClassesAndNavigate('trainer'),
+    [fetchQuickClassesAndNavigate],
   );
 
   const handlePressClass = useCallback(
@@ -620,6 +733,7 @@ const HomeScreen = ({ navigation }) => {
         navigation={navigation}
         onNavigateBooking={handleNavigateBooking}
         onNavigateTrainer={handleNavigateTrainer}
+        quickActionLoading={quickActionLoading}
       />
       <HighlightClasses classes={highlightClasses} onPressClass={handlePressClass} />
       {mostWatchedVideos.length ? (
@@ -882,10 +996,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(48, 196, 81, 0.9)',
+    backgroundColor: 'rgba(48, 196, 81, 0.95)',
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    overflow: 'hidden',
+  },
+  videoBadgeHighlight: {
+    position: 'absolute',
+    top: -12,
+    left: 0,
+    right: 0,
+    height: '160%',
+    opacity: 0.28,
+    backgroundColor: '#ffffff',
+    transform: [{ rotate: '-12deg' }],
   },
   videoBadgeText: {
     color: '#fff',

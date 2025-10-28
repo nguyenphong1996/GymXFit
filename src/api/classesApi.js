@@ -4,7 +4,15 @@ const withClient = () => createAxiosInstance();
 
 export const searchAvailableClasses = async (params = {}) => {
   try {
-    const response = await withClient().get('/api/customer/classes/search', { params });
+    const response = await withClient().get('/api/customer/classes/search', {
+      params: {
+        ...params,
+        cacheBust: Date.now(),
+      },
+      headers: {
+        'Cache-Control': 'no-cache',
+      },
+    });
     return response;
   } catch (error) {
     const message = error.response?.data?.message || 'Không thể tải danh sách lớp học.';
