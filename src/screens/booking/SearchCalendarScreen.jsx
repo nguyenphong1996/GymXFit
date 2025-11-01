@@ -1,4 +1,12 @@
-import React, { useState, useContext, useMemo, useEffect, useCallback, useRef } from 'react';
+// SearchCalendarScreen.js
+import React, {
+  useState,
+  useContext,
+  useMemo,
+  useEffect,
+  useCallback,
+  useRef,
+} from 'react';
 import {
   StyleSheet,
   Text,
@@ -6,17 +14,16 @@ import {
   TouchableOpacity,
   TextInput,
   StatusBar,
-  ScrollView,
-  Platform,
-  UIManager,
   FlatList,
   Modal,
   Pressable,
   Alert,
   ActivityIndicator,
+  Platform,
+  UIManager,
+  Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-
 import { UserContext } from '@context/UserContext';
 import {
   searchAvailableClasses,
@@ -25,46 +32,36 @@ import {
 } from '@api/classesApi';
 import { useRoute } from '@react-navigation/native';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+if (
+  Platform.OS === 'android' &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+const dayNames = [
+  'Chủ Nhật',
+  'Thứ Hai',
+  'Thứ Ba',
+  'Thứ Tư',
+  'Thứ Năm',
+  'Thứ Sáu',
+  'Thứ Bảy',
+];
 
-const generate31Days = () => {
-  const days = [];
-  const today = new Date();
-  const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+const ITEM_WIDTH = 90; // phải khớp với styles.dayContainer width
+const WINDOW_WIDTH = Dimensions.get('window').width;
+const CENTER_OFFSET = Math.floor(WINDOW_WIDTH / (ITEM_WIDTH / 2)); // estimation for center detection
 
-  for (let i = 0; i < 31; i += 1) {
-    const date = new Date(normalizedToday);
-    date.setDate(normalizedToday.getDate() + i);
-
-    const dayLabel = String(date.getDate()).padStart(2, '0');
-    const monthLabel = String(date.getMonth() + 1).padStart(2, '0');
-
-    let label = dayNames[date.getDay()];
-    if (i === 0) {
-      label = 'Hôm nay';
-    }
-
-    days.push({
-      id: date.toISOString(),
-      dayName: label,
-      dateString: `${dayLabel}/${monthLabel}`,
-      fullDateString: date.toISOString().split('T')[0],
-      dateObj: date,
-    });
-  }
-
-  return days;
-};
+/* Helpers */
+const formatMonthYear = date =>
+  date.toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' });
 
 const formatTimeRange = (start, end) => {
   try {
     const startDate = new Date(start);
     const endDate = new Date(end);
-    const formatter = (value) =>
+    const formatter = value =>
       value.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     return `${formatter(startDate)} - ${formatter(endDate)}`;
   } catch {
@@ -72,7 +69,7 @@ const formatTimeRange = (start, end) => {
   }
 };
 
-const formatDateLabel = (date) => {
+const formatDateLabel = date => {
   try {
     return new Date(date).toLocaleDateString('vi-VN', {
       weekday: 'short',
@@ -84,6 +81,36 @@ const formatDateLabel = (date) => {
   }
 };
 
+/* Day item renderer */
+const DayItem = ({ item, isSelected, onPress }) => (
+  <TouchableOpacity
+    activeOpacity={0.85}
+    onPress={() => onPress(item)}
+    style={[
+      styles.dayContainer,
+      isSelected ? styles.selectedDayContainer : styles.dayContainerDefault,
+    ]}
+  >
+    <Text
+      style={[
+        styles.dayName,
+        isSelected ? styles.selectedDayName : styles.defaultDayName,
+      ]}
+    >
+      {item.label}
+    </Text>
+    <Text
+      style={[
+        styles.dayDate,
+        isSelected ? styles.selectedDayDate : styles.defaultDayDate,
+      ]}
+    >
+      {item.dateString}
+    </Text>
+  </TouchableOpacity>
+);
+
+/* Class card (same as yours, small copy) */
 const ClassCard = ({ item, onSelect }) => {
   const instructorName = item.instructor?.name || 'Đang cập nhật';
   const timeRange = formatTimeRange(item.startTime, item.endTime);
@@ -112,7 +139,9 @@ const ClassCard = ({ item, onSelect }) => {
         )}
       </View>
 
-      <Text style={styles.classMeta}>{item.subcategory || item.category || 'Khác'}</Text>
+      <Text style={styles.classMeta}>
+        {item.subcategory || item.category || 'Khác'}
+      </Text>
 
       <View style={styles.classInfoRow}>
         <Icon name="schedule" size={18} color="#30C451" />
@@ -182,102 +211,118 @@ const EnrollmentCard = ({ enrollment }) => {
   );
 };
 
-const renderSeparator = () => <View style={styles.separator} />;
-
 const SearchCalendarScreen = () => {
-  const [selectedTab, setSelectedTab] = useState('Danh sách lớp');
   const route = useRoute();
-  const highlightClassId = route.params?.highlightClassId;
   const { user } = useContext(UserContext);
   const userName = user?.name || user?.phone || 'Bạn';
+  const highlightClassId = route.params?.highlightClassId;
 
-  const days = useMemo(() => generate31Days(), []);
-  const [selectedDateId, setSelectedDateId] = useState(days[0]?.id ?? null);
-
+  // Tabs & search
+  const [selectedTab, setSelectedTab] = useState('Danh sách lớp');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
+  // Classes/enrollments
   const [classes, setClasses] = useState([]);
   const [classesLoading, setClassesLoading] = useState(false);
   const [classesError, setClassesError] = useState(null);
-  const skipNextClassFetchRef = useRef(false);
-
   const [enrollments, setEnrollments] = useState([]);
   const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
   const [enrollmentsError, setEnrollmentsError] = useState(null);
 
+  // modal / enroll
   const [selectedClass, setSelectedClass] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEnrolling, setIsEnrolling] = useState(false);
 
-  const selectedDay = useMemo(
-    () => days.find((item) => item.id === selectedDateId),
-    [days, selectedDateId],
+  /* Infinite days state */
+  const flatListRef = useRef(null);
+  const centerIndexRef = useRef(null);
+  const anchorIndex = 5000; // large middle index to allow prepend/append
+  const [days, setDays] = useState(() => {
+    // create initial window of +/- 30 days around today anchored at anchorIndex
+    const arr = new Array(10001); // 10001 items (0..10000)
+    const today = new Date();
+    for (let i = 0; i < arr.length; i += 1) {
+      const offset = i - anchorIndex; // negative => past, positive => future
+      const d = new Date(today);
+      d.setDate(today.getDate() + offset);
+      const dayLabel = String(d.getDate()).padStart(2, '0');
+      const monthLabel = String(d.getMonth() + 1).padStart(2, '0');
+      arr[i] = {
+        id: d.toISOString(),
+        index: i,
+        dateObj: d,
+        dateString: `${dayLabel}/${monthLabel}`,
+        label: offset === 0 ? 'Hôm nay' : dayNames[d.getDay()],
+      };
+    }
+    return arr;
+  });
+  const [selectedDateIndex, setSelectedDateIndex] = useState(anchorIndex);
+  const [visibleMonthLabel, setVisibleMonthLabel] = useState(
+    formatMonthYear(days[anchorIndex].dateObj),
   );
 
+  /* Debounce search */
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(searchKeyword.trim());
-    }, 400);
-
-    return () => clearTimeout(handler);
+    const t = setTimeout(() => setDebouncedSearch(searchKeyword.trim()), 400);
+    return () => clearTimeout(t);
   }, [searchKeyword]);
 
+  /* API helpers - similar to your original */
   const normalizeClasses = useCallback((items = []) => {
     if (!Array.isArray(items)) return [];
-    return items.map((item) => ({
+    return items.map(item => ({
       ...item,
       classId: item.classId || item.id || item._id || item.class_id,
     }));
   }, []);
 
-  const fetchClasses = useCallback(async () => {
-    if (!selectedDay) {
-      return;
-    }
+  const fetchClasses = useCallback(
+    async dateObj => {
+      if (!dateObj) return;
+      setClassesLoading(true);
+      setClassesError(null);
 
-    setClassesLoading(true);
-    setClassesError(null);
+      const startDate = new Date(dateObj);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(dateObj);
+      endDate.setHours(23, 59, 59, 999);
 
-    const startDate = new Date(selectedDay.dateObj);
-    startDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(selectedDay.dateObj);
-    endDate.setHours(23, 59, 59, 999);
+      try {
+        const response = await searchAvailableClasses({
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          sortBy: 'startTime',
+          sortOrder: 'asc',
+          limit: 50,
+          ...(debouncedSearch ? { search: debouncedSearch } : {}),
+        });
 
-    try {
-      const response = await searchAvailableClasses({
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-        sortBy: 'startTime',
-        sortOrder: 'asc',
-        limit: 50,
-        ...(debouncedSearch ? { search: debouncedSearch } : {}),
-      });
-
-      if (response?.success) {
-        setClasses(normalizeClasses(response.data));
-      } else {
+        if (response?.success) {
+          setClasses(normalizeClasses(response.data));
+        } else {
+          setClasses([]);
+          setClassesError(response?.message || 'Không tìm thấy lớp phù hợp.');
+        }
+      } catch (error) {
         setClasses([]);
-        setClassesError(response?.message || 'Không tìm thấy lớp phù hợp.');
+        setClassesError(error.message);
+      } finally {
+        setClassesLoading(false);
       }
-    } catch (error) {
-      setClasses([]);
-      setClassesError(error.message);
-    } finally {
-      setClassesLoading(false);
-    }
-  }, [selectedDay, debouncedSearch, normalizeClasses]);
+    },
+    [debouncedSearch, normalizeClasses],
+  );
 
   const fetchEnrollments = useCallback(async () => {
     setEnrollmentsLoading(true);
     setEnrollmentsError(null);
-
     try {
       const response = await getMyEnrollments({ status: 'active', limit: 50 });
-
-      if (response?.success) {
-        setEnrollments(response.data || []);
-      } else {
+      if (response?.success) setEnrollments(response.data || []);
+      else {
         setEnrollments([]);
         setEnrollmentsError(response?.message || 'Bạn chưa đăng ký lớp nào.');
       }
@@ -289,35 +334,30 @@ const SearchCalendarScreen = () => {
     }
   }, []);
 
+  /* initial fetch */
   useEffect(() => {
-    const hasPrefetched = !!route.params && Object.prototype.hasOwnProperty.call(route.params, 'prefetchedClasses');
+    // fetch for today initially
+    fetchClasses(days[selectedDateIndex].dateObj);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    if (hasPrefetched) {
-      const prefetched = normalizeClasses(route.params.prefetchedClasses);
-      setClasses(prefetched);
-      setClassesError(null);
-      setClassesLoading(false);
-      skipNextClassFetchRef.current = true;
-    }
-  }, [route.params?.prefetchedClasses, normalizeClasses]);
-
+  /* refetch on selectedTab change or date change */
   useEffect(() => {
     if (selectedTab === 'Danh sách lớp') {
-      if (skipNextClassFetchRef.current) {
-        skipNextClassFetchRef.current = false;
-        return;
-      }
-      fetchClasses();
-    }
-  }, [selectedTab, fetchClasses]);
-
-  useEffect(() => {
-    if (selectedTab === 'Lịch đã đặt') {
+      fetchClasses(days[selectedDateIndex].dateObj);
+    } else {
       fetchEnrollments();
     }
-  }, [selectedTab, fetchEnrollments]);
+  }, [
+    selectedTab,
+    selectedDateIndex,
+    debouncedSearch,
+    fetchClasses,
+    fetchEnrollments,
+    days,
+  ]);
 
-  const handleSelectClass = useCallback((classItem) => {
+  /* handle class modal */
+  const handleSelectClass = useCallback(classItem => {
     setSelectedClass(classItem);
     setModalVisible(true);
   }, []);
@@ -328,35 +368,79 @@ const SearchCalendarScreen = () => {
   }, []);
 
   const handleConfirmEnroll = useCallback(async () => {
-    if (!selectedClass) {
-      return;
-    }
-
+    if (!selectedClass) return;
     const canEnroll = !selectedClass.isEnrolledByUser && !selectedClass.isFull;
     if (!canEnroll) {
       handleCloseModal();
       return;
     }
-
     setIsEnrolling(true);
     try {
       const response = await enrollInClass(selectedClass.classId);
-      Alert.alert('Thành công', response?.message || 'Bạn đã đăng ký lớp thành công.');
+      Alert.alert(
+        'Thành công',
+        response?.message || 'Bạn đã đăng ký lớp thành công.',
+      );
       handleCloseModal();
-      await fetchClasses();
+      await fetchClasses(days[selectedDateIndex].dateObj);
       await fetchEnrollments();
     } catch (error) {
       Alert.alert('Đăng ký thất bại', error.message);
     } finally {
       setIsEnrolling(false);
     }
-  }, [selectedClass, handleCloseModal, fetchClasses, fetchEnrollments]);
+  }, [
+    selectedClass,
+    handleCloseModal,
+    fetchClasses,
+    fetchEnrollments,
+    selectedDateIndex,
+    days,
+  ]);
 
+  /* FlatList helpers - detect center visible item to update visibleMonthLabel */
+  const onViewRef = useRef(({ viewableItems }) => {
+    if (!viewableItems || viewableItems.length === 0) return;
+    // find the item nearest to center of screen
+    // viewableItems are sorted by index; pick middle of array
+    const mid = Math.floor(viewableItems.length / 2);
+    const candidate = viewableItems[mid]?.item || viewableItems[0]?.item;
+    if (candidate) {
+      setVisibleMonthLabel(formatMonthYear(new Date(candidate.dateObj)));
+    }
+  });
+  const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 30 });
+
+  const handleScrollToIndex = index => {
+    if (!flatListRef.current || typeof index !== 'number') return;
+    flatListRef.current.scrollToIndex({
+      index,
+      animated: true,
+      viewPosition: 0.5,
+    });
+  };
+
+  /* when user presses day */
+  const handlePressDay = day => {
+    setSelectedDateIndex(day.index);
+    // scroll to center this item
+    handleScrollToIndex(day.index);
+  };
+
+  /* highlight class from route params */
+  useEffect(() => {
+    if (!highlightClassId || !classes.length) return;
+    const target = classes.find(c => c.classId === highlightClassId);
+    if (target) handleSelectClass(target);
+  }, [highlightClassId, classes, handleSelectClass]);
+
+  /* Renderers for lists */
   const renderClassItem = ({ item }) => (
     <ClassCard item={item} onSelect={handleSelectClass} />
   );
-
-  const renderEnrollmentItem = ({ item }) => <EnrollmentCard enrollment={item} />;
+  const renderEnrollmentItem = ({ item }) => (
+    <EnrollmentCard enrollment={item} />
+  );
 
   return (
     <View style={styles.container}>
@@ -365,7 +449,9 @@ const SearchCalendarScreen = () => {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.greeting}>Xin chào {userName}</Text>
-          <Text style={styles.headerSubtitle}>Chọn lớp phù hợp với lịch rảnh của bạn</Text>
+          <Text style={styles.headerSubtitle}>
+            Chọn lớp phù hợp với lịch rảnh của bạn
+          </Text>
         </View>
 
         <View style={styles.searchContainer}>
@@ -386,7 +472,10 @@ const SearchCalendarScreen = () => {
 
         <View style={styles.tabContainer}>
           <TouchableOpacity
-            style={[styles.tab, selectedTab === 'Danh sách lớp' && styles.activeTab]}
+            style={[
+              styles.tab,
+              selectedTab === 'Danh sách lớp' && styles.activeTab,
+            ]}
             onPress={() => setSelectedTab('Danh sách lớp')}
           >
             <Text
@@ -399,7 +488,10 @@ const SearchCalendarScreen = () => {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tab, selectedTab === 'Lịch đã đặt' && styles.activeTab]}
+            style={[
+              styles.tab,
+              selectedTab === 'Lịch đã đặt' && styles.activeTab,
+            ]}
             onPress={() => setSelectedTab('Lịch đã đặt')}
           >
             <Text
@@ -414,44 +506,38 @@ const SearchCalendarScreen = () => {
         </View>
       </View>
 
+      {/* Calendar header shows month/year */}
+      <View style={styles.calendarHeader}>
+        <Text style={styles.calendarHeaderText}>{visibleMonthLabel}</Text>
+      </View>
+
+      {/* Infinite horizontal FlatList as calendar */}
       <View style={styles.calendarWrapper}>
-        <ScrollView
+        <FlatList
+          ref={flatListRef}
           horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.calendarScrollContent}
-          style={styles.calendarScrollView}
-        >
-          {days.map((item) => {
-            const isSelected = item.id === selectedDateId;
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.dayContainer,
-                  isSelected ? styles.selectedDayContainer : styles.dayContainerDefault,
-                ]}
-                onPress={() => setSelectedDateId(item.id)}
-              >
-                <Text
-                  style={[
-                    styles.dayName,
-                    isSelected ? styles.selectedDayName : styles.defaultDayName,
-                  ]}
-                >
-                  {item.dayName}
-                </Text>
-                <Text
-                  style={[
-                    styles.dayDate,
-                    isSelected ? styles.selectedDayDate : styles.defaultDayDate,
-                  ]}
-                >
-                  {item.dateString}
-                </Text>
-              </TouchableOpacity>
-            );
+          data={days}
+          keyExtractor={item => `${item.index}-${item.id}`}
+          renderItem={({ item }) => (
+            <DayItem
+              item={item}
+              isSelected={item.index === selectedDateIndex}
+              onPress={handlePressDay}
+            />
+          )}
+          initialScrollIndex={selectedDateIndex}
+          getItemLayout={(_, index) => ({
+            length: ITEM_WIDTH,
+            offset: ITEM_WIDTH * index,
+            index,
           })}
-        </ScrollView>
+          showsHorizontalScrollIndicator={false}
+          onViewableItemsChanged={onViewRef.current}
+          viewabilityConfig={viewConfigRef.current}
+          windowSize={9}
+          maxToRenderPerBatch={12}
+          removeClippedSubviews
+        />
       </View>
 
       <View style={styles.listContainer}>
@@ -469,9 +555,9 @@ const SearchCalendarScreen = () => {
             ) : (
               <FlatList
                 data={classes}
-                keyExtractor={(item) => item.classId}
+                keyExtractor={item => item.classId}
                 renderItem={renderClassItem}
-                ItemSeparatorComponent={renderSeparator}
+                ItemSeparatorComponent={() => <View style={styles.separator} />}
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={
                   <View style={styles.stateContainer}>
@@ -489,7 +575,9 @@ const SearchCalendarScreen = () => {
             {enrollmentsLoading ? (
               <View style={styles.stateContainer}>
                 <ActivityIndicator size="large" color="#30C451" />
-                <Text style={styles.stateText}>Đang tải lịch đã đăng ký...</Text>
+                <Text style={styles.stateText}>
+                  Đang tải lịch đã đăng ký...
+                </Text>
               </View>
             ) : enrollmentsError ? (
               <View style={styles.stateContainer}>
@@ -498,13 +586,15 @@ const SearchCalendarScreen = () => {
             ) : (
               <FlatList
                 data={enrollments}
-                keyExtractor={(item) => item.enrollmentId}
+                keyExtractor={item => item.enrollmentId}
                 renderItem={renderEnrollmentItem}
-                ItemSeparatorComponent={renderSeparator}
+                ItemSeparatorComponent={() => <View style={styles.separator} />}
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={
                   <View style={styles.stateContainer}>
-                    <Text style={styles.stateText}>Bạn chưa đăng ký lớp nào.</Text>
+                    <Text style={styles.stateText}>
+                      Bạn chưa đăng ký lớp nào.
+                    </Text>
                   </View>
                 }
                 showsVerticalScrollIndicator={false}
@@ -514,6 +604,7 @@ const SearchCalendarScreen = () => {
         )}
       </View>
 
+      {/* Modal */}
       <Modal
         transparent
         animationType="fade"
@@ -521,7 +612,10 @@ const SearchCalendarScreen = () => {
         onRequestClose={handleCloseModal}
       >
         <Pressable style={styles.modalOverlay} onPress={handleCloseModal}>
-          <Pressable style={styles.modalContent} onPress={(event) => event.stopPropagation()}>
+          <Pressable
+            style={styles.modalContent}
+            onPress={e => e.stopPropagation()}
+          >
             <Text style={styles.modalTitle}>Xác nhận đăng ký</Text>
             <Text style={styles.modalSubtitle}>
               {selectedClass?.name || 'Lớp học'}
@@ -540,7 +634,10 @@ const SearchCalendarScreen = () => {
               <Icon name="schedule" size={20} color="#30C451" />
               <Text style={styles.modalInfoText}>
                 {selectedClass
-                  ? formatTimeRange(selectedClass.startTime, selectedClass.endTime)
+                  ? formatTimeRange(
+                      selectedClass.startTime,
+                      selectedClass.endTime,
+                    )
                   : '--:--'}
               </Text>
             </View>
@@ -548,7 +645,9 @@ const SearchCalendarScreen = () => {
             {selectedClass?.location ? (
               <View style={styles.modalInfoRow}>
                 <Icon name="location-on" size={20} color="#30C451" />
-                <Text style={styles.modalInfoText}>{selectedClass.location}</Text>
+                <Text style={styles.modalInfoText}>
+                  {selectedClass.location}
+                </Text>
               </View>
             ) : null}
 
@@ -578,11 +677,14 @@ const SearchCalendarScreen = () => {
                 style={[
                   styles.modalButton,
                   styles.modalPrimary,
-                  (selectedClass?.isEnrolledByUser || selectedClass?.isFull) && styles.modalButtonDisabled,
+                  (selectedClass?.isEnrolledByUser || selectedClass?.isFull) &&
+                    styles.modalButtonDisabled,
                 ]}
                 onPress={handleConfirmEnroll}
                 disabled={
-                  isEnrolling || selectedClass?.isEnrolledByUser || selectedClass?.isFull
+                  isEnrolling ||
+                  selectedClass?.isEnrolledByUser ||
+                  selectedClass?.isFull
                 }
               >
                 {isEnrolling ? (
@@ -597,44 +699,22 @@ const SearchCalendarScreen = () => {
       </Modal>
     </View>
   );
-
-  useEffect(() => {
-    if (!highlightClassId || !classes.length) {
-      return;
-    }
-    const target = classes.find((classItem) => classItem.classId === highlightClassId);
-    if (target) {
-      handleSelectClass(target);
-    }
-  }, [highlightClassId, classes, handleSelectClass]);
 };
 
 export default SearchCalendarScreen;
 
+/* Styles (reused and slightly adjusted) */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
   header: {
     backgroundColor: '#30C451',
     paddingHorizontal: 16,
     paddingTop: 20,
     paddingBottom: 16,
   },
-  headerTop: {
-    marginBottom: 16,
-  },
-  greeting: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  headerSubtitle: {
-    marginTop: 4,
-    fontSize: 14,
-    color: '#e6ffe8',
-  },
+  headerTop: { marginBottom: 16 },
+  greeting: { fontSize: 22, fontWeight: '700', color: '#fff' },
+  headerSubtitle: { marginTop: 4, fontSize: 14, color: '#e6ffe8' },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -644,28 +724,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     gap: 12,
   },
-  searchInput: {
-    flex: 1,
-    color: '#111',
-    fontSize: 16,
-    paddingVertical: 6,
-  },
+  searchInput: { flex: 1, color: '#111', fontSize: 16, paddingVertical: 6 },
   filterButton: {
     backgroundColor: '#20B24A',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  filterContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  filterText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
+  filterContent: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  filterText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   tabContainer: {
     flexDirection: 'row',
     marginTop: 16,
@@ -673,84 +740,51 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.25)',
     padding: 4,
   },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
+  tab: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
+  activeTab: { backgroundColor: '#fff' },
+  tabText: { color: '#e6ffe8', fontSize: 15, fontWeight: '500' },
+  activeTabText: { color: '#08843a', fontWeight: '700' },
+
+  calendarHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#f5f5f5',
   },
-  activeTab: {
-    backgroundColor: '#fff',
-  },
-  tabText: {
-    color: '#e6ffe8',
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  activeTabText: {
-    color: '#08843a',
-    fontWeight: '700',
-  },
+  calendarHeaderText: { fontSize: 16, fontWeight: '700', color: '#222' },
+
   calendarWrapper: {
     paddingVertical: 12,
     paddingHorizontal: 12,
     backgroundColor: '#f5f5f5',
-  },
-  calendarScrollView: {
-    maxHeight: 110,
-  },
-  calendarScrollContent: {
-    paddingHorizontal: 4,
-    gap: 12,
+    borderBottomWidth: 0.5,
+    borderColor: '#eee',
   },
   dayContainer: {
-    width: 90,
+    width: ITEM_WIDTH,
     height: 90,
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 8,
+    marginHorizontal: 6,
   },
   dayContainerDefault: {
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#e0e0e0',
   },
-  selectedDayContainer: {
-    backgroundColor: '#30C451',
-    borderColor: '#30C451',
-  },
-  dayName: {
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  dayDate: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  defaultDayName: {
-    color: '#555',
-  },
-  selectedDayName: {
-    color: '#fff',
-  },
-  defaultDayDate: {
-    color: '#1a1a1a',
-  },
-  selectedDayDate: {
-    color: '#fff',
-  },
-  listContainer: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  listContent: {
-    paddingBottom: 24,
-  },
-  separator: {
-    height: 14,
-  },
+  selectedDayContainer: { backgroundColor: '#30C451', borderColor: '#30C451' },
+  dayName: { fontSize: 14, marginBottom: 4 },
+  dayDate: { fontSize: 18, fontWeight: '700' },
+  defaultDayName: { color: '#555' },
+  selectedDayName: { color: '#fff' },
+  defaultDayDate: { color: '#1a1a1a' },
+  selectedDayDate: { color: '#fff' },
+
+  listContainer: { flex: 1, paddingHorizontal: 16, paddingBottom: 16 },
+  listContent: { paddingBottom: 24 },
+  separator: { height: 14 },
+
   classCard: {
     borderRadius: 16,
     backgroundColor: '#fff',
@@ -768,63 +802,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#d9f6e3',
   },
-  classCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  className: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111',
-  },
-  classMeta: {
-    marginTop: 4,
-    marginBottom: 12,
-    fontSize: 14,
-    color: '#4f4f4f',
-  },
+  classCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  className: { flex: 1, fontSize: 18, fontWeight: '700', color: '#111' },
+  classMeta: { marginTop: 4, marginBottom: 12, fontSize: 14, color: '#4f4f4f' },
   classInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginTop: 6,
   },
-  classInfoText: {
-    fontSize: 15,
-    color: '#222',
-  },
+  classInfoText: { fontSize: 15, color: '#222' },
   spotsRow: {
     marginTop: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  spotsText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#08843a',
-  },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  badgeSuccess: {
-    backgroundColor: '#34d399',
-  },
-  badgeWarning: {
-    backgroundColor: '#f97316',
-  },
-  badgeInfo: {
-    backgroundColor: '#60a5fa',
-  },
+  spotsText: { fontSize: 14, fontWeight: '600', color: '#08843a' },
+
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  badgeText: { fontSize: 12, fontWeight: '600', color: '#fff' },
+  badgeSuccess: { backgroundColor: '#34d399' },
+  badgeWarning: { backgroundColor: '#f97316' },
+  badgeInfo: { backgroundColor: '#60a5fa' },
+
   stateContainer: {
     flex: 1,
     alignItems: 'center',
@@ -838,6 +839,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 24,
   },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.35)',
@@ -851,11 +853,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 20,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111',
-  },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#111' },
   modalSubtitle: {
     marginTop: 4,
     fontSize: 16,
@@ -868,44 +866,18 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 14,
   },
-  modalInfoText: {
-    fontSize: 15,
-    color: '#222',
-  },
-  modalNote: {
-    marginTop: 16,
-    fontSize: 14,
-    color: '#555',
-    lineHeight: 20,
-  },
-  modalActions: {
-    marginTop: 20,
-    flexDirection: 'row',
-    gap: 12,
-  },
+  modalInfoText: { fontSize: 15, color: '#222' },
+  modalNote: { marginTop: 16, fontSize: 14, color: '#555', lineHeight: 20 },
+  modalActions: { marginTop: 20, flexDirection: 'row', gap: 12 },
   modalButton: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
   },
-  modalSecondary: {
-    backgroundColor: '#f0f0f0',
-  },
-  modalPrimary: {
-    backgroundColor: '#30C451',
-  },
-  modalButtonDisabled: {
-    backgroundColor: '#a7dfb9',
-  },
-  modalSecondaryText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
-  },
-  modalPrimaryText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
-  },
+  modalSecondary: { backgroundColor: '#f0f0f0' },
+  modalPrimary: { backgroundColor: '#30C451' },
+  modalButtonDisabled: { backgroundColor: '#a7dfb9' },
+  modalSecondaryText: { fontSize: 15, fontWeight: '600', color: '#333' },
+  modalPrimaryText: { fontSize: 15, fontWeight: '600', color: '#fff' },
 });
