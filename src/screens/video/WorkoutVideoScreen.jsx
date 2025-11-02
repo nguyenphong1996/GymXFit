@@ -1,10 +1,9 @@
-// screens/WorkoutVideoScreen.js
+// 📁 screens/WorkoutVideoScreen.js
 import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Image,
   TouchableOpacity,
   ScrollView,
   TextInput,
@@ -14,6 +13,8 @@ import {
 import Video from 'react-native-video';
 import { useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import MIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { getVideoById } from '@api/userApi';
 
 const WorkoutVideoScreen = ({ navigation }) => {
@@ -27,7 +28,6 @@ const WorkoutVideoScreen = ({ navigation }) => {
   const [showSearch, setShowSearch] = useState(false);
   const [searchText, setSearchText] = useState('');
 
-  // 🔹 Lấy dữ liệu video theo videoId
   useEffect(() => {
     const fetchVideoDetails = async () => {
       if (!videoId) {
@@ -55,7 +55,6 @@ const WorkoutVideoScreen = ({ navigation }) => {
 
   const toggleFavorite = () => setIsFavorite(prev => !prev);
 
-  // ------------------ Render ------------------
   if (isLoading) {
     return (
       <View style={styles.centerStatus}>
@@ -80,7 +79,6 @@ const WorkoutVideoScreen = ({ navigation }) => {
     );
   }
 
-  // Mô tả tạm nếu API không có
   const infoText =
     videoData.description ||
     'Tăng cường sức mạnh cơ bụng và cải thiện độ linh hoạt của phần thân trên. Giữ tư thế ổn định khi gập người và kiểm soát nhịp thở đều.';
@@ -90,53 +88,52 @@ const WorkoutVideoScreen = ({ navigation }) => {
       {/* ----------- HEADER ----------- */}
       <View style={styles.headerWrap}>
         <View style={styles.header}>
-          {/* 🔙 Nút Back */}
+          {/* 🔙 Back */}
           <TouchableOpacity
             activeOpacity={0.8}
             style={styles.backWrap}
             onPress={() => navigation.goBack()}
           >
-            <Image
-              source={require('@assets/images/back.png')}
-              style={styles.backIcon}
-            />
+            <Icon name="arrow-back" size={26} color="#20B24A" />
           </TouchableOpacity>
 
-          {/* Tiêu đề */}
           <Text style={styles.headerText}>{videoData.level || 'Bài tập'}</Text>
 
-          {/* Nhóm icon bên phải */}
+          {/* 🔍, 🔔, 👤 */}
           <View style={styles.headerRight}>
-            {/* 🔍 Nút tìm kiếm */}
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={() => setShowSearch(!showSearch)}
             >
-              <Image
-                source={require('@assets/images/Search_icon.png')}
-                style={styles.icon}
+              <Icon
+                name="search"
+                size={26}
+                color="#20B24A"
+                style={styles.rightIcon}
               />
             </TouchableOpacity>
 
-            {/* 🔔 Thông báo */}
             <TouchableOpacity activeOpacity={0.8}>
-              <Image
-                source={require('@assets/images/Notifications_icon.png')}
-                style={styles.icon}
+              <Icon
+                name="notifications-none"
+                size={26}
+                color="#20B24A"
+                style={styles.rightIcon}
               />
             </TouchableOpacity>
 
-            {/* 👤 User */}
             <TouchableOpacity activeOpacity={0.8}>
-              <Image
-                source={require('@assets/images/User_Icon.png')}
-                style={styles.icon}
+              <Icon
+                name="person-outline"
+                size={26}
+                color="#20B24A"
+                style={styles.rightIcon}
               />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Ô tìm kiếm hiển thị khi bật */}
+        {/* Search input */}
         {showSearch && (
           <TextInput
             style={styles.searchInput}
@@ -148,9 +145,9 @@ const WorkoutVideoScreen = ({ navigation }) => {
         )}
       </View>
 
-      {/* ----------- NỘI DUNG CHÍNH ----------- */}
+      {/* ----------- CONTENT ----------- */}
       <ScrollView contentContainerStyle={{ paddingBottom: 60 }}>
-        {/* 🎬 Video Player */}
+        {/* 🎬 Video */}
         <View style={styles.videoContainer}>
           {videoData.streaming_url ? (
             <Video
@@ -161,60 +158,62 @@ const WorkoutVideoScreen = ({ navigation }) => {
               paused={false}
             />
           ) : (
-            <Image
-              source={require('@assets/images/workout1.jpg')}
-              style={styles.videoPlayer}
-            />
+            <View style={[styles.videoPlayer, { backgroundColor: '#000' }]} />
           )}
 
-          {/* ⭐ Nút yêu thích */}
+          {/* ⭐ Favorite */}
           <TouchableOpacity
             activeOpacity={0.8}
             style={styles.favoriteBtn}
             onPress={toggleFavorite}
           >
-            <Image
-              source={
-                isFavorite
-                  ? require('@assets/images/yellowstar.png')
-                  : require('@assets/images/favorites_white_star.png')
-              }
-              style={styles.favoriteIcon}
+            <Icon
+              name={isFavorite ? 'star' : 'star-border'}
+              size={32}
+              color={isFavorite ? '#FFD700' : '#20B24A'}
             />
           </TouchableOpacity>
         </View>
 
-        {/* 📄 Thông tin bài tập */}
+        {/* 📄 Info */}
         <View style={styles.infoSection}>
           <View style={styles.infoCard}>
             <Text style={styles.infoTitle}>{videoData.title}</Text>
             <Text style={styles.infoDesc}>{infoText}</Text>
 
-            {/* Dòng thông tin nhỏ */}
             <View style={styles.infoRowWrapper}>
+              {/* ⏱️ Thời gian */}
               <View style={styles.infoItem}>
-                <Image
-                  source={require('@assets/images/time.png')}
-                  style={styles.smallIcon}
+                <Icon
+                  name="schedule"
+                  size={18}
+                  color="#20B24A"
+                  style={styles.infoIcon}
                 />
                 <Text style={styles.infoItemText}>
-                  {Math.floor(videoData.duration / 60)}:
-                  {String(videoData.duration % 60).padStart(2, '0')}
+                  {String(Math.floor(videoData.duration / 60)).padStart(2, '0')}
+                  :{String(videoData.duration % 60).padStart(2, '0')}
                 </Text>
               </View>
 
+              {/* 🔥 Số lần */}
               <View style={styles.infoItem}>
-                <Image
-                  source={require('@assets/images/calories.png')}
-                  style={styles.smallIcon}
+                <MIcon
+                  name="fire"
+                  size={18}
+                  color="#20B24A"
+                  style={styles.infoIcon}
                 />
                 <Text style={styles.infoItemText}>3 lần</Text>
               </View>
 
+              {/* 🏃‍♂️ Mức độ */}
               <View style={styles.infoItem}>
-                <Image
-                  source={require('@assets/images/Workout_icon.png')}
-                  style={styles.smallIcon}
+                <MIcon
+                  name="run"
+                  size={18}
+                  color="#20B24A"
+                  style={styles.infoIcon}
                 />
                 <Text style={styles.infoItemText}>
                   {videoData.level || 'Trung bình'}
@@ -245,7 +244,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 
-  // ---------- Header ----------
   headerWrap: { paddingHorizontal: 18, marginBottom: 10 },
   header: {
     flexDirection: 'row',
@@ -254,12 +252,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   backWrap: { width: 30, alignItems: 'flex-start' },
-  backIcon: { width: 22, height: 22, resizeMode: 'contain' },
   headerText: { fontSize: 22, fontWeight: '700', color: '#111' },
   headerRight: { flexDirection: 'row', alignItems: 'center' },
-  icon: { width: 26, height: 26, marginLeft: 14, resizeMode: 'contain' },
+  rightIcon: { marginLeft: 14 },
 
-  // ---------- Search ----------
   searchInput: {
     marginTop: 10,
     backgroundColor: '#f1f1f1',
@@ -272,7 +268,6 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
   },
 
-  // ---------- Video ----------
   videoContainer: {
     width: '100%',
     aspectRatio: 16 / 9,
@@ -288,9 +283,7 @@ const styles = StyleSheet.create({
     right: 0,
   },
   favoriteBtn: { position: 'absolute', top: 16, right: 16, zIndex: 6 },
-  favoriteIcon: { width: 32, height: 32, resizeMode: 'contain' },
 
-  // ---------- Info ----------
   infoSection: { paddingHorizontal: 18, marginTop: 14 },
   infoCard: {
     backgroundColor: '#EEF94E',
@@ -324,7 +317,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   infoItem: { flexDirection: 'row', alignItems: 'center' },
-  smallIcon: { width: 18, height: 18, resizeMode: 'contain', marginRight: 6 },
+  infoIcon: { marginRight: 6 },
   infoItemText: { fontSize: 14, color: '#333', fontWeight: '500' },
 });
 

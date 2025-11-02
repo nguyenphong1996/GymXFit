@@ -1,4 +1,3 @@
-// screens/WorkoutScreen.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -9,16 +8,16 @@ import {
   Image,
   TextInput,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import Ionicons from 'react-native-vector-icons/Ionicons';
-import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import { getAllVideos } from '@api/userApi';
 
+const PRIMARY_COLOR = '#30C451';
+
+// 🕒 Format thời lượng
 const formatDuration = seconds => {
-  if (!seconds && seconds !== 0) {
-    return '--:--';
-  }
+  if (!seconds && seconds !== 0) return '--:--';
   const totalSeconds = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(totalSeconds / 60);
   const remainSeconds = totalSeconds % 60;
@@ -30,58 +29,100 @@ const formatDuration = seconds => {
 
 const WorkoutScreen = ({ navigation }) => {
   const [searchVisible, setSearchVisible] = useState(false);
+  const [filterVisible, setFilterVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [favorites, setFavorites] = useState({});
-
   const [videos, setVideos] = useState([]);
+  const [filteredVideos, setFilteredVideos] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('Tất cả');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchVideos = useCallback(async (query = '') => {
-    setIsLoading(true);
-    setError(null);
+  const categories = [
+    { id: 'Tất cả', name: 'Tất cả', icon: 'apps' },
+    { id: 'Yoga', name: 'Yoga', icon: 'self-improvement' },
+    { id: 'Cơ tay', name: 'Cơ tay', icon: 'fitness-center' },
+    { id: 'Cơ bụng', name: 'Cơ bụng', icon: 'directions-run' },
+    { id: 'Cardio', name: 'Cardio', icon: 'favorite-border' },
+    { id: 'Cơ chân', name: 'Cơ chân', icon: 'accessibility-new' },
+  ];
+
+  // 📦 Gọi API danh sách video
+  const fetchVideos = useCallback(async query => {
     try {
+      setIsLoading(true);
+      setError(null);
       const response = await getAllVideos({
         limit: 30,
         ...(query ? { search: query } : {}),
       });
+
       if (response?.success) {
-        setVideos(response.videos || []);
+        const vids = response.videos || [];
+        setVideos(vids);
+        setFilteredVideos(vids);
       } else {
         setVideos([]);
+        setFilteredVideos([]);
         setError(response?.message || 'Không thể tải danh sách bài tập.');
       }
     } catch (err) {
-      setVideos([]);
       setError(err.message);
+      setVideos([]);
+      setFilteredVideos([]);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
+  // ⏳ Debounce tìm kiếm
   useEffect(() => {
-    const handler = setTimeout(() => {
+    const timeout = setTimeout(() => {
       setDebouncedSearch(searchText.trim());
     }, 400);
-    return () => clearTimeout(handler);
+    return () => clearTimeout(timeout);
   }, [searchText]);
 
+  // 🔁 Tải lại dữ liệu khi search thay đổi
   useEffect(() => {
     fetchVideos(debouncedSearch);
   }, [debouncedSearch, fetchVideos]);
 
-  const toggleFavorite = id => {
+  // 🧩 Lọc theo loại
+  const filterByCategory = useCallback(
+    category => {
+      setSelectedCategory(category);
+      if (category === 'Tất cả') {
+        setFilteredVideos(videos);
+      } else {
+        const filtered = videos.filter(
+          v =>
+            v.category?.toLowerCase().includes(category.toLowerCase()) ||
+            v.subcategory?.toLowerCase().includes(category.toLowerCase()),
+        );
+        setFilteredVideos(filtered);
+      }
+    },
+    [videos],
+  );
+
+  // ⭐ Thêm / Xoá yêu thích
+  const toggleFavorite = id =>
     setFavorites(prev => ({
       ...prev,
       [id]: !prev[id],
     }));
-  };
 
+  // ▶️ Xem video
   const handleNavigateToVideo = videoId => {
+    if (!videoId) return;
     navigation.navigate('WorkoutVideo', { videoId });
   };
 
+  const featuredVideo = filteredVideos.length > 0 ? filteredVideos[0] : null;
+
+  // 🎞️ Render 1 item bài tập
   const renderWorkoutItem = ({ item }) => (
     <TouchableOpacity
       style={styles.workoutCard}
@@ -90,22 +131,21 @@ const WorkoutScreen = ({ navigation }) => {
     >
       <View style={styles.workoutInfo}>
         <Text style={styles.workoutTitle}>{item.title}</Text>
-
         <View style={styles.workoutDetailsColumn}>
           <View style={styles.detailItem}>
-            <MaterialIcons name="schedule" size={16} color="#333" />
+            <Icon name="schedule" size={16} color="#333" />
             <Text style={styles.detailText}>
               {formatDuration(item.duration)}
             </Text>
           </View>
           <View style={styles.detailItem}>
-            <Ionicons name="flame-outline" size={16} color="#333" />
+            <Icon name="whatshot" size={16} color="#333" />
             <Text style={styles.detailText}>
               {item.estimated_calories} Kcal
             </Text>
           </View>
           <View style={styles.detailItem}>
-            <FontAwesome5 name="dumbbell" size={14} color="#333" />
+            <Icon name="fitness-center" size={16} color="#333" />
             <Text style={styles.detailText}>
               {item.subcategory || item.category}
             </Text>
@@ -114,19 +154,19 @@ const WorkoutScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.thumbSection}>
-        {item.thumbnail ? (
-          <Image source={{ uri: item.thumbnail }} style={styles.thumbImage} />
-        ) : (
-          <Image
-            source={require('@assets/images/workout1.jpg')}
-            style={styles.thumbImage}
-          />
-        )}
+        <Image
+          source={
+            item.thumbnail
+              ? { uri: item.thumbnail }
+              : require('@assets/images/workout1.jpg')
+          }
+          style={styles.thumbImage}
+        />
         <TouchableOpacity
           style={styles.itemFavorite}
           onPress={() => toggleFavorite(item.id)}
         >
-          <MaterialIcons
+          <Icon
             name={favorites[item.id] ? 'star' : 'star-border'}
             size={20}
             color={favorites[item.id] ? '#FFD700' : '#fff'}
@@ -136,33 +176,36 @@ const WorkoutScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
-  const featuredVideo = videos[0];
-
   return (
     <View style={styles.container}>
-      <View style={styles.innerPadding}>
-        <View style={styles.header}>
-          <View style={styles.leftHeader}>
-            <TouchableOpacity onPress={() => navigation.goBack()}>
-              <Ionicons name="arrow-back" size={22} color="#333" />
-            </TouchableOpacity>
-            <Text style={styles.title}>Bài tập</Text>
-          </View>
-
-          <View style={styles.rightHeader}>
-            <TouchableOpacity onPress={() => setSearchVisible(!searchVisible)}>
-              <Ionicons name="search" size={20} color="#333" />
-            </TouchableOpacity>
-            <TouchableOpacity>
-              <Ionicons name="notifications-outline" size={20} color="#333" />
-            </TouchableOpacity>
-            <TouchableOpacity>
-              <Ionicons name="person-circle-outline" size={22} color="#333" />
-            </TouchableOpacity>
-          </View>
+      {/* 🧭 Header */}
+      <View style={styles.header}>
+        <View style={styles.leftHeader}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Icon name="arrow-back" size={24} color="#111" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Bài tập</Text>
         </View>
 
-        {searchVisible && (
+        <View style={styles.rightHeader}>
+          <TouchableOpacity onPress={() => setSearchVisible(!searchVisible)}>
+            <Icon name="search" size={22} color="#111" />
+          </TouchableOpacity>
+
+          <TouchableOpacity>
+            <Icon name="notifications-none" size={22} color="#111" />
+          </TouchableOpacity>
+
+          <TouchableOpacity>
+            <Icon name="account-circle" size={24} color="#111" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* 🔍 Thanh tìm kiếm */}
+      {searchVisible && (
+        <View style={styles.searchBar}>
+          <Icon name="search" size={20} color="#666" />
           <TextInput
             style={styles.searchInput}
             placeholder="Nhập tên bài tập..."
@@ -170,12 +213,13 @@ const WorkoutScreen = ({ navigation }) => {
             value={searchText}
             onChangeText={setSearchText}
           />
-        )}
-      </View>
+        </View>
+      )}
 
+      {/* Hiển thị trạng thái */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#30C451" />
+          <ActivityIndicator size="large" color={PRIMARY_COLOR} />
           <Text style={styles.loadingText}>Đang tải bài tập...</Text>
         </View>
       ) : error ? (
@@ -184,72 +228,92 @@ const WorkoutScreen = ({ navigation }) => {
         </View>
       ) : (
         <>
-          <View style={styles.levelContainer}>
-            <TouchableOpacity style={styles.levelButton}>
-              <Text style={styles.levelText}>Người mới</Text>
+          {/* 🌟 Featured Video */}
+          {featuredVideo && (
+            <TouchableOpacity
+              style={styles.featuredWrapper}
+              onPress={() => handleNavigateToVideo(featuredVideo.id)}
+              activeOpacity={0.85}
+            >
+              <Image
+                source={
+                  featuredVideo.thumbnail
+                    ? { uri: featuredVideo.thumbnail }
+                    : require('@assets/images/workout1.jpg')
+                }
+                style={styles.featuredImage}
+              />
+              <View style={styles.featuredOverlay}>
+                <View style={styles.badgeWrap}>
+                  <Text style={styles.badgeText}>Bài tập nổi bật</Text>
+                </View>
+                <Text style={styles.featuredTitle}>{featuredVideo.title}</Text>
+              </View>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.levelButton}>
-              <Text style={styles.levelText}>Trung cấp</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.levelButton}>
-              <Text style={styles.levelText}>Nâng cao</Text>
+          )}
+
+          {/* 🔽 ICON BỘ LỌC DƯỚI BANNER */}
+          <View style={styles.filterBar}>
+            <TouchableOpacity
+              style={styles.filterButton}
+              onPress={() => setFilterVisible(!filterVisible)}
+            >
+              <Icon
+                name="tune"
+                size={24}
+                color={filterVisible ? PRIMARY_COLOR : '#111'}
+              />
+              <Text
+                style={[
+                  styles.filterLabel,
+                  { color: filterVisible ? PRIMARY_COLOR : '#111' },
+                ]}
+              >
+                Bộ lọc
+              </Text>
             </TouchableOpacity>
           </View>
 
-          {featuredVideo ? (
-            <TouchableOpacity
-              style={styles.featuredWrapper}
-              activeOpacity={0.85}
-              onPress={() => handleNavigateToVideo(featuredVideo.id)}
+          {/* 🧩 DANH MỤC HIỆN RA KHI NHẤN ICON */}
+          {filterVisible && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.categoryScroll}
+              contentContainerStyle={styles.categoryContainer}
             >
-              <View style={styles.featuredCard}>
-                {featuredVideo.thumbnail ? (
-                  <Image
-                    source={{ uri: featuredVideo.thumbnail }}
-                    style={styles.featuredImage}
+              {categories.map(cat => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={[
+                    styles.categoryButton,
+                    selectedCategory === cat.id && styles.categoryActive,
+                  ]}
+                  onPress={() => filterByCategory(cat.id)}
+                >
+                  <Icon
+                    name={cat.icon}
+                    size={26}
+                    color={selectedCategory === cat.id ? '#fff' : PRIMARY_COLOR}
                   />
-                ) : (
-                  <Image
-                    source={require('@assets/images/workout1.jpg')}
-                    style={styles.featuredImage}
-                  />
-                )}
-                <View style={styles.badgeWrap}>
-                  <Text style={styles.badgeText}>Bài tập trong ngày</Text>
-                </View>
-                <View style={styles.featuredOverlay}>
-                  <Text style={styles.featuredTitle}>
-                    {featuredVideo.title}
+                  <Text
+                    style={[
+                      styles.categoryText,
+                      selectedCategory === cat.id && { color: '#fff' },
+                    ]}
+                  >
+                    {cat.name}
                   </Text>
-                  <View style={styles.featuredDetails}>
-                    <View style={styles.detailItem}>
-                      <MaterialIcons name="schedule" size={16} color="#fff" />
-                      <Text style={styles.featuredDetailText}>
-                        {formatDuration(featuredVideo.duration)}
-                      </Text>
-                    </View>
-                    <View style={styles.detailItem}>
-                      <Ionicons name="flame-outline" size={16} color="#fff" />
-                      <Text style={styles.featuredDetailText}>
-                        {featuredVideo.estimated_calories} Kcal
-                      </Text>
-                    </View>
-                    <View style={styles.detailItem}>
-                      <FontAwesome5 name="dumbbell" size={14} color="#fff" />
-                      <Text style={styles.featuredDetailText}>
-                        {featuredVideo.subcategory || featuredVideo.category}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ) : null}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
 
+          {/* 📋 Danh sách bài tập */}
           <FlatList
             contentContainerStyle={styles.listContent}
-            data={videos.slice(1)}
-            keyExtractor={item => item.id}
+            data={filteredVideos.slice(1)}
+            keyExtractor={item => String(item.id)}
             renderItem={renderWorkoutItem}
             ListEmptyComponent={
               <View style={styles.loadingContainer}>
@@ -266,135 +330,139 @@ const WorkoutScreen = ({ navigation }) => {
   );
 };
 
-export default WorkoutScreen;
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  innerPadding: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ececec',
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  leftHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  title: { fontSize: 22, fontWeight: '700', color: '#111' },
-  rightHeader: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  searchInput: {
-    marginTop: 12,
-    backgroundColor: '#f2f2f2',
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingVertical: 10,
+    borderBottomWidth: 0.4,
+    borderBottomColor: '#ccc',
+  },
+  leftHeader: { flexDirection: 'row', alignItems: 'center' },
+  rightHeader: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '700',
     color: '#111',
-    fontSize: 16,
+    marginLeft: 10,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 24,
-  },
-  loadingText: { fontSize: 15, color: '#555', textAlign: 'center' },
-  levelContainer: {
+  searchBar: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-  },
-  levelButton: {
-    backgroundColor: '#e8f8ee',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
     borderRadius: 12,
+    marginHorizontal: 18,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
-  levelText: { fontSize: 14, fontWeight: '600', color: '#08843a' },
-  featuredWrapper: { paddingHorizontal: 20 },
-  featuredCard: {
-    marginTop: 12,
-    borderRadius: 18,
+  searchInput: { flex: 1, marginLeft: 6, color: '#111', fontSize: 14 },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 40,
+  },
+  loadingText: { marginTop: 10, fontSize: 14, color: '#555' },
+  featuredWrapper: {
+    margin: 18,
+    borderRadius: 14,
     overflow: 'hidden',
     position: 'relative',
   },
   featuredImage: { width: '100%', height: 200 },
-  badgeWrap: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    backgroundColor: '#30C451',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  badgeText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   featuredOverlay: {
     position: 'absolute',
-    inset: 0,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    padding: 20,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'flex-end',
+    padding: 14,
   },
-  featuredTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 10,
+  badgeWrap: {
+    backgroundColor: PRIMARY_COLOR,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginBottom: 6,
   },
-  featuredDetails: { flexDirection: 'row', gap: 16 },
-  detailItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  detailText: { fontSize: 13, color: '#333' },
-  featuredDetailText: { fontSize: 13, color: '#fff', fontWeight: '600' },
-  listContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 40,
-    gap: 16,
-  },
-  workoutCard: {
-    backgroundColor: '#fff',
+  badgeText: { color: '#fff', fontWeight: '600', fontSize: 12 },
+  featuredTitle: { color: '#fff', fontSize: 20, fontWeight: '700' },
+
+  // 🎛 Bộ lọc
+  filterBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-    gap: 16,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 18,
+    marginBottom: 8,
   },
-  workoutInfo: { flex: 1 },
-  workoutTitle: { fontSize: 17, fontWeight: '700', color: '#111' },
-  workoutDetailsColumn: { marginTop: 12, gap: 8 },
-  thumbSection: {
-    width: 110,
-    height: 110,
+  filterButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  filterLabel: { fontSize: 15, fontWeight: '600' },
+
+  // 🧩 Danh mục
+  categoryScroll: { marginVertical: 12 },
+  categoryContainer: { paddingHorizontal: 14, gap: 12 },
+  categoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: PRIMARY_COLOR,
+    borderRadius: 30,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 3,
+  },
+  categoryActive: {
+    backgroundColor: PRIMARY_COLOR,
+    borderColor: PRIMARY_COLOR,
+    transform: [{ scale: 1.03 }],
+  },
+  categoryText: {
+    marginLeft: 10,
+    fontSize: 16,
+    color: PRIMARY_COLOR,
+    fontWeight: '700',
+  },
+
+  listContent: { paddingHorizontal: 16, paddingBottom: 40 },
+  workoutCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
     borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+    elevation: 2,
+  },
+  workoutInfo: { flex: 1, marginRight: 10 },
+  workoutTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111',
+    marginBottom: 4,
+  },
+  workoutDetailsColumn: { flexDirection: 'column', gap: 2 },
+  detailItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  detailText: { fontSize: 12, color: '#444' },
+  thumbSection: {
+    width: 90,
+    height: 90,
+    borderRadius: 10,
     overflow: 'hidden',
     position: 'relative',
   },
   thumbImage: { width: '100%', height: '100%' },
-  itemFavorite: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
+  itemFavorite: { position: 'absolute', top: 6, right: 6 },
 });
+
+export default WorkoutScreen;

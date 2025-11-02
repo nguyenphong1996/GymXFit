@@ -28,7 +28,7 @@ const Stack = createNativeStackNavigator();
 const UserNavigator = () => {
   return (
     <Stack.Navigator
-      initialRouteName="WorkoutVideoScreen"
+      initialRouteName="LoginScreen"
       screenOptions={{
         headerShown: false,
       }}

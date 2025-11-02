@@ -1,15 +1,16 @@
 import React, { useContext } from 'react';
 import {
-  Text,
   View,
-  Image,
+  Text,
   StyleSheet,
+  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  ScrollView,
   StatusBar,
+  Image,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { UserContext } from '@context/UserContext';
 import { useNavigation } from '@react-navigation/native';
 
@@ -17,11 +18,12 @@ const formatDateForDisplay = dateString => {
   if (!dateString) return '';
   try {
     const date = new Date(dateString);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    return `${day}/${month}/${year}`;
-  } catch (e) {
+    return `${date.getDate().toString().padStart(2, '0')}/${(
+      date.getMonth() + 1
+    )
+      .toString()
+      .padStart(2, '0')}/${date.getFullYear()}`;
+  } catch {
     return '';
   }
 };
@@ -33,11 +35,9 @@ const calculateAge = dobString => {
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
     const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
     return age > 0 ? age : '--';
-  } catch (e) {
+  } catch {
     return '--';
   }
 };
@@ -55,7 +55,7 @@ const ProfileScreen = () => {
 
   if (isLoading || !user) {
     return (
-      <View style={[styles.container, styles.loadingContainer]}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#20B24A" />
       </View>
     );
@@ -72,119 +72,67 @@ const ProfileScreen = () => {
     : require('@assets/images/avt.png');
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#fff' }}>
+    <ScrollView style={styles.container}>
       <StatusBar backgroundColor="#20B24A" barStyle="light-content" />
 
-      {/* Header avatar */}
+      {/* Header */}
       <View style={styles.header}>
         <Image style={styles.avatar} source={avatarSource} />
         <Text style={styles.name}>{userName}</Text>
         <Text style={styles.email}>{userEmail}</Text>
 
         <View style={styles.infoStats}>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{userWeight}</Text>
-            <Text style={styles.statLabel}>Cân nặng (kg)</Text>
-          </View>
-          <View style={styles.verticalLine} />
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{userAge}</Text>
-            <Text style={styles.statLabel}>Tuổi</Text>
-          </View>
-          <View style={styles.verticalLine} />
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{userHeight}</Text>
-            <Text style={styles.statLabel}>Chiều cao (cm)</Text>
-          </View>
+          <InfoStat label="Cân nặng" value={`${userWeight} kg`} />
+          <InfoStat label="Tuổi" value={userAge} />
+          <InfoStat label="Chiều cao" value={`${userHeight} cm`} />
         </View>
       </View>
 
-      {/* Options list */}
+      {/* Options */}
       <View style={styles.optionContainer}>
-        <TouchableOpacity
-          style={styles.itemOption}
+        <OptionItem
+          icon="account-edit"
+          text="Chỉnh sửa hồ sơ"
           onPress={() => navigation.navigate('UpdateProfile')}
-        >
-          <Image
-            style={styles.optionIcon}
-            source={require('@assets/images/profile.png')}
-          />
-          <Text style={styles.optionText}>Chỉnh sửa hồ sơ</Text>
-          <Image
-            style={styles.arrowIcon}
-            source={require('@assets/images/arrowright.png')}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.itemOption}>
-          <Image
-            style={styles.optionIcon}
-            source={require('@assets/images/tutorial.png')}
-          />
-          <Text style={styles.optionText}>Hướng dẫn sử dụng</Text>
-          <Image
-            style={styles.arrowIcon}
-            source={require('@assets/images/arrowright.png')}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.itemOption}>
-          <Image
-            style={styles.optionIcon}
-            source={require('@assets/images/support.png')}
-          />
-          <Text style={styles.optionText}>Liên hệ</Text>
-          <Image
-            style={styles.arrowIcon}
-            source={require('@assets/images/arrowright.png')}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.itemOption}>
-          <Image
-            style={styles.optionIcon}
-            source={require('@assets/images/contract.png')}
-          />
-          <Text style={styles.optionText}>Hợp đồng</Text>
-          <Image
-            style={styles.arrowIcon}
-            source={require('@assets/images/arrowright.png')}
-          />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.itemOption}>
-          <Image
-            style={styles.optionIcon}
-            source={require('@assets/images/password.png')}
-          />
-          <Text style={styles.optionText}>Đổi mật khẩu</Text>
-          <Image
-            style={styles.arrowIcon}
-            source={require('@assets/images/arrowright.png')}
-          />
-        </TouchableOpacity>
+        />
+        <OptionItem icon="book-open-page-variant" text="Hướng dẫn sử dụng" />
+        <OptionItem icon="headset" text="Liên hệ hỗ trợ" />
+        <OptionItem icon="file-document" text="Hợp đồng của tôi" />
+        <OptionItem icon="lock-reset" text="Đổi mật khẩu" />
       </View>
 
-      {/* Logout button */}
+      {/* Logout */}
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Image
-          style={styles.logoutIcon}
-          source={require('@assets/images/logout.png')}
-        />
+        <Icon name="logout" size={22} color="#fff" style={{ marginRight: 8 }} />
         <Text style={styles.logoutText}>Đăng xuất</Text>
       </TouchableOpacity>
     </ScrollView>
   );
 };
 
+/* === COMPONENT: InfoStat === */
+const InfoStat = ({ label, value }) => (
+  <View style={styles.statBox}>
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statLabel}>{label}</Text>
+  </View>
+);
+
+/* === COMPONENT: OptionItem === */
+const OptionItem = ({ icon, text, onPress }) => (
+  <TouchableOpacity style={styles.optionItem} onPress={onPress}>
+    <Icon name={icon} size={26} color="#20B24A" />
+    <Text style={styles.optionText}>{text}</Text>
+    <Icon name="chevron-right" size={26} color="#9E9E9E" />
+  </TouchableOpacity>
+);
+
 export default ProfileScreen;
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
   header: {
     backgroundColor: '#20B24A',
     alignItems: 'center',
@@ -198,96 +146,49 @@ const styles = StyleSheet.create({
     borderRadius: 55,
     backgroundColor: '#E8F5E9',
   },
-  name: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#fff',
-    marginTop: 12,
-  },
-  email: {
-    fontSize: 14,
-    color: '#E0FFE8',
-    marginBottom: 20,
-  },
+  name: { fontSize: 22, fontWeight: '700', color: '#fff', marginTop: 12 },
+  email: { fontSize: 14, color: '#E0FFE8', marginBottom: 20 },
+
   infoStats: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     backgroundColor: '#1A9E42',
     borderRadius: 15,
     paddingVertical: 10,
-    paddingHorizontal: 15,
-    marginTop: 10,
+    paddingHorizontal: 20,
+    width: '85%',
   },
-  statBox: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statValue: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  statLabel: {
-    color: '#E8F5E9',
-    fontSize: 13,
-  },
-  verticalLine: {
-    width: 1,
-    backgroundColor: '#fff',
-    marginHorizontal: 10,
-  },
-  optionContainer: {
-    padding: 20,
-    marginTop: 10,
-  },
-  itemOption: {
+  statBox: { alignItems: 'center', flex: 1 },
+  statValue: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  statLabel: { color: '#C8E6C9', fontSize: 13, marginTop: 2 },
+
+  optionContainer: { marginTop: 15, paddingHorizontal: 20 },
+  optionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 15,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#ddd',
-  },
-  optionIcon: {
-    width: 35,
-    height: 35,
-    tintColor: '#20B24A',
+    paddingVertical: 14,
+    borderBottomColor: '#eee',
+    borderBottomWidth: 1,
   },
   optionText: {
     flex: 1,
     fontSize: 17,
+    color: '#212121',
     fontWeight: '500',
     marginLeft: 15,
-    color: '#212020',
   },
-  arrowIcon: {
-    width: 18,
-    height: 18,
-    tintColor: '#777',
-  },
+
   logoutButton: {
     backgroundColor: '#E53935',
     marginHorizontal: 30,
-    marginTop: 30,
+    marginTop: 40,
     marginBottom: 50,
-    borderRadius: 12,
+    borderRadius: 14,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 5,
+    elevation: 3,
   },
-  logoutIcon: {
-    width: 20,
-    height: 20,
-    tintColor: '#fff',
-    marginRight: 10,
-  },
-  logoutText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
-  },
+  logoutText: { color: '#fff', fontSize: 17, fontWeight: '700' },
 });
