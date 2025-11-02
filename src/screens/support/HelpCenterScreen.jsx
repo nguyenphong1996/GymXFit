@@ -1,13 +1,14 @@
+// screens/HelpCenterScreen.js
 import React, { useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  Image,
   ScrollView,
   StyleSheet,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons'; // ✅ Thư viện icon
 
 const HelpCenterScreen = ({ navigation }) => {
   const [selectedQuestion, setSelectedQuestion] = useState(null);
@@ -53,10 +54,7 @@ const HelpCenterScreen = ({ navigation }) => {
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Image
-            source={require('@assets/images/back.png')}
-            style={styles.backIcon}
-          />
+          <Icon name="arrow-back" size={22} color="#0EBE7E" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Trợ giúp & Câu hỏi thường gặp</Text>
       </View>
@@ -64,7 +62,7 @@ const HelpCenterScreen = ({ navigation }) => {
       <ScrollView showsVerticalScrollIndicator={false}>
         <Text style={styles.subtitle}>Chúng tôi có thể giúp gì cho bạn?</Text>
 
-        {/* Tabs: FAQ / Contact Us */}
+        {/* Tabs */}
         <View style={styles.tabContainer}>
           <TouchableOpacity
             style={[
@@ -103,7 +101,7 @@ const HelpCenterScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Bộ lọc danh mục */}
+        {/* Danh mục */}
         <View style={styles.categoryContainer}>
           {['Chung', 'Tài khoản', 'Dịch vụ'].map(item => (
             <TouchableOpacity
@@ -129,12 +127,12 @@ const HelpCenterScreen = ({ navigation }) => {
 
         {/* Thanh tìm kiếm */}
         <View style={styles.searchContainer}>
-          <TouchableOpacity>
-            <Image
-              source={require('@assets/images/Search_icon.png')}
-              style={styles.searchIcon}
-            />
-          </TouchableOpacity>
+          <Icon
+            name="search"
+            size={20}
+            color="#0EBE7E"
+            style={{ marginRight: 8 }}
+          />
           <TextInput
             placeholder="Tìm kiếm..."
             placeholderTextColor="#888"
@@ -142,7 +140,7 @@ const HelpCenterScreen = ({ navigation }) => {
           />
         </View>
 
-        {/* Danh sách FAQ */}
+        {/* FAQ */}
         {faqData.map((item, index) => (
           <View key={index} style={styles.faqItem}>
             <TouchableOpacity
@@ -151,21 +149,18 @@ const HelpCenterScreen = ({ navigation }) => {
               activeOpacity={0.7}
             >
               <Text style={styles.questionText}>{item.question}</Text>
-              <Image
-                source={require('@assets/images/ArrowDown.png')}
-                style={[
-                  styles.arrowIcon,
-                  selectedQuestion === index && {
-                    transform: [{ rotate: '180deg' }],
-                  },
-                ]}
+              <Icon
+                name={
+                  selectedQuestion === index ? 'expand-less' : 'expand-more'
+                }
+                size={20}
+                color="#000"
               />
             </TouchableOpacity>
 
             {selectedQuestion === index && (
               <Text style={styles.answerText}>{item.answer}</Text>
             )}
-
             <View style={styles.separator} />
           </View>
         ))}
@@ -187,16 +182,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 15,
   },
-  backIcon: {
-    width: 20,
-    height: 20,
-    resizeMode: 'contain',
-    marginRight: 10,
-  },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#000',
+    marginLeft: 10,
   },
   subtitle: {
     textAlign: 'center',
@@ -266,12 +256,6 @@ const styles = StyleSheet.create({
     marginVertical: 15,
     paddingHorizontal: 10,
   },
-  searchIcon: {
-    width: 18,
-    height: 18,
-    resizeMode: 'contain',
-    marginRight: 8,
-  },
   searchInput: {
     flex: 1,
     height: 40,
@@ -290,17 +274,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
     color: '#000',
+    flex: 1,
+    marginRight: 10,
   },
   answerText: {
     fontSize: 13,
     color: '#444',
     marginTop: 8,
     lineHeight: 18,
-  },
-  arrowIcon: {
-    width: 6,
-    height: 6,
-    tintColor: '#000',
   },
   separator: {
     borderBottomWidth: 1,
