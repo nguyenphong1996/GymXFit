@@ -1,3 +1,4 @@
+// screens/WorkoutScreen2.js
 import React from 'react';
 import {
   View,
@@ -8,21 +9,34 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const WorkoutScreen2 = ({ navigation }) => {
   const roundData = [
     {
       round: 'Hiệp 1',
       exercises: [
-        { id: '1', title: 'Đẩy ngực với tạ đòn', time: '00:30', reps: '3x', videoId: '68f27b44812ace4e1165a782' },
-        { id: '2', title: 'Hít xà tam đầu', time: '00:15', reps: '2x', videoId: '68f27b44812ace4e1165a782' },
+        {
+          id: '1',
+          title: 'Đẩy ngực với tạ đòn',
+          time: '00:30',
+          reps: '3x',
+          videoId: '68f27b44812ace4e1165a782',
+        },
+        {
+          id: '2',
+          title: 'Hít xà tam đầu',
+          time: '00:15',
+          reps: '2x',
+          videoId: '68f27b44812ace4e1165a782',
+        },
         {
           id: '3',
           title: 'Gập bụng trên ghế nghiêng',
           time: '00:30',
           reps: '3x',
           videoId: '68f27b44812ace4e1165a782',
-          active: true, // nút play đổi sang Play_Button_2.png
+          active: true,
         },
       ],
     },
@@ -44,33 +58,29 @@ const WorkoutScreen2 = ({ navigation }) => {
     <TouchableOpacity
       key={item.id}
       style={styles.exerciseCard}
-      onPress={() => navigation.navigate('WorkoutVideo', { videoId: item.videoId })}
+      onPress={() =>
+        navigation.navigate('WorkoutVideo', { videoId: item.videoId })
+      }
     >
-      {/* nút phát (play button) */}
+      {/* Nút phát video */}
       <View style={styles.playButtonWrap}>
-        <Image
-          source={
-            item.active
-              ? require('@assets/images/Play_Button_2.png')
-              : require('@assets/images/Play_Button.png')
-          }
-          style={styles.playIcon}
+        <Icon
+          name={item.active ? 'play-circle' : 'play-circle-outline'}
+          size={44}
+          color={item.active ? '#30C451' : '#000'}
         />
       </View>
 
-      {/* thông tin bài tập */}
+      {/* Thông tin bài tập */}
       <View style={styles.exerciseInfo}>
         <Text style={styles.exerciseTitle}>{item.title}</Text>
         <View style={styles.exerciseDetails}>
-          <Image
-            source={require('@assets/images/time.png')}
-            style={styles.detailIcon}
-          />
+          <Icon name="clock-outline" size={16} color="#555" />
           <Text style={styles.exerciseTime}>{item.time}</Text>
         </View>
       </View>
 
-      {/* số lần lặp */}
+      {/* Số lần lặp */}
       <Text style={styles.repsText}>Lặp lại {item.reps}</Text>
     </TouchableOpacity>
   );
@@ -81,36 +91,39 @@ const WorkoutScreen2 = ({ navigation }) => {
       <View style={styles.header}>
         <View style={styles.leftHeader}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Image
-              source={require('@assets/images/back.png')}
-              style={styles.backIcon}
-            />
+            <Icon name="arrow-left" size={26} color="#111" />
           </TouchableOpacity>
           <Text style={styles.title}>Nâng cao</Text>
         </View>
         <View style={styles.rightHeader}>
           <TouchableOpacity>
-            <Image
-              source={require('@assets/images/Search_icon.png')}
-              style={styles.headerIcon}
+            <Icon
+              name="magnify"
+              size={24}
+              color="#111"
+              style={{ marginLeft: 12 }}
             />
           </TouchableOpacity>
           <TouchableOpacity>
-            <Image
-              source={require('@assets/images/Notifications_icon.png')}
-              style={styles.headerIcon}
+            <Icon
+              name="bell-outline"
+              size={24}
+              color="#111"
+              style={{ marginLeft: 12 }}
             />
           </TouchableOpacity>
           <TouchableOpacity>
-            <Image
-              source={require('@assets/images/User_Icon.png')}
-              style={styles.headerIcon}
+            <Icon
+              name="account-circle-outline"
+              size={24}
+              color="#111"
+              style={{ marginLeft: 12 }}
             />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Banner */}
+      {/* Banner (giữ ảnh) */}
       <View style={styles.featuredWrapper}>
         <View style={styles.featuredCard}>
           <Image
@@ -125,33 +138,21 @@ const WorkoutScreen2 = ({ navigation }) => {
           <View style={styles.featuredOverlay}>
             <View style={styles.featuredDetails}>
               <View style={styles.detailRow}>
-                <Image
-                  source={require('@assets/images/time.png')}
-                  style={styles.detailIcon}
-                />
+                <Icon name="clock-outline" size={16} color="#fff" />
                 <Text style={styles.featuredDetailText}>60 Phút</Text>
               </View>
               <View style={styles.detailRow}>
-                <Image
-                  source={require('@assets/images/calories.png')}
-                  style={styles.detailIcon}
-                />
+                <Icon name="fire" size={16} color="#fff" />
                 <Text style={styles.featuredDetailText}>1450 Kcal</Text>
               </View>
               <View style={styles.detailRow}>
-                <Image
-                  source={require('@assets/images/Workout_icon.png')}
-                  style={styles.detailIcon}
-                />
+                <Icon name="dumbbell" size={16} color="#fff" />
                 <Text style={styles.featuredDetailText}>Nâng cao</Text>
               </View>
             </View>
 
             <TouchableOpacity style={styles.featuredFavorite}>
-              <Image
-                source={require('@assets/images/favorites_white_star.png')}
-                style={styles.featuredFavoriteIcon}
-              />
+              <Icon name="star-outline" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
         </View>
@@ -194,24 +195,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  backIcon: {
-    width: 26,
-    height: 26,
-    marginRight: 10,
-    resizeMode: 'contain',
-  },
   title: {
     fontSize: 22,
     fontWeight: '700',
     color: '#111',
+    marginLeft: 10,
   },
-  headerIcon: {
-    width: 22,
-    height: 22,
-    marginLeft: 12,
-    resizeMode: 'contain',
-  },
-
   featuredWrapper: {
     backgroundColor: '#20B24A',
     padding: 12,
@@ -261,20 +250,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  detailIcon: {
-    width: 16,
-    height: 16,
-    resizeMode: 'contain',
-    tintColor: '#fff',
-  },
   featuredDetailText: {
     color: '#fff',
     marginLeft: 6,
     fontSize: 13,
     fontWeight: '600',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
   },
   featuredFavorite: {
     position: 'absolute',
@@ -285,12 +265,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  featuredFavoriteIcon: {
-    width: 18,
-    height: 18,
-    tintColor: '#fff',
-  },
-
   roundTitle: {
     fontSize: 16,
     fontWeight: '700',
@@ -315,11 +289,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
-  },
-  playIcon: {
-    width: 40,
-    height: 40,
-    resizeMode: 'contain',
   },
   exerciseInfo: {
     flex: 1,

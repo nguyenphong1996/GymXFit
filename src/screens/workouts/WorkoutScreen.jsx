@@ -1,3 +1,4 @@
+// screens/WorkoutScreen.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -9,17 +10,22 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
-
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 import { getAllVideos } from '@api/userApi';
 
-const formatDuration = (seconds) => {
+const formatDuration = seconds => {
   if (!seconds && seconds !== 0) {
     return '--:--';
   }
   const totalSeconds = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(totalSeconds / 60);
   const remainSeconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(remainSeconds).padStart(2, '0')} phút`;
+  return `${String(minutes).padStart(2, '0')}:${String(remainSeconds).padStart(
+    2,
+    '0',
+  )} phút`;
 };
 
 const WorkoutScreen = ({ navigation }) => {
@@ -65,14 +71,14 @@ const WorkoutScreen = ({ navigation }) => {
     fetchVideos(debouncedSearch);
   }, [debouncedSearch, fetchVideos]);
 
-  const toggleFavorite = (id) => {
-    setFavorites((prev) => ({
+  const toggleFavorite = id => {
+    setFavorites(prev => ({
       ...prev,
       [id]: !prev[id],
     }));
   };
 
-  const handleNavigateToVideo = (videoId) => {
+  const handleNavigateToVideo = videoId => {
     navigation.navigate('WorkoutVideo', { videoId });
   };
 
@@ -87,25 +93,22 @@ const WorkoutScreen = ({ navigation }) => {
 
         <View style={styles.workoutDetailsColumn}>
           <View style={styles.detailItem}>
-            <Image
-              source={require('@assets/images/time.png')}
-              style={styles.detailIcon}
-            />
-            <Text style={styles.detailText}>{formatDuration(item.duration)}</Text>
+            <MaterialIcons name="schedule" size={16} color="#333" />
+            <Text style={styles.detailText}>
+              {formatDuration(item.duration)}
+            </Text>
           </View>
           <View style={styles.detailItem}>
-            <Image
-              source={require('@assets/images/calories.png')}
-              style={styles.detailIcon}
-            />
-            <Text style={styles.detailText}>{item.estimated_calories} Kcal</Text>
+            <Ionicons name="flame-outline" size={16} color="#333" />
+            <Text style={styles.detailText}>
+              {item.estimated_calories} Kcal
+            </Text>
           </View>
           <View style={styles.detailItem}>
-            <Image
-              source={require('@assets/images/Workout_icon.png')}
-              style={styles.detailIcon}
-            />
-            <Text style={styles.detailText}>{item.subcategory || item.category}</Text>
+            <FontAwesome5 name="dumbbell" size={14} color="#333" />
+            <Text style={styles.detailText}>
+              {item.subcategory || item.category}
+            </Text>
           </View>
         </View>
       </View>
@@ -114,19 +117,19 @@ const WorkoutScreen = ({ navigation }) => {
         {item.thumbnail ? (
           <Image source={{ uri: item.thumbnail }} style={styles.thumbImage} />
         ) : (
-          <Image source={require('@assets/images/workout1.jpg')} style={styles.thumbImage} />
+          <Image
+            source={require('@assets/images/workout1.jpg')}
+            style={styles.thumbImage}
+          />
         )}
         <TouchableOpacity
           style={styles.itemFavorite}
           onPress={() => toggleFavorite(item.id)}
         >
-          <Image
-            source={
-              favorites[item.id]
-                ? require('@assets/images/yellowstar.png')
-                : require('@assets/images/favorites_white_star.png')
-            }
-            style={styles.itemFavoriteIcon}
+          <MaterialIcons
+            name={favorites[item.id] ? 'star' : 'star-border'}
+            size={20}
+            color={favorites[item.id] ? '#FFD700' : '#fff'}
           />
         </TouchableOpacity>
       </View>
@@ -141,32 +144,20 @@ const WorkoutScreen = ({ navigation }) => {
         <View style={styles.header}>
           <View style={styles.leftHeader}>
             <TouchableOpacity onPress={() => navigation.goBack()}>
-              <Image
-                source={require('@assets/images/back.png')}
-                style={styles.backIcon}
-              />
+              <Ionicons name="arrow-back" size={22} color="#333" />
             </TouchableOpacity>
             <Text style={styles.title}>Bài tập</Text>
           </View>
 
           <View style={styles.rightHeader}>
             <TouchableOpacity onPress={() => setSearchVisible(!searchVisible)}>
-              <Image
-                source={require('@assets/images/Search_icon.png')}
-                style={styles.headerIcon}
-              />
+              <Ionicons name="search" size={20} color="#333" />
             </TouchableOpacity>
             <TouchableOpacity>
-              <Image
-                source={require('@assets/images/Notifications_icon.png')}
-                style={styles.headerIcon}
-              />
+              <Ionicons name="notifications-outline" size={20} color="#333" />
             </TouchableOpacity>
             <TouchableOpacity>
-              <Image
-                source={require('@assets/images/User_Icon.png')}
-                style={styles.headerIcon}
-              />
+              <Ionicons name="person-circle-outline" size={22} color="#333" />
             </TouchableOpacity>
           </View>
         </View>
@@ -227,31 +218,24 @@ const WorkoutScreen = ({ navigation }) => {
                   <Text style={styles.badgeText}>Bài tập trong ngày</Text>
                 </View>
                 <View style={styles.featuredOverlay}>
-                  <Text style={styles.featuredTitle}>{featuredVideo.title}</Text>
+                  <Text style={styles.featuredTitle}>
+                    {featuredVideo.title}
+                  </Text>
                   <View style={styles.featuredDetails}>
                     <View style={styles.detailItem}>
-                      <Image
-                        source={require('@assets/images/time.png')}
-                        style={styles.detailIconWhite}
-                      />
+                      <MaterialIcons name="schedule" size={16} color="#fff" />
                       <Text style={styles.featuredDetailText}>
                         {formatDuration(featuredVideo.duration)}
                       </Text>
                     </View>
                     <View style={styles.detailItem}>
-                      <Image
-                        source={require('@assets/images/calories.png')}
-                        style={styles.detailIconWhite}
-                      />
+                      <Ionicons name="flame-outline" size={16} color="#fff" />
                       <Text style={styles.featuredDetailText}>
                         {featuredVideo.estimated_calories} Kcal
                       </Text>
                     </View>
                     <View style={styles.detailItem}>
-                      <Image
-                        source={require('@assets/images/Workout_icon.png')}
-                        style={styles.detailIconWhite}
-                      />
+                      <FontAwesome5 name="dumbbell" size={14} color="#fff" />
                       <Text style={styles.featuredDetailText}>
                         {featuredVideo.subcategory || featuredVideo.category}
                       </Text>
@@ -265,11 +249,13 @@ const WorkoutScreen = ({ navigation }) => {
           <FlatList
             contentContainerStyle={styles.listContent}
             data={videos.slice(1)}
-            keyExtractor={(item) => item.id}
+            keyExtractor={item => item.id}
             renderItem={renderWorkoutItem}
             ListEmptyComponent={
               <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>Không tìm thấy bài tập phù hợp.</Text>
+                <Text style={styles.loadingText}>
+                  Không tìm thấy bài tập phù hợp.
+                </Text>
               </View>
             }
             showsVerticalScrollIndicator={false}
@@ -283,10 +269,7 @@ const WorkoutScreen = ({ navigation }) => {
 export default WorkoutScreen;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
   innerPadding: {
     paddingHorizontal: 20,
     paddingTop: 16,
@@ -305,26 +288,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  backIcon: {
-    width: 18,
-    height: 18,
-    tintColor: '#333',
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111',
-  },
-  rightHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  headerIcon: {
-    width: 20,
-    height: 20,
-    tintColor: '#333',
-  },
+  title: { fontSize: 22, fontWeight: '700', color: '#111' },
+  rightHeader: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   searchInput: {
     marginTop: 12,
     backgroundColor: '#f2f2f2',
@@ -341,11 +306,7 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 24,
   },
-  loadingText: {
-    fontSize: 15,
-    color: '#555',
-    textAlign: 'center',
-  },
+  loadingText: { fontSize: 15, color: '#555', textAlign: 'center' },
   levelContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -359,24 +320,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
   },
-  levelText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#08843a',
-  },
-  featuredWrapper: {
-    paddingHorizontal: 20,
-  },
+  levelText: { fontSize: 14, fontWeight: '600', color: '#08843a' },
+  featuredWrapper: { paddingHorizontal: 20 },
   featuredCard: {
     marginTop: 12,
     borderRadius: 18,
     overflow: 'hidden',
     position: 'relative',
   },
-  featuredImage: {
-    width: '100%',
-    height: 200,
-  },
+  featuredImage: { width: '100%', height: 200 },
   badgeWrap: {
     position: 'absolute',
     top: 16,
@@ -386,11 +338,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
   },
-  badgeText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 12,
-  },
+  badgeText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   featuredOverlay: {
     position: 'absolute',
     inset: 0,
@@ -404,34 +352,10 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 10,
   },
-  featuredDetails: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  detailIcon: {
-    width: 16,
-    height: 16,
-    tintColor: '#333',
-  },
-  detailIconWhite: {
-    width: 16,
-    height: 16,
-    tintColor: '#fff',
-  },
-  detailText: {
-    fontSize: 13,
-    color: '#333',
-  },
-  featuredDetailText: {
-    fontSize: 13,
-    color: '#fff',
-    fontWeight: '600',
-  },
+  featuredDetails: { flexDirection: 'row', gap: 16 },
+  detailItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  detailText: { fontSize: 13, color: '#333' },
+  featuredDetailText: { fontSize: 13, color: '#fff', fontWeight: '600' },
   listContent: {
     paddingHorizontal: 20,
     paddingTop: 16,
@@ -451,18 +375,9 @@ const styles = StyleSheet.create({
     elevation: 2,
     gap: 16,
   },
-  workoutInfo: {
-    flex: 1,
-  },
-  workoutTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#111',
-  },
-  workoutDetailsColumn: {
-    marginTop: 12,
-    gap: 8,
-  },
+  workoutInfo: { flex: 1 },
+  workoutTitle: { fontSize: 17, fontWeight: '700', color: '#111' },
+  workoutDetailsColumn: { marginTop: 12, gap: 8 },
   thumbSection: {
     width: 110,
     height: 110,
@@ -470,10 +385,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
-  thumbImage: {
-    width: '100%',
-    height: '100%',
-  },
+  thumbImage: { width: '100%', height: '100%' },
   itemFavorite: {
     position: 'absolute',
     top: 8,
@@ -484,9 +396,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  itemFavoriteIcon: {
-    width: 18,
-    height: 18,
   },
 });
