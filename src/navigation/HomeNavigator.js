@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -11,6 +11,7 @@ import ProfileScreen from '@screens/profile/ProfileScreen';
 import QrScannerModal from '@screens/qr/QrScannerModal';
 import UpdateProfileScreen from '@screens/profile/UpdateProfileScreen';
 import SearchCalendarScreen from '@screens/booking/SearchCalendarScreen';
+import BookScreen from '@screens/booking/BookScreen';
 import NewsScreen from '@screens/home/NewsScreen';
 import CalendarScreen from '@screens/booking/CalendarScreen';
 import CardMembershipScreen from '@screens/membership/CardMembershipScreen';
@@ -26,6 +27,13 @@ const renderCustomTabBar = props => <CustomTabBar {...props} />;
 // Custom Tab Bar với FAB
 const CustomTabBar = ({ state, descriptors, navigation }) => {
     const [showQRScanner, setShowQRScanner] = useState(false);
+    const handleScanSuccess = useCallback(
+        result => {
+            const value = result?.value ?? 'Không rõ dữ liệu';
+            Alert.alert('Quét mã thành công', value);
+        },
+        [],
+    );
 
     return (
         <View style={styles.tabContainer}>
@@ -33,6 +41,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
             <QrScannerModal
                 visible={showQRScanner}
                 onClose={() => setShowQRScanner(false)}
+                onScan={handleScanSuccess}
             />
 
             {/* Nút Home */}
@@ -120,6 +129,7 @@ const HomeStack = () => {
             <Stack.Screen name='WorkoutScreen' component={WorkoutScreen} />
             <Stack.Screen name='WorkoutScreen2' component={WorkoutScreen2} />
             <Stack.Screen name='WorkoutVideo' component={WorkoutVideoScreen} />
+            <Stack.Screen name='BookScreen' component={BookScreen} />
         </Stack.Navigator>
     )
 }

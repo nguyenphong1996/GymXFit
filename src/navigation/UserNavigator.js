@@ -17,28 +17,20 @@ import WorkoutScreen2 from '@screens/workouts/WorkoutScreen2';
 import WorkoutVideoScreen from '@screens/video/WorkoutVideoScreen';
 import UpdateProfileScreen from '@screens/profile/UpdateProfileScreen';
 import BookScreen from '@screens/booking/BookScreen';
-import CalendarScreen from '@screens/booking/CalendarScreen';
-import SearchCalendarScreen from '@screens/booking/SearchCalendarScreen';
-import ProfileScreen from '@screens/profile/ProfileScreen';
-import HomeScreen from '@screens/home/HomeScreen';
-import NotificationScreen from '@screens/home/NewsScreen';
 
 const Stack = createNativeStackNavigator();
 
 const UserNavigator = () => {
   return (
     <Stack.Navigator
-      initialRouteName="LoginScreen"
+      initialRouteName="RegisterScreen"
       screenOptions={{
         headerShown: false,
       }}
     >
       <Stack.Screen name="LoginScreen" component={LoginScreen} />
       <Stack.Screen name="RegisterScreen" component={RegisterScreen} />
-      <Stack.Screen
-        name="VerifyRegisterScreen"
-        component={VerifyRegisterScreen}
-      />
+      <Stack.Screen name="VerifyRegisterScreen" component={VerifyRegisterScreen} />
       <Stack.Screen name="VerifyLoginScreen" component={VerifyLoginScreen} />
       <Stack.Screen name="SurveyScreen" component={SurveyScreen} />
       <Stack.Screen name="CustomerService" component={CustomerServiceScreen} />
@@ -49,17 +41,9 @@ const UserNavigator = () => {
       <Stack.Screen name="WelcomeScreen" component={WelcomeScreen} />
       <Stack.Screen name="WorkoutScreen" component={WorkoutScreen} />
       <Stack.Screen name="WorkoutScreen2" component={WorkoutScreen2} />
-      <Stack.Screen name="WorkoutVideoScreen" component={WorkoutVideoScreen} />
+      <Stack.Screen name="WorkoutVideo" component={WorkoutVideoScreen} />
       <Stack.Screen name="UpdateProfile" component={UpdateProfileScreen} />
       <Stack.Screen name="BookScreen" component={BookScreen} />
-      <Stack.Screen name="CalendarScreen" component={CalendarScreen} />
-      <Stack.Screen
-        name="SearchCalendarScreen"
-        component={SearchCalendarScreen}
-      />
-      <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
-      <Stack.Screen name="HomeScreen" component={HomeScreen} />
-      <Stack.Screen name="NotificationScreen" component={NotificationScreen} />
     </Stack.Navigator>
   );
 };

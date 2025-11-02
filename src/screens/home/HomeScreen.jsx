@@ -308,7 +308,7 @@ const QuickActions = ({
           if (onNavigateTrainer) {
             onNavigateTrainer();
           } else {
-            navigation.navigate('SearchCalendarScreen');
+            navigation.navigate('BookScreen');
           }
         }}
         disabled={quickActionLoading === 'trainer'}
@@ -686,8 +686,8 @@ const HomeScreen = ({ navigation }) => {
   );
 
   const handleNavigateTrainer = useCallback(
-    () => fetchQuickClassesAndNavigate('trainer'),
-    [fetchQuickClassesAndNavigate],
+    () => navigation.navigate('BookScreen'),
+    [navigation],
   );
 
   const handlePressClass = useCallback(
