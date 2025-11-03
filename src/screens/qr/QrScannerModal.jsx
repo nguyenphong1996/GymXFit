@@ -49,16 +49,52 @@ const PERMISSION_STATUS = {
   blocked: 'blocked',
 };
 
-const QrScannerModal = ({ visible, onClose, onScan }) => {
+const DEFAULT_HELPER_TEXT = 'Giữ thiết bị ổn định, đưa QR vào khung để điểm danh.';
+
+const formatDateTime = value => {
+  if (!value) return '';
+  try {
+    return new Date(value).toLocaleString('vi-VN', {
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return value;
+  }
+};
+
+const shortenValue = (value, max = 28) => {
+  if (typeof value !== 'string') return value;
+  if (value.length <= max) return value;
+  return `${value.slice(0, 12)}…${value.slice(-6)}`;
+};
+
+const QrScannerModal = ({
+  visible,
+  onClose,
+  onCheckIn,
+  onCheckOut,
+  helperTitle,
+  disableActions = false,
+  onUnsupportedRole,
+}) => {
   const [permissionStatus, setPermissionStatus] = useState(PERMISSION_STATUS.checking);
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [scannedResult, setScannedResult] = useState(null);
   const [cameraError, setCameraError] = useState(null);
+  const [actionLoading, setActionLoading] = useState(null);
+  const [actionState, setActionState] = useState({ status: 'idle', message: '', type: null });
 
   const resetState = useCallback(() => {
     setTorchEnabled(false);
     setScannedResult(null);
     setCameraError(null);
+    setActionLoading(null);
+    setActionState({ status: 'idle', message: '', type: null });
     setPermissionStatus(PERMISSION_STATUS.checking);
   }, []);
 
@@ -141,6 +177,7 @@ const QrScannerModal = ({ visible, onClose, onScan }) => {
       const value = event?.nativeEvent?.codeStringValue?.trim();
       if (!value) return;
       Vibration.vibrate(80);
+      setActionState({ status: 'idle', message: '', type: null });
       setScannedResult({
         value,
         type: event?.nativeEvent?.codeFormat ?? 'unknown',
@@ -149,21 +186,80 @@ const QrScannerModal = ({ visible, onClose, onScan }) => {
     [scannedResult],
   );
 
-  const handleUseResult = useCallback(() => {
-    if (scannedResult && onScan) {
-      onScan(scannedResult);
-    }
-    handleClose();
-  }, [handleClose, onScan, scannedResult]);
-
   const handleRescan = useCallback(() => {
     setScannedResult(null);
+    setActionState({ status: 'idle', message: '', type: null });
   }, []);
 
   const handleCameraError = useCallback(event => {
     const message = event?.nativeEvent?.errorMessage || 'Không thể khởi tạo camera';
     setCameraError(message);
   }, []);
+
+  const parsedPayload = useMemo(() => {
+    if (!scannedResult?.value) return null;
+    if (typeof scannedResult.value === 'object') return scannedResult.value;
+    try {
+      return JSON.parse(scannedResult.value);
+    } catch {
+      return null;
+    }
+  }, [scannedResult]);
+
+  const handleUnsupported = useCallback(
+    message => {
+      const fallback = message || 'Tài khoản hiện tại không thể sử dụng chức năng này.';
+      setActionState({
+        status: 'error',
+        message: fallback,
+        type: null,
+      });
+      if (onUnsupportedRole) {
+        onUnsupportedRole();
+      }
+    },
+    [onUnsupportedRole],
+  );
+
+  const handleAttendanceAction = useCallback(
+    async actionType => {
+      if (!scannedResult) return;
+
+      if (disableActions) {
+        handleUnsupported('Vui lòng đăng nhập bằng tài khoản phù hợp để điểm danh.');
+        return;
+      }
+
+      const handler = actionType === 'checkin' ? onCheckIn : onCheckOut;
+      if (!handler) {
+        handleUnsupported(
+          actionType === 'checkin'
+            ? 'Chức năng check-in hiện chưa khả dụng.'
+            : 'Chức năng check-out hiện chưa khả dụng.',
+        );
+        return;
+      }
+
+      try {
+        setActionLoading(actionType);
+        const feedback = await handler(scannedResult);
+        setActionState({
+          status: 'success',
+          message: feedback || (actionType === 'checkin' ? 'Check-in thành công.' : 'Check-out thành công.'),
+          type: actionType,
+        });
+      } catch (error) {
+        setActionState({
+          status: 'error',
+          message: error?.message || 'Không thể xử lý QR.',
+          type: actionType,
+        });
+      } finally {
+        setActionLoading(null);
+      }
+    },
+    [disableActions, handleUnsupported, onCheckIn, onCheckOut, scannedResult],
+  );
 
   const permissionContent = useMemo(() => {
     if (permissionStatus === PERMISSION_STATUS.checking) {
@@ -220,28 +316,102 @@ const QrScannerModal = ({ visible, onClose, onScan }) => {
         <Icon name="check-circle" size={24} color={PALETTE.primary} />
         <Text style={styles.resultTitle}>Đã quét mã QR</Text>
       </View>
-      <Text style={styles.resultValue} numberOfLines={3} ellipsizeMode="middle">
-        {scannedResult.value}
-      </Text>
+      {helperTitle ? <Text style={styles.resultHelper}>{helperTitle}</Text> : null}
+
+      <View style={styles.payloadContainer}>
+        <View style={styles.payloadRow}>
+          <Icon name="fingerprint" size={18} color={PALETTE.primary} />
+          <Text style={styles.payloadLabel}>Dữ liệu</Text>
+        </View>
+        <Text style={styles.payloadValue} numberOfLines={4} ellipsizeMode="middle">
+          {scannedResult.value}
+        </Text>
+
+        {parsedPayload?.classId ? (
+          <View style={styles.payloadMeta}>
+            <View style={styles.metaRow}>
+              <Icon name="barcode-scan" size={18} color={PALETTE.accent} />
+              <Text style={styles.metaText}>Lớp: {shortenValue(parsedPayload.classId)}</Text>
+            </View>
+            {parsedPayload?.generatedAt ? (
+              <View style={styles.metaRow}>
+                <Icon name="clock-time-four-outline" size={18} color={PALETTE.accent} />
+                <Text style={styles.metaText}>
+                  Sinh lúc: {formatDateTime(parsedPayload.generatedAt)}
+                </Text>
+              </View>
+            ) : null}
+            {parsedPayload?.token ? (
+              <View style={styles.metaRow}>
+                <Icon name="shield-key" size={18} color={PALETTE.accent} />
+                <Text style={styles.metaText}>Token: {shortenValue(parsedPayload.token)}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+
+      {actionState.status !== 'idle' ? (
+        <View
+          style={[
+            styles.feedbackBanner,
+            actionState.status === 'success' ? styles.feedbackSuccess : styles.feedbackError,
+          ]}
+        >
+          <Icon
+            name={actionState.status === 'success' ? 'check-circle-outline' : 'alert-circle-outline'}
+            size={18}
+            color={PALETTE.textOnPrimary}
+          />
+          <Text style={styles.feedbackText}>{actionState.message}</Text>
+        </View>
+      ) : null}
+
       <View style={styles.resultActions}>
         <TouchableOpacity
-          style={[styles.resultButton, styles.resultSecondaryButton]}
+          style={[styles.actionButton, styles.secondaryButton]}
           onPress={handleRescan}
         >
-          <Text style={styles.resultSecondaryText}>Quét lại</Text>
+          <Text style={styles.secondaryButtonText}>Quét lại</Text>
         </TouchableOpacity>
+
         <TouchableOpacity
-          style={[styles.resultButton, styles.resultPrimaryButton]}
-          onPress={handleUseResult}
+          style={[
+            styles.actionButton,
+            styles.primaryButton,
+            disableActions && styles.actionButtonDisabled,
+          ]}
+          disabled={actionLoading === 'checkin' || disableActions}
+          onPress={() => handleAttendanceAction('checkin')}
         >
-          <Text style={styles.resultPrimaryText}>Sử dụng mã</Text>
+          {actionLoading === 'checkin' ? (
+            <ActivityIndicator color={PALETTE.textOnPrimary} />
+          ) : (
+            <Text style={styles.primaryButtonText}>Check-in</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.actionButton,
+            styles.tonalButton,
+            disableActions && styles.actionButtonDisabled,
+          ]}
+          disabled={actionLoading === 'checkout' || disableActions}
+          onPress={() => handleAttendanceAction('checkout')}
+        >
+          {actionLoading === 'checkout' ? (
+            <ActivityIndicator color={PALETTE.textPrimary} />
+          ) : (
+            <Text style={styles.tonalButtonText}>Check-out</Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
   ) : (
     <View style={styles.helperCard}>
       <Icon name="qrcode-scan" size={22} color={PALETTE.accent} />
-      <Text style={styles.helperText}>Giữ thiết bị ổn định và đảm bảo ánh sáng đủ</Text>
+      <Text style={styles.helperText}>{helperTitle || DEFAULT_HELPER_TEXT}</Text>
     </View>
   );
 
@@ -542,40 +712,114 @@ const styles = StyleSheet.create({
     color: PALETTE.textPrimary,
     marginLeft: 10,
   },
-  resultValue: {
+  resultHelper: {
+    color: PALETTE.textSecondary,
+    fontSize: 14,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  payloadContainer: {
+    backgroundColor: PALETTE.surfaceMuted,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: PALETTE.outline,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 16,
+  },
+  payloadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 8,
+  },
+  payloadLabel: {
+    fontSize: 14,
+    fontWeight: '700',
     color: PALETTE.textPrimary,
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 18,
+  },
+  payloadValue: {
+    color: PALETTE.textPrimary,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  payloadMeta: {
+    marginTop: 12,
+    gap: 8,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  metaText: {
+    fontSize: 13,
+    color: PALETTE.textSecondary,
+    fontWeight: '600',
+  },
+  feedbackBanner: {
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  feedbackSuccess: {
+    backgroundColor: 'rgba(48, 196, 81, 0.22)',
+  },
+  feedbackError: {
+    backgroundColor: 'rgba(253, 93, 93, 0.22)',
+  },
+  feedbackText: {
+    color: PALETTE.textPrimary,
+    fontSize: 13,
+    lineHeight: 18,
+    flex: 1,
   },
   resultActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 12,
   },
-  resultButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
+  actionButton: {
+    borderRadius: 14,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
-  resultSecondaryButton: {
+  actionButtonDisabled: {
+    opacity: 0.6,
+  },
+  secondaryButton: {
     borderWidth: 1,
-    borderColor: PALETTE.accent,
-    marginRight: 8,
+    borderColor: PALETTE.outline,
     backgroundColor: 'transparent',
   },
-  resultSecondaryText: {
-    color: PALETTE.accent,
+  secondaryButtonText: {
+    fontSize: 15,
     fontWeight: '600',
+    color: PALETTE.textPrimary,
+  },
+  primaryButton: {
+    backgroundColor: PALETTE.primary,
+    shadowColor: PALETTE.primary,
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
+  primaryButtonText: {
+    color: PALETTE.textOnPrimary,
+    fontWeight: '700',
     fontSize: 15,
   },
-  resultPrimaryButton: {
-    backgroundColor: PALETTE.primary,
-    marginLeft: 8,
+  tonalButton: {
+    backgroundColor: 'rgba(48, 196, 81, 0.16)',
   },
-  resultPrimaryText: {
-    color: PALETTE.textOnPrimary,
+  tonalButtonText: {
+    color: PALETTE.primary,
     fontWeight: '700',
     fontSize: 15,
   },
