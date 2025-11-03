@@ -22,6 +22,26 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import CameraKitModule, { Camera, CameraType } from 'react-native-camera-kit';
 
+const PALETTE = {
+  primary: '#30C451',
+  primaryDark: '#1FA04A',
+  accent: '#81F4A8',
+  background: '#05130B',
+  surface: 'rgba(6, 20, 12, 0.96)',
+  surfaceMuted: 'rgba(9, 27, 17, 0.72)',
+  surfaceElevated: 'rgba(11, 32, 21, 0.94)',
+  textPrimary: '#F1FFF6',
+  textSecondary: '#9BBEA9',
+  textMuted: '#6F8579',
+  textInverse: '#102615',
+  textOnPrimary: '#FFFFFF',
+  outline: 'rgba(129, 244, 168, 0.28)',
+  borderBright: 'rgba(129, 244, 168, 0.42)',
+  overlayScrim: 'rgba(5, 19, 11, 0.9)',
+  overlayDim: 'rgba(5, 19, 11, 0.64)',
+  danger: '#FD5D5D',
+};
+
 const PERMISSION_STATUS = {
   checking: 'checking',
   granted: 'granted',
@@ -149,7 +169,7 @@ const QrScannerModal = ({ visible, onClose, onScan }) => {
     if (permissionStatus === PERMISSION_STATUS.checking) {
       return (
         <View style={styles.stateContainer}>
-          <ActivityIndicator size="large" color="#30C451" />
+          <ActivityIndicator size="large" color={PALETTE.primary} />
           <Text style={styles.stateText}>Đang kiểm tra quyền truy cập camera...</Text>
         </View>
       );
@@ -162,7 +182,7 @@ const QrScannerModal = ({ visible, onClose, onScan }) => {
     if (permissionStatus === PERMISSION_STATUS.denied) {
       return (
         <View style={styles.permissionContainer}>
-          <Icon name="camera-off" size={56} color="#30C451" />
+          <Icon name="camera-off" size={56} color={PALETTE.primary} />
           <Text style={styles.permissionTitle}>Chưa có quyền sử dụng camera</Text>
           <Text style={styles.permissionDescription}>
             Vui lòng cho phép GymXFit truy cập camera để quét mã QR của bạn.
@@ -179,7 +199,7 @@ const QrScannerModal = ({ visible, onClose, onScan }) => {
 
     return (
       <View style={styles.permissionContainer}>
-        <Icon name="shield-lock" size={56} color="#30C451" />
+        <Icon name="shield-lock" size={56} color={PALETTE.primary} />
         <Text style={styles.permissionTitle}>Camera đã bị chặn quyền truy cập</Text>
         <Text style={styles.permissionDescription}>
           Hãy mở phần Cài đặt và cấp quyền camera cho GymXFit để tiếp tục quét mã QR.
@@ -197,7 +217,7 @@ const QrScannerModal = ({ visible, onClose, onScan }) => {
   const renderResultCard = scannedResult ? (
     <View style={styles.resultCard}>
       <View style={styles.resultHeader}>
-        <Icon name="check-circle" size={24} color="#30C451" />
+        <Icon name="check-circle" size={24} color={PALETTE.primary} />
         <Text style={styles.resultTitle}>Đã quét mã QR</Text>
       </View>
       <Text style={styles.resultValue} numberOfLines={3} ellipsizeMode="middle">
@@ -220,7 +240,7 @@ const QrScannerModal = ({ visible, onClose, onScan }) => {
     </View>
   ) : (
     <View style={styles.helperCard}>
-      <Icon name="qrcode-scan" size={22} color="#9bbfa3" />
+      <Icon name="qrcode-scan" size={22} color={PALETTE.accent} />
       <Text style={styles.helperText}>Giữ thiết bị ổn định và đảm bảo ánh sáng đủ</Text>
     </View>
   );
@@ -245,11 +265,15 @@ const QrScannerModal = ({ visible, onClose, onScan }) => {
       </View>
       <View style={styles.actionsBar}>
         <TouchableOpacity style={styles.actionButton} onPress={handleClose}>
-          <Icon name="close" size={26} color="#1b1b1f" />
+          <Icon name="close" size={26} color={PALETTE.textPrimary} />
           <Text style={[styles.actionLabel, styles.actionLabelSpacing]}>Đóng</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton} onPress={handleTorchToggle}>
-          <Icon name={torchEnabled ? 'flashlight' : 'flashlight-off'} size={26} color="#1b1b1f" />
+          <Icon
+            name={torchEnabled ? 'flashlight' : 'flashlight-off'}
+            size={26}
+            color={PALETTE.textPrimary}
+          />
           <Text style={[styles.actionLabel, styles.actionLabelSpacing]}>
             {torchEnabled ? 'Tắt đèn' : 'Bật đèn'}
           </Text>
@@ -257,7 +281,7 @@ const QrScannerModal = ({ visible, onClose, onScan }) => {
       </View>
       {cameraError ? (
         <View style={styles.errorBanner}>
-          <Icon name="alert-circle" size={20} color="#fff" />
+          <Icon name="alert-circle" size={20} color={PALETTE.textOnPrimary} />
           <Text style={styles.errorText}>{cameraError}</Text>
         </View>
       ) : null}
@@ -270,7 +294,7 @@ const QrScannerModal = ({ visible, onClose, onScan }) => {
         <Suspense
           fallback={
             <View style={styles.pendingOverlay}>
-              <ActivityIndicator size="large" color="#30C451" />
+              <ActivityIndicator size="large" color={PALETTE.primary} />
               <Text style={styles.pendingText}>Đang kích hoạt camera...</Text>
             </View>
           }
@@ -294,12 +318,18 @@ const QrScannerModal = ({ visible, onClose, onScan }) => {
     );
 
   return (
-    <Modal visible={visible} animationType="fade" presentationStyle="fullScreen" onRequestClose={handleClose}>
+    <Modal
+      visible={visible}
+      animationType="fade"
+      presentationStyle="fullScreen"
+      statusBarTranslucent
+      onRequestClose={handleClose}
+    >
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" />
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         <View style={styles.header}>
           <TouchableOpacity style={styles.headerButton} onPress={handleClose}>
-            <Icon name="arrow-left" size={24} color="#fff" />
+            <Icon name="arrow-left" size={24} color={PALETTE.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Quét mã QR</Text>
           <View style={styles.headerPlaceholder} />
@@ -315,14 +345,22 @@ const QrScannerModal = ({ visible, onClose, onScan }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f1b12',
+    backgroundColor: PALETTE.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
     justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(5, 19, 11, 0.96)',
+    borderBottomColor: PALETTE.outline,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
   },
   headerButton: {
     width: 40,
@@ -330,24 +368,32 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: PALETTE.surfaceMuted,
+    borderWidth: 1,
+    borderColor: PALETTE.outline,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#fff',
+    color: PALETTE.textPrimary,
   },
   headerPlaceholder: {
     width: 40,
   },
   body: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    alignSelf: 'stretch',
+    backgroundColor: 'transparent',
   },
   cameraWrapper: {
     flex: 1,
     alignSelf: 'stretch',
+    marginHorizontal: 0,
+    marginTop: 0,
+    marginBottom: 0,
+    borderRadius: 0,
+    overflow: 'hidden',
+    backgroundColor: '#000',
   },
   cameraPreview: {
     position: 'absolute',
@@ -362,7 +408,7 @@ const styles = StyleSheet.create({
   },
   overlayDim: {
     flex: 1,
-    backgroundColor: 'rgba(10, 20, 14, 0.6)',
+    backgroundColor: PALETTE.overlayDim,
   },
   overlayRow: {
     flexDirection: 'row',
@@ -372,16 +418,22 @@ const styles = StyleSheet.create({
   scanFrame: {
     width: 260,
     height: 260,
-    borderRadius: 16,
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
+    borderRadius: 20,
+    borderColor: PALETTE.borderBright,
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(3, 18, 10, 0.32)',
   },
   frameCorner: {
     position: 'absolute',
-    width: 42,
-    height: 42,
-    borderColor: '#30C451',
+    width: 44,
+    height: 44,
+    borderColor: PALETTE.primary,
     borderWidth: 4,
+    shadowColor: PALETTE.primary,
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
   },
   topLeft: {
     top: -2,
@@ -408,13 +460,15 @@ const styles = StyleSheet.create({
     borderTopWidth: 0,
   },
   overlayBottom: {
-    paddingTop: 24,
+    paddingTop: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
   bottomInstruction: {
-    color: '#d8f4e0',
+    color: PALETTE.textPrimary,
     fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.4,
   },
   actionsBar: {
     position: 'absolute',
@@ -423,15 +477,18 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     justifyContent: 'space-evenly',
-    paddingVertical: 18,
-    backgroundColor: 'rgba(15, 27, 18, 0.92)',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    backgroundColor: 'rgba(5, 19, 11, 0.95)',
+    borderTopColor: PALETTE.outline,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   actionButton: {
     alignItems: 'center',
-    marginHorizontal: 24,
+    marginHorizontal: 16,
   },
   actionLabel: {
-    color: '#d8f4e0',
+    color: PALETTE.textSecondary,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -442,30 +499,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 28,
     alignSelf: 'stretch',
+    backgroundColor: 'rgba(5, 19, 11, 0.96)',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: PALETTE.outline,
   },
   helperCard: {
-    backgroundColor: 'rgba(48, 196, 81, 0.12)',
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
+    backgroundColor: PALETTE.surfaceMuted,
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: PALETTE.borderBright,
   },
   helperText: {
-    color: '#b7d9c0',
+    color: PALETTE.textPrimary,
     fontSize: 14,
     flex: 1,
     marginLeft: 12,
   },
   resultCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 18,
+    backgroundColor: PALETTE.surfaceElevated,
+    borderRadius: 20,
+    padding: 20,
     shadowColor: '#000',
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.12,
     shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 8 },
     elevation: 6,
+    borderWidth: 1,
+    borderColor: PALETTE.outline,
   },
   resultHeader: {
     flexDirection: 'row',
@@ -475,14 +539,14 @@ const styles = StyleSheet.create({
   resultTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#102615',
+    color: PALETTE.textPrimary,
     marginLeft: 10,
   },
   resultValue: {
-    color: '#273b2c',
+    color: PALETTE.textPrimary,
     fontSize: 15,
-    lineHeight: 20,
-    marginBottom: 16,
+    lineHeight: 22,
+    marginBottom: 18,
   },
   resultActions: {
     flexDirection: 'row',
@@ -491,26 +555,27 @@ const styles = StyleSheet.create({
   resultButton: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   resultSecondaryButton: {
     borderWidth: 1,
-    borderColor: '#30C451',
+    borderColor: PALETTE.accent,
     marginRight: 8,
+    backgroundColor: 'transparent',
   },
   resultSecondaryText: {
-    color: '#30C451',
+    color: PALETTE.accent,
     fontWeight: '600',
     fontSize: 15,
   },
   resultPrimaryButton: {
-    backgroundColor: '#30C451',
+    backgroundColor: PALETTE.primary,
     marginLeft: 8,
   },
   resultPrimaryText: {
-    color: '#fff',
+    color: PALETTE.textOnPrimary,
     fontWeight: '700',
     fontSize: 15,
   },
@@ -519,41 +584,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
+    backgroundColor: PALETTE.background,
   },
   permissionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#fff',
+    color: PALETTE.textPrimary,
     marginTop: 18,
   },
   permissionDescription: {
-    color: '#d8f4e0',
+    color: PALETTE.textSecondary,
     fontSize: 15,
     textAlign: 'center',
     marginTop: 10,
+    lineHeight: 22,
   },
   permissionButton: {
-    backgroundColor: '#30C451',
-    borderRadius: 10,
-    paddingHorizontal: 20,
+    backgroundColor: PALETTE.primary,
+    borderRadius: 12,
+    paddingHorizontal: 24,
     paddingVertical: 12,
-    marginTop: 18,
+    marginTop: 20,
+    minWidth: 200,
   },
   permissionButtonText: {
-    color: '#fff',
+    color: PALETTE.textOnPrimary,
     fontWeight: '700',
     fontSize: 14,
   },
   permissionGhostButton: {
-    borderRadius: 10,
-    paddingHorizontal: 20,
+    borderRadius: 12,
+    paddingHorizontal: 24,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
+    borderColor: PALETTE.outline,
     marginTop: 12,
+    backgroundColor: 'transparent',
+    minWidth: 200,
   },
   permissionGhostButtonText: {
-    color: '#fff',
+    color: PALETTE.textPrimary,
     fontWeight: '600',
     fontSize: 14,
   },
@@ -561,9 +631,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 32,
+    backgroundColor: PALETTE.background,
   },
   stateText: {
-    color: '#d8f4e0',
+    color: PALETTE.textSecondary,
     fontSize: 15,
     marginTop: 16,
   },
@@ -571,10 +643,10 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(15, 27, 18, 0.72)',
+    backgroundColor: PALETTE.overlayScrim,
   },
   pendingText: {
-    color: '#d8f4e0',
+    color: PALETTE.textPrimary,
     fontSize: 15,
     marginTop: 16,
   },
@@ -585,13 +657,13 @@ const styles = StyleSheet.create({
     right: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(220, 53, 69, 0.85)',
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: PALETTE.danger,
+    borderRadius: 14,
   },
   errorText: {
-    color: '#fff',
+    color: PALETTE.textOnPrimary,
     fontSize: 14,
     marginLeft: 10,
     flex: 1,
