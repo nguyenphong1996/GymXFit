@@ -16,7 +16,6 @@ import NewsScreen from '@screens/home/NewsScreen';
 import CalendarScreen from '@screens/booking/CalendarScreen';
 import CardMembershipScreen from '@screens/membership/CardMembershipScreen';
 import WorkoutScreen from '@screens/workouts/WorkoutScreen';
-import WorkoutScreen2 from '@screens/workouts/WorkoutScreen2';
 import WorkoutVideoScreen from '@screens/video/WorkoutVideoScreen';
 import { UserContext } from '@context/UserContext';
 import { checkInToClass, checkOutFromClass } from '@api/classesApi';
@@ -209,7 +208,6 @@ const HomeStack = () => {
             <Stack.Screen name='CalendarScreen' component={CalendarScreen} />
             <Stack.Screen name='CardMembershipScreen' component={CardMembershipScreen} />
             <Stack.Screen name='WorkoutScreen' component={WorkoutScreen} />
-            <Stack.Screen name='WorkoutScreen2' component={WorkoutScreen2} />
             <Stack.Screen name='WorkoutVideo' component={WorkoutVideoScreen} />
             <Stack.Screen name='BookScreen' component={BookScreen} />
         </Stack.Navigator>

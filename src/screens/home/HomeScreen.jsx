@@ -806,7 +806,7 @@ const HomeScreen = ({ navigation }) => {
               onPress={() => navigation.navigate('Favorites')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <MaterialIcons name="notifications-none" size={24} color="#145724" />
+              <MaterialIcons name="star-border" size={24} color="#145724" />
             </TouchableOpacity>
           </View>
         ) : null}
