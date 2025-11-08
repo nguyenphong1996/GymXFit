@@ -142,3 +142,41 @@ export async function getVideoById(videoId) {
         throw new Error(errorMessage);
     }
 }
+
+export async function getFavoriteVideos() {
+    try {
+        const response = await createAxiosInstance().get('/api/customer/videos/favorites');
+        return response;
+    } catch (error) {
+        const errorMessage = error.response?.data?.message || 'Không thể tải danh sách video yêu thích.';
+        throw new Error(errorMessage);
+    }
+}
+
+export async function addVideoToFavorites(videoId) {
+    if (!videoId) {
+        throw new Error('Thiếu mã video để thêm vào danh sách yêu thích.');
+    }
+
+    try {
+        const response = await createAxiosInstance().post(`/api/customer/videos/${videoId}/favorites`);
+        return response;
+    } catch (error) {
+        const errorMessage = error.response?.data?.message || 'Không thể thêm video vào danh sách yêu thích.';
+        throw new Error(errorMessage);
+    }
+}
+
+export async function removeVideoFromFavorites(videoId) {
+    if (!videoId) {
+        throw new Error('Thiếu mã video để bỏ khỏi danh sách yêu thích.');
+    }
+
+    try {
+        const response = await createAxiosInstance().delete(`/api/customer/videos/${videoId}/favorites`);
+        return response;
+    } catch (error) {
+        const errorMessage = error.response?.data?.message || 'Không thể gỡ video khỏi danh sách yêu thích.';
+        throw new Error(errorMessage);
+    }
+}

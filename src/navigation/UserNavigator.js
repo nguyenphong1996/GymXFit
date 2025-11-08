@@ -13,7 +13,6 @@ import VerifyRegisterScreen from '@screens/auth/VerifyRegisterScreen';
 import VerifyLoginScreen from '@screens/auth/VerifyLoginScreen';
 import WelcomeScreen from '@screens/onboarding/WelcomeScreen';
 import WorkoutScreen from '@screens/workouts/WorkoutScreen';
-import WorkoutScreen2 from '@screens/workouts/WorkoutScreen2';
 import WorkoutVideoScreen from '@screens/video/WorkoutVideoScreen';
 import UpdateProfileScreen from '@screens/profile/UpdateProfileScreen';
 import BookScreen from '@screens/booking/BookScreen';
@@ -40,7 +39,6 @@ const UserNavigator = () => {
       <Stack.Screen name="OnlineSupport" component={OnlineSupportScreen} />
       <Stack.Screen name="WelcomeScreen" component={WelcomeScreen} />
       <Stack.Screen name="WorkoutScreen" component={WorkoutScreen} />
-      <Stack.Screen name="WorkoutScreen2" component={WorkoutScreen2} />
       <Stack.Screen name="WorkoutVideo" component={WorkoutVideoScreen} />
       <Stack.Screen name="UpdateProfile" component={UpdateProfileScreen} />
       <Stack.Screen name="BookScreen" component={BookScreen} />

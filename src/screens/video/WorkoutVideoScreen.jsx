@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,7 +15,12 @@ import { useRoute } from '@react-navigation/native';
 import Video from 'react-native-video';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
-import { getVideoById } from '@api/userApi';
+import {
+  addVideoToFavorites,
+  getFavoriteVideos,
+  getVideoById,
+  removeVideoFromFavorites,
+} from '@api/userApi';
 
 const FALLBACK_DESCRIPTION =
   'Tăng cường sức mạnh cơ bắp và độ linh hoạt cho toàn thân. Hít thở đều, giữ tư thế ổn định và thực hiện động tác với nhịp chậm để đạt hiệu quả tối đa.';
@@ -30,11 +36,13 @@ const formatDurationLabel = value => {
 const WorkoutVideoScreen = ({ navigation }) => {
   const route = useRoute();
   const videoId = route?.params?.videoId;
+  const initialFavorite = Boolean(route?.params?.initialFavorite);
 
   const [videoData, setVideoData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isFavorite, setIsFavorite] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(initialFavorite);
+  const [isSyncingFavorite, setIsSyncingFavorite] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchText, setSearchText] = useState('');
 
@@ -63,7 +71,57 @@ const WorkoutVideoScreen = ({ navigation }) => {
     fetchVideoDetails();
   }, [videoId]);
 
-  const handleToggleFavorite = () => setIsFavorite(prev => !prev);
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncFavoriteState = async () => {
+      if (!videoId) {
+        return;
+      }
+      try {
+        const response = await getFavoriteVideos();
+        const list = Array.isArray(response?.data)
+          ? response.data
+          : response?.favorites || [];
+        const found = list.some(item => item.videoId === videoId);
+        if (isMounted) {
+          setIsFavorite(found);
+        }
+      } catch (err) {
+        console.warn('Không thể đồng bộ trạng thái yêu thích:', err?.message || err);
+      }
+    };
+
+    syncFavoriteState();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [videoId]);
+
+  const handleToggleFavorite = async () => {
+    if (!videoId) {
+      return;
+    }
+
+    setIsSyncingFavorite(true);
+    try {
+      if (isFavorite) {
+        await removeVideoFromFavorites(videoId);
+        setIsFavorite(false);
+      } else {
+        await addVideoToFavorites(videoId);
+        setIsFavorite(true);
+      }
+    } catch (err) {
+      Alert.alert(
+        'Không thể cập nhật yêu thích',
+        err.message || 'Vui lòng thử lại.',
+      );
+    } finally {
+      setIsSyncingFavorite(false);
+    }
+  };
 
   const descriptionText = useMemo(() => {
     const raw = `${videoData?.description || ''}`.trim();
@@ -186,8 +244,17 @@ const WorkoutVideoScreen = ({ navigation }) => {
             <View style={[styles.videoPlayer, { backgroundColor: '#000' }]} />
           )}
 
-          <TouchableOpacity activeOpacity={0.8} style={styles.favoriteBtn} onPress={handleToggleFavorite}>
-            <Icon name={isFavorite ? 'star' : 'star-border'} size={32} color={isFavorite ? '#FFD700' : '#20B24A'} />
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.favoriteBtn}
+            onPress={handleToggleFavorite}
+            disabled={isSyncingFavorite}
+          >
+            {isSyncingFavorite ? (
+              <ActivityIndicator size="small" color="#FFD700" />
+            ) : (
+              <Icon name={isFavorite ? 'star' : 'star-border'} size={32} color={isFavorite ? '#FFD700' : '#20B24A'} />
+            )}
           </TouchableOpacity>
         </View>
 
