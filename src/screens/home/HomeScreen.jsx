@@ -10,6 +10,8 @@ import {
   RefreshControl,
   Animated,
   Alert,
+  TextInput,
+  Keyboard,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -18,6 +20,28 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { UserContext } from '@context/UserContext';
 import { getAllVideos } from '@api/userApi';
 import { searchAvailableClasses } from '@api/classesApi';
+
+const MATERIAL_COLORS = {
+  primary: '#1F8E4A',
+  onPrimary: '#FFFFFF',
+  primaryContainer: '#C2F0D4',
+  background: '#F5F7F6',
+  surface: '#FFFFFF',
+  surfaceVariant: '#E7EFE8',
+  outline: '#D7E5DB',
+  textPrimary: '#10241A',
+  textSecondary: '#47614F',
+  secondary: '#3A5B4C',
+  error: '#B3261E',
+};
+
+const ELEVATION = {
+  shadowColor: 'rgba(16, 36, 26, 0.12)',
+  shadowOpacity: 0.9,
+  shadowRadius: 12,
+  shadowOffset: { width: 0, height: 8 },
+  elevation: 4,
+};
 
 const formatDateLabel = (date) => {
   try {
@@ -263,20 +287,9 @@ const QuickActions = ({
         onPress={() => navigation.navigate('WorkoutScreen')}
       >
         <View style={styles.bgImage}>
-          <MaterialCommunityIcons name="dumbbell" size={26} color="#08843a" />
+          <MaterialCommunityIcons name="dumbbell" size={28} color={MATERIAL_COLORS.primary} />
         </View>
-        <Text style={styles.itemText}>Tập luyện</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.itemTabBar}
-        onPress={() => navigation.navigate('CalendarScreen')}
-        disabled={quickActionLoading === 'booking' || quickActionLoading === 'trainer'}
-      >
-        <View style={styles.bgImage}>
-          <MaterialCommunityIcons name="calendar-check" size={26} color="#08843a" />
-        </View>
-        <Text style={styles.itemText}>Lịch học</Text>
+        <Text style={styles.itemText}>Workout</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -292,12 +305,12 @@ const QuickActions = ({
       >
         <View style={styles.bgImage}>
           {quickActionLoading === 'booking' ? (
-            <ActivityIndicator size="small" color="#08843a" />
+            <ActivityIndicator size="small" color={MATERIAL_COLORS.primary} />
           ) : (
-            <MaterialCommunityIcons name="calendar-plus" size={26} color="#08843a" />
+            <MaterialCommunityIcons name="calendar-plus" size={28} color={MATERIAL_COLORS.primary} />
           )}
         </View>
-        <Text style={styles.itemText}>Đặt lịch tập</Text>
+        <Text style={styles.itemText}>Schedule</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -306,19 +319,19 @@ const QuickActions = ({
           if (onNavigateTrainer) {
             onNavigateTrainer();
           } else {
-            navigation.navigate('SearchCalendarScreen');
+            navigation.navigate('BookScreen');
           }
         }}
         disabled={quickActionLoading === 'trainer'}
       >
         <View style={styles.bgImage}>
           {quickActionLoading === 'trainer' ? (
-            <ActivityIndicator size="small" color="#08843a" />
+            <ActivityIndicator size="small" color={MATERIAL_COLORS.primary} />
           ) : (
-            <MaterialCommunityIcons name="account-tie" size={26} color="#08843a" />
+            <MaterialCommunityIcons name="account-tie" size={28} color={MATERIAL_COLORS.primary} />
           )}
         </View>
-        <Text style={styles.itemText}>Đặt lịch HLV</Text>
+        <Text style={styles.itemText}>Coaching</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -326,9 +339,9 @@ const QuickActions = ({
         onPress={() => navigation.navigate('CardMembershipScreen')}
       >
         <View style={styles.bgImage}>
-          <MaterialCommunityIcons name="cart-outline" size={26} color="#08843a" />
+          <MaterialCommunityIcons name="cart-outline" size={28} color={MATERIAL_COLORS.primary} />
         </View>
-        <Text style={styles.itemText}>Mua dịch vụ</Text>
+        <Text style={styles.itemText}>Services</Text>
       </TouchableOpacity>
     </View>
   </View>
@@ -521,6 +534,8 @@ const HomeScreen = ({ navigation }) => {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [quickActionLoading, setQuickActionLoading] = useState(null);
+  const [isSearchActive, setIsSearchActive] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState('');
 
   const fetchHomeData = useCallback(async (isPullToRefresh = false) => {
     if (isPullToRefresh) {
@@ -601,6 +616,29 @@ const HomeScreen = ({ navigation }) => {
     [navigation],
   );
 
+  const handleSearchIconPress = useCallback(() => {
+    setIsSearchActive(true);
+  }, []);
+
+  const handleCancelSearch = useCallback(() => {
+    setIsSearchActive(false);
+    setSearchKeyword('');
+    Keyboard.dismiss();
+  }, []);
+
+  const handleSubmitSearch = useCallback(() => {
+    const trimmedKeyword = searchKeyword.trim();
+    if (!trimmedKeyword) return;
+    Keyboard.dismiss();
+    setIsSearchActive(false);
+    setSearchKeyword('');
+    navigation.navigate('WorkoutScreen', { keyword: trimmedKeyword });
+  }, [navigation, searchKeyword]);
+
+  const handleSearchChange = useCallback((value) => {
+    setSearchKeyword(value);
+  }, []);
+
   const navigateToSearchCalendar = useCallback(
     (params) => {
       const targetParams = params ? { ...params } : {};
@@ -659,8 +697,8 @@ const HomeScreen = ({ navigation }) => {
   );
 
   const handleNavigateTrainer = useCallback(
-    () => fetchQuickClassesAndNavigate('trainer'),
-    [fetchQuickClassesAndNavigate],
+    () => navigation.navigate('BookScreen'),
+    [navigation],
   );
 
   const handlePressClass = useCallback(
@@ -714,19 +752,64 @@ const HomeScreen = ({ navigation }) => {
   const listHeader = (
     <View>
       <View style={styles.headerContainer}>
-        <View>
-          <Text style={styles.headerText}>Xin chào {userName}!</Text>
-          <Text style={styles.headerSubText}>Cùng GymXFit hoàn thành mục tiêu hôm nay nhé.</Text>
+        <View style={styles.headerContent}>
+          {isSearchActive ? (
+            <View style={styles.searchBar}>
+              <MaterialIcons name="search" size={20} color="#3a6043" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Tìm kiếm video..."
+                placeholderTextColor="#6a7c6f"
+                value={searchKeyword}
+                onChangeText={handleSearchChange}
+                autoFocus
+                returnKeyType="search"
+                onSubmitEditing={handleSubmitSearch}
+                blurOnSubmit={false}
+              />
+              {searchKeyword.trim().length ? (
+                <TouchableOpacity
+                  style={styles.searchSubmitIcon}
+                  onPress={handleSubmitSearch}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <MaterialIcons name="arrow-forward" size={20} color="#1e6f3d" />
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                style={styles.searchCancelIcon}
+                onPress={handleCancelSearch}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialIcons name="close" size={20} color="#6a7c6f" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.headerText}>Xin chào {userName}!</Text>
+              <Text style={styles.headerSubText}>Cùng GymXFit hoàn thành mục tiêu hôm nay nhé.</Text>
+            </>
+          )}
         </View>
 
-        <View style={styles.headerRight}>
-          <TouchableOpacity onPress={() => navigation.navigate('WorkoutScreen')}>
-            <MaterialCommunityIcons name="magnify" size={24} color="#145724" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Notification')}>
-            <MaterialCommunityIcons name="bell-outline" size={24} color="#145724" />
-          </TouchableOpacity>
-        </View>
+        {!isSearchActive ? (
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.headerActionIcon}
+              onPress={handleSearchIconPress}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialIcons name="search" size={24} color="#145724" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerActionIcon}
+              onPress={() => navigation.navigate('Favorites')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialIcons name="star-border" size={24} color="#145724" />
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </View>
 
       <QuickActions
@@ -817,6 +900,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  headerContent: {
+    flex: 1,
+  },
   headerText: {
     fontSize: 24,
     fontWeight: '700',
@@ -826,48 +912,79 @@ const styles = StyleSheet.create({
     marginTop: 6,
     color: '#4f4f4f',
   },
-  headerRight: {
+  headerActions: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 16,
+  },
+  headerActionIcon: {
+    padding: 6,
+    borderRadius: 12,
+    backgroundColor: '#e7f4eb',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f5f1',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1b2d1f',
+    paddingVertical: 0,
+  },
+  searchSubmitIcon: {
+    padding: 4,
+    borderRadius: 10,
+    backgroundColor: '#d8f2e0',
+  },
+  searchCancelIcon: {
+    padding: 4,
   },
   tabBarContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingTop: 20,
+    paddingBottom: 12,
   },
   tabBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderRadius: 18,
-    backgroundColor: '#fff',
+    justifyContent: 'space-around',
+    borderRadius: 24,
+    backgroundColor: MATERIAL_COLORS.surface,
     borderWidth: 1,
-    borderColor: '#dcefe2',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    borderColor: MATERIAL_COLORS.outline,
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+    ...ELEVATION,
   },
   itemTabBar: {
     alignItems: 'center',
-    width: '20%',
-    gap: 6,
+    gap: 8,
+    flex: 1,
   },
   bgImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#e5f5eb',
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: MATERIAL_COLORS.primaryContainer,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    shadowColor: MATERIAL_COLORS.primary,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   itemText: {
     fontSize: 12,
-    color: '#145724',
+    color: MATERIAL_COLORS.textPrimary,
     textAlign: 'center',
     fontWeight: '600',
+    lineHeight: 16,
   },
   sectionWrapper: {
     marginTop: 24,

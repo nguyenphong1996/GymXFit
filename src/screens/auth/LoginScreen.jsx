@@ -7,44 +7,37 @@ import {
   StyleSheet,
   Image,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
 } from 'react-native';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import { requestLoginOtp } from '@api/userApi';
 
-const LoginScreen = (props) => {
-  const { navigation } = props;
+const LoginScreen = ({ navigation }) => {
   const [mobileNumber, setMobileNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
     const trimmedNumber = mobileNumber.trim();
 
-    // 🟥 Kiểm tra không để trống
     if (trimmedNumber === '') {
       Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại của bạn.');
       return;
     }
-
-    // 🟧 Kiểm tra có ít nhất 10 chữ số
     if (trimmedNumber.length !== 10) {
       Alert.alert('Lỗi', 'Số điện thoại phải có 10 chữ số.');
       return;
     }
 
     setIsLoading(true);
-
     try {
-      // Gọi API để yêu cầu gửi OTP
       await requestLoginOtp(trimmedNumber);
-
-      Alert.alert('Thành công', 'Mã OTP đã được gửi đến số điện thoại của bạn.');
-
-      // Nếu thành công, chuyển sang màn hình xác thực và truyền SĐT theo
+      Alert.alert(
+        'Thành công',
+        'Mã OTP đã được gửi đến số điện thoại của bạn.',
+      );
       navigation.navigate('VerifyLoginScreen', { phone: trimmedNumber });
-
     } catch (error) {
-      // Bắt lỗi từ API (ví dụ: SĐT không tồn tại)
       Alert.alert('Đăng nhập thất bại', error.message);
     } finally {
       setIsLoading(false);
@@ -53,7 +46,7 @@ const LoginScreen = (props) => {
 
   return (
     <View style={styles.container}>
-      {/* Logo */}
+      {/* 🟩 Logo */}
       <Image
         source={require('@assets/images/logo.png')}
         style={styles.logo}
@@ -62,24 +55,38 @@ const LoginScreen = (props) => {
 
       <Text style={styles.loginText}>Đăng nhập</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Nhập số điện thoại"
-        placeholderTextColor="#888"
-        keyboardType="phone-pad"
-        value={mobileNumber}
-        onChangeText={setMobileNumber}
-        editable={!isLoading}
-      />
+      {/* 🟩 Ô nhập số điện thoại với icon hợp lý */}
+      <View style={styles.inputContainer}>
+        <MaterialIcons
+          name="smartphone"
+          size={24}
+          color="#20B24A"
+          style={styles.inputIcon}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Nhập số điện thoại"
+          placeholderTextColor="#888"
+          keyboardType="phone-pad"
+          value={mobileNumber}
+          onChangeText={setMobileNumber}
+          editable={!isLoading}
+        />
+      </View>
 
-      <TouchableOpacity onPress={handleLogin}
+      {/* 🟩 Nút đăng nhập với icon đăng nhập chuẩn */}
+      <TouchableOpacity
+        onPress={handleLogin}
         style={[styles.button, isLoading && styles.buttonDisabled]}
         disabled={isLoading}
       >
         {isLoading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.buttonText}>Đăng nhập</Text>
+          <View style={styles.buttonContent}>
+            <MaterialIcons name="login" size={22} color="#fff" />
+            <Text style={styles.buttonText}>Đăng nhập</Text>
+          </View>
         )}
       </TouchableOpacity>
 
@@ -97,9 +104,6 @@ const LoginScreen = (props) => {
 };
 
 const styles = StyleSheet.create({
-  buttonDisabled: { // <<< THÊM
-    backgroundColor: '#A5D6A7',
-  },
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -118,14 +122,23 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: '#000',
   },
-  input: {
-    height: 50,
-    width: '100%',
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderColor: '#20B24A',
     borderWidth: 1,
     borderRadius: 10,
-    paddingHorizontal: 15,
+    width: '100%',
+    height: 50,
+    paddingHorizontal: 10,
     marginBottom: 20,
+  },
+  inputIcon: {
+    marginRight: 8,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
     color: '#000',
   },
   button: {
@@ -139,6 +152,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+  },
+  buttonDisabled: {
+    backgroundColor: '#A5D6A7',
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   buttonText: {
     color: '#fff',

@@ -1,10 +1,9 @@
-// screens/OnlineSupport.js
+// screens/OnlineSupportScreen.js
 import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Image,
   TouchableOpacity,
   TextInput,
   Platform,
@@ -12,25 +11,23 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import IonIcon from 'react-native-vector-icons/Ionicons';
+import Feather from 'react-native-vector-icons/Feather';
 
 const OnlineSupportScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
-        {/* Thanh tiêu đề */}
+        {/* --- Header --- */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation?.goBack?.()}>
-            <Image
-              source={require('@assets/images/back.png')}
-              style={styles.backIcon}
-            />
+            <IonIcon name="arrow-back" size={22} color="#30C451" />
           </TouchableOpacity>
 
-          <Image
-            source={require('@assets/images/customerserviceicon.png')}
-            style={styles.avatar}
-            resizeMode="contain"
-          />
+          <View style={styles.avatarContainer}>
+            <IonIcon name="chatbubbles" size={32} color="#30C451" />
+          </View>
 
           <View style={styles.headerText}>
             <Text style={styles.title}>Trợ lý trực tuyến</Text>
@@ -38,7 +35,7 @@ const OnlineSupportScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Khu vực trò chuyện (nền trắng, trống) */}
+        {/* --- Chat Area --- */}
         <KeyboardAvoidingView
           style={styles.chatWrapper}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -48,15 +45,14 @@ const OnlineSupportScreen = ({ navigation }) => {
             style={styles.chatArea}
             contentContainerStyle={styles.chatContent}
             showsVerticalScrollIndicator={false}
-          ></ScrollView>
+          >
+            {/* Tin nhắn có thể thêm tại đây */}
+          </ScrollView>
 
-          {/* Thanh nhập tin nhắn */}
+          {/* --- Input Bar --- */}
           <View style={styles.inputContainer}>
             <TouchableOpacity>
-              <Image
-                source={require('@assets/images/File.png')}
-                style={styles.icon}
-              />
+              <Feather name="paperclip" size={22} color="#000" />
             </TouchableOpacity>
 
             <TextInput
@@ -66,17 +62,11 @@ const OnlineSupportScreen = ({ navigation }) => {
             />
 
             <TouchableOpacity>
-              <Image
-                source={require('@assets/images/Voice.png')}
-                style={styles.icon}
-              />
+              <IonIcon name="mic-outline" size={22} color="#000" />
             </TouchableOpacity>
 
-            <TouchableOpacity>
-              <Image
-                source={require('@assets/images/Send.png')}
-                style={styles.icon}
-              />
+            <TouchableOpacity style={styles.sendButton}>
+              <Icon name="send" size={22} color="#fff" />
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -85,34 +75,34 @@ const OnlineSupportScreen = ({ navigation }) => {
   );
 };
 
+export default OnlineSupportScreen;
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#fff' },
   container: { flex: 1, backgroundColor: '#fff' },
 
-  /* Thanh tiêu đề */
+  /* Header */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 18 : 14,
-    paddingBottom: 8,
+    paddingBottom: 10,
   },
-  backIcon: {
-    width: 18,
-    height: 18,
-    resizeMode: 'contain',
-    marginRight: 8,
-  },
-  avatar: {
+  avatarContainer: {
     width: 52,
     height: 52,
-    marginRight: 10,
+    borderRadius: 26,
+    backgroundColor: '#E9F9F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 10,
   },
   headerText: { flexDirection: 'column' },
   title: { fontSize: 18, fontWeight: '700', color: '#000' },
   subtitle: { fontSize: 12, color: '#555' },
 
-  /* Khu vực trò chuyện */
+  /* Chat area */
   chatWrapper: { flex: 1 },
   chatArea: {
     flex: 1,
@@ -121,20 +111,20 @@ const styles = StyleSheet.create({
   },
   chatContent: { paddingTop: 10, paddingBottom: 24 },
 
-  /* Thanh nhập tin nhắn */
+  /* Input Bar */
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 16,
     marginBottom: 16,
-    backgroundColor: '#EEF94E', // nền vàng như mẫu
+    backgroundColor: '#EEF94E',
     borderRadius: 30,
     paddingHorizontal: 12,
     paddingVertical: Platform.OS === 'ios' ? 10 : 6,
   },
   input: {
     flex: 1,
-    backgroundColor: '#fff', // khung nhập trắng
+    backgroundColor: '#fff',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 10 : 6,
@@ -142,11 +132,13 @@ const styles = StyleSheet.create({
     color: '#000',
     marginHorizontal: 8,
   },
-  icon: {
-    width: 22,
-    height: 22,
-    resizeMode: 'contain',
+  sendButton: {
+    backgroundColor: '#30C451',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
   },
 });
-
-export default OnlineSupportScreen;

@@ -1,4 +1,12 @@
-import React, { useState, useContext, useMemo, useEffect, useCallback, useRef } from 'react';
+// SearchCalendarScreen.js - Material Design 3 Redesign
+import React, {
+  useState,
+  useContext,
+  useMemo,
+  useEffect,
+  useCallback,
+  useRef,
+} from 'react';
 import {
   StyleSheet,
   Text,
@@ -6,17 +14,20 @@ import {
   TouchableOpacity,
   TextInput,
   StatusBar,
-  ScrollView,
-  Platform,
-  UIManager,
   FlatList,
   Modal,
   Pressable,
   Alert,
   ActivityIndicator,
+  Platform,
+  UIManager,
+  Dimensions,
+  ScrollView,
+  RefreshControl,
+  Animated,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { UserContext } from '@context/UserContext';
 import {
   searchAvailableClasses,
@@ -25,46 +36,80 @@ import {
 } from '@api/classesApi';
 import { useRoute } from '@react-navigation/native';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+// Material Design 3 Colors
+const MATERIAL_COLORS = {
+  primary: '#1F8E4A',
+  onPrimary: '#FFFFFF',
+  primaryContainer: '#C2F0D4',
+  background: '#F5F7F6',
+  surface: '#FFFFFF',
+  surfaceVariant: '#E7EFE8',
+  outline: '#D7E5DB',
+  textPrimary: '#10241A',
+  textSecondary: '#47614F',
+  secondary: '#3A5B4C',
+  error: '#B3261E',
+  success: '#34D399',
+  warning: '#F59E0B',
+};
+
+if (
+  Platform.OS === 'android' &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+const dayNames = [
+  'CN',
+  'T2',
+  'T3',
+  'T4',
+  'T5',
+  'T6',
+  'T7',
+];
 
-const generate31Days = () => {
-  const days = [];
-  const today = new Date();
-  const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+const fullDayNames = [
+  'Chủ Nhật',
+  'Thứ Hai',
+  'Thứ Ba',
+  'Thứ Tư',
+  'Thứ Năm',
+  'Thứ Sáu',
+  'Thứ Bảy',
+];
 
-  for (let i = 0; i < 31; i += 1) {
-    const date = new Date(normalizedToday);
-    date.setDate(normalizedToday.getDate() + i);
+const monthNames = [
+  'Tháng 1',
+  'Tháng 2',
+  'Tháng 3',
+  'Tháng 4',
+  'Tháng 5',
+  'Tháng 6',
+  'Tháng 7',
+  'Tháng 8',
+  'Tháng 9',
+  'Tháng 10',
+  'Tháng 11',
+  'Tháng 12',
+];
 
-    const dayLabel = String(date.getDate()).padStart(2, '0');
-    const monthLabel = String(date.getMonth() + 1).padStart(2, '0');
+const ITEM_WIDTH = 56; // Compact size for modern design
+const WINDOW_WIDTH = Dimensions.get('window').width;
 
-    let label = dayNames[date.getDay()];
-    if (i === 0) {
-      label = 'Hôm nay';
-    }
-
-    days.push({
-      id: date.toISOString(),
-      dayName: label,
-      dateString: `${dayLabel}/${monthLabel}`,
-      fullDateString: date.toISOString().split('T')[0],
-      dateObj: date,
-    });
-  }
-
-  return days;
+/* Helpers */
+const formatMonthYear = date => {
+  const month = monthNames[date.getMonth()];
+  const year = date.getFullYear();
+  return `${month} ${year}`;
 };
 
 const formatTimeRange = (start, end) => {
   try {
     const startDate = new Date(start);
     const endDate = new Date(end);
-    const formatter = (value) =>
+    const formatter = value =>
       value.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     return `${formatter(startDate)} - ${formatter(endDate)}`;
   } catch {
@@ -72,212 +117,357 @@ const formatTimeRange = (start, end) => {
   }
 };
 
-const formatDateLabel = (date) => {
+const formatDateLabel = date => {
   try {
-    return new Date(date).toLocaleDateString('vi-VN', {
-      weekday: 'short',
-      day: '2-digit',
-      month: '2-digit',
-    });
+    const d = new Date(date);
+    return `${fullDayNames[d.getDay()]}, ${d.getDate()}/${d.getMonth() + 1}`;
   } catch {
     return '--/--';
   }
 };
 
+const isSameDay = (date1, date2) => {
+  return (
+    date1.getDate() === date2.getDate() &&
+    date1.getMonth() === date2.getMonth() &&
+    date1.getFullYear() === date2.getFullYear()
+  );
+};
+
+/* Skeleton Loading Component */
+const SkeletonCard = () => (
+  <View style={styles.skeletonCard}>
+    <View style={styles.skeletonHeader}>
+      <View style={[styles.skeletonBox, { width: '60%', height: 20 }]} />
+      <View style={[styles.skeletonBox, { width: 80, height: 24, borderRadius: 12 }]} />
+    </View>
+    <View style={[styles.skeletonBox, { width: '40%', height: 14, marginTop: 8 }]} />
+    <View style={[styles.skeletonBox, { width: '70%', height: 14, marginTop: 12 }]} />
+    <View style={[styles.skeletonBox, { width: '50%', height: 14, marginTop: 8 }]} />
+    <View style={[styles.skeletonBox, { width: '55%', height: 14, marginTop: 8 }]} />
+  </View>
+);
+
+/* Day item renderer - Compact & Modern */
+const DayItem = ({ item, isSelected, isToday, onPress }) => (
+  <TouchableOpacity
+    activeOpacity={0.7}
+    onPress={() => onPress(item)}
+    style={[
+      styles.dayContainer,
+      isSelected && styles.selectedDayContainer,
+      isToday && !isSelected && styles.todayContainer,
+    ]}
+  >
+    <Text
+      style={[
+        styles.dayName,
+        isSelected && styles.selectedDayName,
+        isToday && !isSelected && styles.todayText,
+      ]}
+    >
+      {item.label}
+    </Text>
+    <Text
+      style={[
+        styles.dayDate,
+        isSelected && styles.selectedDayDate,
+        isToday && !isSelected && styles.todayText,
+      ]}
+    >
+      {item.dayNumber}
+    </Text>
+    {isToday && !isSelected && <View style={styles.todayDot} />}
+  </TouchableOpacity>
+);
+
+/* Class card - Modern Material Design 3 */
 const ClassCard = ({ item, onSelect }) => {
   const instructorName = item.instructor?.name || 'Đang cập nhật';
   const timeRange = formatTimeRange(item.startTime, item.endTime);
-  const remainingText =
-    item.availableSpots > 0
-      ? `${item.availableSpots} chỗ còn trống`
-      : 'Không còn chỗ trống';
+  const remainingSpots = item.availableSpots || 0;
+  const totalSpots = item.capacity || 0;
+  const spotsPercentage = totalSpots > 0 ? (remainingSpots / totalSpots) * 100 : 0;
 
   return (
     <TouchableOpacity
       style={styles.classCard}
-      activeOpacity={0.85}
+      activeOpacity={0.8}
       onPress={() => onSelect(item)}
     >
+      {/* Header with badges */}
       <View style={styles.classCardHeader}>
-        <Text style={styles.className}>{item.name}</Text>
+        <View style={styles.classCardTitleRow}>
+          <MaterialCommunityIcons 
+            name="dumbbell" 
+            size={24} 
+            color={MATERIAL_COLORS.primary} 
+          />
+          <Text style={styles.className} numberOfLines={1}>
+            {item.name}
+          </Text>
+        </View>
+        
         {item.isEnrolledByUser && (
           <View style={[styles.badge, styles.badgeSuccess]}>
+            <Icon name="check-circle" size={14} color="#fff" />
             <Text style={styles.badgeText}>Đã đăng ký</Text>
           </View>
         )}
         {item.isFull && !item.isEnrolledByUser && (
           <View style={[styles.badge, styles.badgeWarning]}>
+            <Icon name="block" size={14} color="#fff" />
             <Text style={styles.badgeText}>Đã đầy</Text>
           </View>
         )}
       </View>
 
-      <Text style={styles.classMeta}>{item.subcategory || item.category || 'Khác'}</Text>
-
-      <View style={styles.classInfoRow}>
-        <Icon name="schedule" size={18} color="#30C451" />
-        <Text style={styles.classInfoText}>{timeRange}</Text>
-      </View>
-
-      {item.location ? (
-        <View style={styles.classInfoRow}>
-          <Icon name="location-on" size={18} color="#30C451" />
-          <Text style={styles.classInfoText}>{item.location}</Text>
+      {/* Category tag */}
+      {(item.subcategory || item.category) && (
+        <View style={styles.categoryTag}>
+          <Text style={styles.categoryTagText}>
+            {item.subcategory || item.category}
+          </Text>
         </View>
-      ) : null}
+      )}
 
-      <View style={styles.classInfoRow}>
-        <Icon name="person-outline" size={18} color="#30C451" />
-        <Text style={styles.classInfoText}>{instructorName}</Text>
+      {/* Info rows */}
+      <View style={styles.classInfoContainer}>
+        <View style={styles.classInfoRow}>
+          <Icon name="schedule" size={18} color={MATERIAL_COLORS.secondary} />
+          <Text style={styles.classInfoText}>{timeRange}</Text>
+        </View>
+
+        {item.location && (
+          <View style={styles.classInfoRow}>
+            <Icon name="location-on" size={18} color={MATERIAL_COLORS.secondary} />
+            <Text style={styles.classInfoText} numberOfLines={1}>
+              {item.location}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.classInfoRow}>
+          <Icon name="person-outline" size={18} color={MATERIAL_COLORS.secondary} />
+          <Text style={styles.classInfoText} numberOfLines={1}>
+            {instructorName}
+          </Text>
+        </View>
       </View>
 
-      <View style={styles.spotsRow}>
-        <Text style={styles.spotsText}>{remainingText}</Text>
+      {/* Spots indicator */}
+      <View style={styles.spotsContainer}>
+        <View style={styles.spotsProgressBar}>
+          <View 
+            style={[
+              styles.spotsProgressFill, 
+              { 
+                width: `${spotsPercentage}%`,
+                backgroundColor: spotsPercentage > 50 
+                  ? MATERIAL_COLORS.success 
+                  : spotsPercentage > 20 
+                    ? MATERIAL_COLORS.warning 
+                    : MATERIAL_COLORS.error
+              }
+            ]} 
+          />
+        </View>
+        <Text style={styles.spotsText}>
+          {remainingSpots > 0 
+            ? `Còn ${remainingSpots}/${totalSpots} chỗ` 
+            : 'Không còn chỗ'}
+        </Text>
       </View>
     </TouchableOpacity>
   );
 };
 
+/* Enrollment Card - Modern Design */
 const EnrollmentCard = ({ enrollment }) => {
   const classInfo = enrollment.class || {};
   const timeRange = formatTimeRange(classInfo.startTime, classInfo.endTime);
+  const dateLabel = formatDateLabel(classInfo.startTime || enrollment.enrolledAt);
 
   return (
     <View style={styles.enrollmentCard}>
-      <View style={styles.classCardHeader}>
-        <Text style={styles.className}>{classInfo.name || 'Lớp học'}</Text>
-        <View style={[styles.badge, styles.badgeInfo]}>
-          <Text style={styles.badgeText}>
-            {enrollment.status === 'active' ? 'Đã đăng ký' : enrollment.status}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.classInfoRow}>
-        <Icon name="event" size={18} color="#30C451" />
-        <Text style={styles.classInfoText}>
-          {formatDateLabel(classInfo.startTime || enrollment.enrolledAt)}
+      {/* Status badge */}
+      <View style={styles.enrollmentBadge}>
+        <Icon name="check-circle" size={16} color={MATERIAL_COLORS.success} />
+        <Text style={styles.enrollmentBadgeText}>
+          {enrollment.status === 'active' ? 'Đã xác nhận' : enrollment.status}
         </Text>
       </View>
 
-      <View style={styles.classInfoRow}>
-        <Icon name="schedule" size={18} color="#30C451" />
-        <Text style={styles.classInfoText}>{timeRange}</Text>
+      {/* Class info */}
+      <View style={styles.enrollmentContent}>
+        <View style={styles.enrollmentTitleRow}>
+          <MaterialCommunityIcons 
+            name="calendar-check" 
+            size={24} 
+            color={MATERIAL_COLORS.primary} 
+          />
+          <Text style={styles.enrollmentClassName} numberOfLines={2}>
+            {classInfo.name || 'Lớp học'}
+          </Text>
+        </View>
+
+        <View style={styles.enrollmentInfoContainer}>
+          <View style={styles.classInfoRow}>
+            <Icon name="event" size={18} color={MATERIAL_COLORS.secondary} />
+            <Text style={styles.classInfoText}>{dateLabel}</Text>
+          </View>
+
+          <View style={styles.classInfoRow}>
+            <Icon name="schedule" size={18} color={MATERIAL_COLORS.secondary} />
+            <Text style={styles.classInfoText}>{timeRange}</Text>
+          </View>
+
+          {classInfo.location && (
+            <View style={styles.classInfoRow}>
+              <Icon name="location-on" size={18} color={MATERIAL_COLORS.secondary} />
+              <Text style={styles.classInfoText} numberOfLines={1}>
+                {classInfo.location}
+              </Text>
+            </View>
+          )}
+
+          {classInfo.instructor?.name && (
+            <View style={styles.classInfoRow}>
+              <Icon name="person-outline" size={18} color={MATERIAL_COLORS.secondary} />
+              <Text style={styles.classInfoText} numberOfLines={1}>
+                {classInfo.instructor.name}
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
-
-      {classInfo.location ? (
-        <View style={styles.classInfoRow}>
-          <Icon name="location-on" size={18} color="#30C451" />
-          <Text style={styles.classInfoText}>{classInfo.location}</Text>
-        </View>
-      ) : null}
-
-      {classInfo.instructor?.name ? (
-        <View style={styles.classInfoRow}>
-          <Icon name="person-outline" size={18} color="#30C451" />
-          <Text style={styles.classInfoText}>{classInfo.instructor.name}</Text>
-        </View>
-      ) : null}
     </View>
   );
 };
 
-const renderSeparator = () => <View style={styles.separator} />;
-
 const SearchCalendarScreen = () => {
-  const [selectedTab, setSelectedTab] = useState('Danh sách lớp');
   const route = useRoute();
-  const highlightClassId = route.params?.highlightClassId;
   const { user } = useContext(UserContext);
   const userName = user?.name || user?.phone || 'Bạn';
+  const highlightClassId = route.params?.highlightClassId;
 
-  const days = useMemo(() => generate31Days(), []);
-  const [selectedDateId, setSelectedDateId] = useState(days[0]?.id ?? null);
+  // Tabs & search
+  const [selectedTab, setSelectedTab] = useState('Danh sách lớp');
 
-  const [searchKeyword, setSearchKeyword] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-
+  // Classes/enrollments
   const [classes, setClasses] = useState([]);
   const [classesLoading, setClassesLoading] = useState(false);
   const [classesError, setClassesError] = useState(null);
-  const skipNextClassFetchRef = useRef(false);
-
   const [enrollments, setEnrollments] = useState([]);
   const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
   const [enrollmentsError, setEnrollmentsError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
+  // modal / enroll
   const [selectedClass, setSelectedClass] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEnrolling, setIsEnrolling] = useState(false);
+  const [yearPickerVisible, setYearPickerVisible] = useState(false);
 
-  const selectedDay = useMemo(
-    () => days.find((item) => item.id === selectedDateId),
-    [days, selectedDateId],
-  );
+  // Calendar state - Infinite scroll with month navigation
+  const flatListRef = useRef(null);
+  const todayRef = useRef(new Date());
+  const anchorIndex = 5000; // Middle index for infinite scroll
+  
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
 
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(searchKeyword.trim());
-    }, 400);
+  // Generate infinite days array
+  const infiniteDays = useMemo(() => {
+    const arr = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    for (let i = 0; i < 10001; i++) {
+      const offset = i - anchorIndex;
+      const date = new Date(today);
+      date.setDate(today.getDate() + offset);
+      
+      arr.push({
+        id: `${date.getTime()}-${i}`,
+        index: i,
+        dateObj: date,
+        dayNumber: date.getDate(),
+        label: dayNames[date.getDay()],
+        isToday: isSameDay(date, todayRef.current),
+      });
+    }
+    return arr;
+  }, []);
 
-    return () => clearTimeout(handler);
-  }, [searchKeyword]);
+  const [selectedDateIndex, setSelectedDateIndex] = useState(anchorIndex);
 
+  /* API helpers */
   const normalizeClasses = useCallback((items = []) => {
     if (!Array.isArray(items)) return [];
-    return items.map((item) => ({
+    return items.map(item => ({
       ...item,
       classId: item.classId || item.id || item._id || item.class_id,
     }));
   }, []);
 
-  const fetchClasses = useCallback(async () => {
-    if (!selectedDay) {
-      return;
-    }
-
-    setClassesLoading(true);
-    setClassesError(null);
-
-    const startDate = new Date(selectedDay.dateObj);
-    startDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(selectedDay.dateObj);
-    endDate.setHours(23, 59, 59, 999);
-
-    try {
-      const response = await searchAvailableClasses({
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-        sortBy: 'startTime',
-        sortOrder: 'asc',
-        limit: 50,
-        ...(debouncedSearch ? { search: debouncedSearch } : {}),
-      });
-
-      if (response?.success) {
-        setClasses(normalizeClasses(response.data));
+  const fetchClasses = useCallback(
+    async (dateObj, isPullToRefresh = false) => {
+      if (!dateObj) return;
+      
+      if (isPullToRefresh) {
+        setRefreshing(true);
       } else {
-        setClasses([]);
-        setClassesError(response?.message || 'Không tìm thấy lớp phù hợp.');
+        setClassesLoading(true);
       }
-    } catch (error) {
-      setClasses([]);
-      setClassesError(error.message);
-    } finally {
-      setClassesLoading(false);
+      setClassesError(null);
+
+      const startDate = new Date(dateObj);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(dateObj);
+      endDate.setHours(23, 59, 59, 999);
+
+      try {
+        const response = await searchAvailableClasses({
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          sortBy: 'startTime',
+          sortOrder: 'asc',
+          limit: 50,
+        });
+
+        if (response?.success) {
+          setClasses(normalizeClasses(response.data));
+        } else {
+          setClasses([]);
+          setClassesError(response?.message || 'Không tìm thấy lớp phù hợp.');
+        }
+      } catch (error) {
+        setClasses([]);
+        setClassesError(error.message);
+      } finally {
+        setClassesLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [normalizeClasses],
+  );
+
+  const fetchEnrollments = useCallback(async (isPullToRefresh = false) => {
+    if (isPullToRefresh) {
+      setRefreshing(true);
+    } else {
+      setEnrollmentsLoading(true);
     }
-  }, [selectedDay, debouncedSearch, normalizeClasses]);
-
-  const fetchEnrollments = useCallback(async () => {
-    setEnrollmentsLoading(true);
     setEnrollmentsError(null);
-
+    
     try {
       const response = await getMyEnrollments({ status: 'active', limit: 50 });
-
-      if (response?.success) {
-        setEnrollments(response.data || []);
-      } else {
+      if (response?.success) setEnrollments(response.data || []);
+      else {
         setEnrollments([]);
         setEnrollmentsError(response?.message || 'Bạn chưa đăng ký lớp nào.');
       }
@@ -286,38 +476,127 @@ const SearchCalendarScreen = () => {
       setEnrollmentsError(error.message);
     } finally {
       setEnrollmentsLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
+  /* initial fetch */
   useEffect(() => {
-    const hasPrefetched = !!route.params && Object.prototype.hasOwnProperty.call(route.params, 'prefetchedClasses');
+    fetchClasses(selectedDate);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    if (hasPrefetched) {
-      const prefetched = normalizeClasses(route.params.prefetchedClasses);
-      setClasses(prefetched);
-      setClassesError(null);
-      setClassesLoading(false);
-      skipNextClassFetchRef.current = true;
-    }
-  }, [route.params?.prefetchedClasses, normalizeClasses]);
-
+  /* refetch on selectedTab change or date change */
   useEffect(() => {
     if (selectedTab === 'Danh sách lớp') {
-      if (skipNextClassFetchRef.current) {
-        skipNextClassFetchRef.current = false;
-        return;
-      }
-      fetchClasses();
-    }
-  }, [selectedTab, fetchClasses]);
-
-  useEffect(() => {
-    if (selectedTab === 'Lịch đã đặt') {
+      fetchClasses(selectedDate);
+    } else {
       fetchEnrollments();
     }
-  }, [selectedTab, fetchEnrollments]);
+  }, [selectedTab, selectedDate, fetchClasses, fetchEnrollments]);
 
-  const handleSelectClass = useCallback((classItem) => {
+  /* Pull to refresh */
+  const handleRefresh = useCallback(() => {
+    if (selectedTab === 'Danh sách lớp') {
+      fetchClasses(selectedDate, true);
+    } else {
+      fetchEnrollments(true);
+    }
+  }, [selectedTab, selectedDate, fetchClasses, fetchEnrollments]);
+
+  /* Calendar navigation */
+  const goToPreviousMonth = useCallback(() => {
+    const newMonth = new Date(currentMonth);
+    newMonth.setMonth(newMonth.getMonth() - 1);
+    setCurrentMonth(newMonth);
+    
+    // Find first day of new month in infinite array
+    const targetDate = new Date(newMonth);
+    targetDate.setDate(1);
+    const diffDays = Math.floor((targetDate - todayRef.current) / (1000 * 60 * 60 * 24));
+    const newIndex = anchorIndex + diffDays;
+    
+    if (newIndex >= 0 && newIndex < infiniteDays.length) {
+      setSelectedDateIndex(newIndex);
+      setSelectedDate(infiniteDays[newIndex].dateObj);
+      flatListRef.current?.scrollToIndex({
+        index: newIndex,
+        animated: true,
+        viewPosition: 0.5,
+      });
+    }
+  }, [currentMonth, infiniteDays]);
+
+  const goToNextMonth = useCallback(() => {
+    const newMonth = new Date(currentMonth);
+    newMonth.setMonth(newMonth.getMonth() + 1);
+    setCurrentMonth(newMonth);
+    
+    // Find first day of new month in infinite array
+    const targetDate = new Date(newMonth);
+    targetDate.setDate(1);
+    const diffDays = Math.floor((targetDate - todayRef.current) / (1000 * 60 * 60 * 24));
+    const newIndex = anchorIndex + diffDays;
+    
+    if (newIndex >= 0 && newIndex < infiniteDays.length) {
+      setSelectedDateIndex(newIndex);
+      setSelectedDate(infiniteDays[newIndex].dateObj);
+      flatListRef.current?.scrollToIndex({
+        index: newIndex,
+        animated: true,
+        viewPosition: 0.5,
+      });
+    }
+  }, [currentMonth, infiniteDays]);
+
+  const handleYearPickerOpen = useCallback(() => {
+    setYearPickerVisible(true);
+  }, []);
+
+  const handleYearSelect = useCallback((year) => {
+    const newMonth = new Date(currentMonth);
+    newMonth.setFullYear(year);
+    setCurrentMonth(newMonth);
+    setYearPickerVisible(false);
+    
+    // Jump to first day of selected month/year
+    const targetDate = new Date(newMonth);
+    targetDate.setDate(1);
+    const diffDays = Math.floor((targetDate - todayRef.current) / (1000 * 60 * 60 * 24));
+    const newIndex = anchorIndex + diffDays;
+    
+    if (newIndex >= 0 && newIndex < infiniteDays.length) {
+      setSelectedDateIndex(newIndex);
+      setSelectedDate(infiniteDays[newIndex].dateObj);
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({
+          index: newIndex,
+          animated: true,
+          viewPosition: 0.5,
+        });
+      }, 100);
+    }
+  }, [currentMonth, infiniteDays]);
+
+  const goToToday = useCallback(() => {
+    const today = new Date();
+    setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    setSelectedDate(today);
+    setSelectedDateIndex(anchorIndex);
+    flatListRef.current?.scrollToIndex({
+      index: anchorIndex,
+      animated: true,
+      viewPosition: 0.5,
+    });
+  }, []);
+
+  const handlePressDay = useCallback((day) => {
+    setSelectedDate(day.dateObj);
+    setSelectedDateIndex(day.index);
+    setCurrentMonth(new Date(day.dateObj.getFullYear(), day.dateObj.getMonth(), 1));
+  }, []);
+
+  /* handle class modal */
+  const handleSelectClass = useCallback(classItem => {
     setSelectedClass(classItem);
     setModalVisible(true);
   }, []);
@@ -328,67 +607,81 @@ const SearchCalendarScreen = () => {
   }, []);
 
   const handleConfirmEnroll = useCallback(async () => {
-    if (!selectedClass) {
-      return;
-    }
-
+    if (!selectedClass) return;
     const canEnroll = !selectedClass.isEnrolledByUser && !selectedClass.isFull;
     if (!canEnroll) {
       handleCloseModal();
       return;
     }
-
     setIsEnrolling(true);
     try {
       const response = await enrollInClass(selectedClass.classId);
-      Alert.alert('Thành công', response?.message || 'Bạn đã đăng ký lớp thành công.');
+      Alert.alert(
+        'Thành công',
+        response?.message || 'Bạn đã đăng ký lớp thành công.',
+      );
       handleCloseModal();
-      await fetchClasses();
+      await fetchClasses(selectedDate);
       await fetchEnrollments();
     } catch (error) {
       Alert.alert('Đăng ký thất bại', error.message);
     } finally {
       setIsEnrolling(false);
     }
-  }, [selectedClass, handleCloseModal, fetchClasses, fetchEnrollments]);
+  }, [selectedClass, handleCloseModal, fetchClasses, fetchEnrollments, selectedDate]);
 
+  /* highlight class from route params */
+  useEffect(() => {
+    if (!highlightClassId || !classes.length) return;
+    const target = classes.find(c => c.classId === highlightClassId);
+    if (target) handleSelectClass(target);
+  }, [highlightClassId, classes, handleSelectClass]);
+
+  /* Renderers for lists */
   const renderClassItem = ({ item }) => (
     <ClassCard item={item} onSelect={handleSelectClass} />
   );
+  const renderEnrollmentItem = ({ item }) => (
+    <EnrollmentCard enrollment={item} />
+  );
 
-  const renderEnrollmentItem = ({ item }) => <EnrollmentCard enrollment={item} />;
+  const currentMonthYear = formatMonthYear(currentMonth);
+  
+  // Generate years for picker (current year ± 10 years)
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i);
 
   return (
     <View style={styles.container}>
-      <StatusBar backgroundColor="#30C451" barStyle="light-content" />
+      <StatusBar backgroundColor={MATERIAL_COLORS.primary} barStyle="light-content" />
 
+      {/* Modern Header with gradient effect */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={styles.greeting}>Xin chào {userName}</Text>
-          <Text style={styles.headerSubtitle}>Chọn lớp phù hợp với lịch rảnh của bạn</Text>
-        </View>
-
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Tìm kiếm theo tên lớp, PT, địa điểm..."
-            placeholderTextColor="#999"
-            value={searchKeyword}
-            onChangeText={setSearchKeyword}
-          />
-          <View style={styles.filterButton}>
-            <View style={styles.filterContent}>
-              <Icon name="tune" size={16} color="white" />
-              <Text style={styles.filterText}>Lọc</Text>
+          <View style={styles.greetingRow}>
+            <View>
+              <Text style={styles.greeting}>Xin chào, {userName} 👋</Text>
+              <Text style={styles.headerSubtitle}>
+                Đặt lịch tập luyện hôm nay
+              </Text>
             </View>
           </View>
         </View>
 
+        {/* Tabs */}
         <View style={styles.tabContainer}>
           <TouchableOpacity
-            style={[styles.tab, selectedTab === 'Danh sách lớp' && styles.activeTab]}
+            style={[
+              styles.tab,
+              selectedTab === 'Danh sách lớp' && styles.activeTab,
+            ]}
             onPress={() => setSelectedTab('Danh sách lớp')}
           >
+            <Icon 
+              name="list" 
+              size={20} 
+              color={selectedTab === 'Danh sách lớp' ? MATERIAL_COLORS.primary : MATERIAL_COLORS.onPrimary} 
+            />
             <Text
               style={[
                 styles.tabText,
@@ -399,9 +692,17 @@ const SearchCalendarScreen = () => {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tab, selectedTab === 'Lịch đã đặt' && styles.activeTab]}
+            style={[
+              styles.tab,
+              selectedTab === 'Lịch đã đặt' && styles.activeTab,
+            ]}
             onPress={() => setSelectedTab('Lịch đã đặt')}
           >
+            <Icon 
+              name="event-available" 
+              size={20} 
+              color={selectedTab === 'Lịch đã đặt' ? MATERIAL_COLORS.primary : MATERIAL_COLORS.onPrimary} 
+            />
             <Text
               style={[
                 styles.tabText,
@@ -414,69 +715,134 @@ const SearchCalendarScreen = () => {
         </View>
       </View>
 
-      <View style={styles.calendarWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.calendarScrollContent}
-          style={styles.calendarScrollView}
-        >
-          {days.map((item) => {
-            const isSelected = item.id === selectedDateId;
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.dayContainer,
-                  isSelected ? styles.selectedDayContainer : styles.dayContainerDefault,
-                ]}
-                onPress={() => setSelectedDateId(item.id)}
-              >
-                <Text
-                  style={[
-                    styles.dayName,
-                    isSelected ? styles.selectedDayName : styles.defaultDayName,
-                  ]}
-                >
-                  {item.dayName}
-                </Text>
-                <Text
-                  style={[
-                    styles.dayDate,
-                    isSelected ? styles.selectedDayDate : styles.defaultDayDate,
-                  ]}
-                >
-                  {item.dateString}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+      {/* Modern Calendar Section - Only show for "Danh sách lớp" */}
+      {selectedTab === 'Danh sách lớp' && (
+        <View style={styles.calendarSection}>
+          {/* Month Navigation */}
+          <View style={styles.calendarHeader}>
+          <TouchableOpacity 
+            style={styles.calendarNavButton}
+            onPress={goToPreviousMonth}
+          >
+            <Icon name="chevron-left" size={24} color={MATERIAL_COLORS.primary} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.monthYearButton}
+            onPress={handleYearPickerOpen}
+          >
+            <Text style={styles.monthYearText}>{currentMonthYear}</Text>
+            <Icon name="event" size={18} color={MATERIAL_COLORS.primary} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.calendarNavButton}
+            onPress={goToNextMonth}
+          >
+            <Icon name="chevron-right" size={24} color={MATERIAL_COLORS.primary} />
+          </TouchableOpacity>
+        </View>
 
+        {/* Infinite Scroll Days */}
+        <FlatList
+          ref={flatListRef}
+          horizontal
+          data={infiniteDays}
+          keyExtractor={item => item.id}
+          renderItem={({ item }) => (
+            <DayItem
+              item={item}
+              isSelected={item.index === selectedDateIndex}
+              isToday={item.isToday}
+              onPress={handlePressDay}
+            />
+          )}
+          initialScrollIndex={anchorIndex}
+          getItemLayout={(_, index) => ({
+            length: ITEM_WIDTH + 8,
+            offset: (ITEM_WIDTH + 8) * index,
+            index,
+          })}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.daysScrollContainer}
+          onScrollToIndexFailed={(info) => {
+            const wait = new Promise(resolve => setTimeout(resolve, 500));
+            wait.then(() => {
+              flatListRef.current?.scrollToIndex({
+                index: info.index,
+                animated: true,
+                viewPosition: 0.5,
+              });
+            });
+          }}
+          windowSize={11}
+          maxToRenderPerBatch={15}
+          removeClippedSubviews={Platform.OS === 'android'}
+        />
+        </View>
+      )}
+
+      {/* List Container with Pull to Refresh */}
       <View style={styles.listContainer}>
         {selectedTab === 'Danh sách lớp' ? (
           <>
-            {classesLoading ? (
-              <View style={styles.stateContainer}>
-                <ActivityIndicator size="large" color="#30C451" />
-                <Text style={styles.stateText}>Đang tải lớp học...</Text>
-              </View>
+            {classesLoading && !refreshing ? (
+              <ScrollView contentContainerStyle={styles.skeletonContainer}>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </ScrollView>
             ) : classesError ? (
-              <View style={styles.stateContainer}>
-                <Text style={styles.stateText}>{classesError}</Text>
-              </View>
+              <ScrollView 
+                contentContainerStyle={styles.emptyStateContainer}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefresh}
+                    colors={[MATERIAL_COLORS.primary]}
+                    tintColor={MATERIAL_COLORS.primary}
+                  />
+                }
+              >
+                <MaterialCommunityIcons 
+                  name="alert-circle-outline" 
+                  size={64} 
+                  color={MATERIAL_COLORS.outline} 
+                />
+                <Text style={styles.emptyTitle}>Không tìm thấy lớp học</Text>
+                <Text style={styles.emptyText}>{classesError}</Text>
+                <TouchableOpacity 
+                  style={styles.retryButton}
+                  onPress={() => fetchClasses(selectedDate)}
+                >
+                  <Text style={styles.retryButtonText}>Thử lại</Text>
+                </TouchableOpacity>
+              </ScrollView>
             ) : (
               <FlatList
                 data={classes}
-                keyExtractor={(item) => item.classId}
+                keyExtractor={item => item.classId}
                 renderItem={renderClassItem}
-                ItemSeparatorComponent={renderSeparator}
+                ItemSeparatorComponent={() => <View style={styles.separator} />}
                 contentContainerStyle={styles.listContent}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefresh}
+                    colors={[MATERIAL_COLORS.primary]}
+                    tintColor={MATERIAL_COLORS.primary}
+                  />
+                }
                 ListEmptyComponent={
-                  <View style={styles.stateContainer}>
-                    <Text style={styles.stateText}>
-                      Không có lớp nào trong ngày đã chọn.
+                  <View style={styles.emptyStateContainer}>
+                    <MaterialCommunityIcons 
+                      name="calendar-blank-outline" 
+                      size={64} 
+                      color={MATERIAL_COLORS.outline} 
+                    />
+                    <Text style={styles.emptyTitle}>Chưa có lớp học</Text>
+                    <Text style={styles.emptyText}>
+                      Không có lớp nào trong ngày {formatDateLabel(selectedDate)}
                     </Text>
                   </View>
                 }
@@ -486,25 +852,58 @@ const SearchCalendarScreen = () => {
           </>
         ) : (
           <>
-            {enrollmentsLoading ? (
-              <View style={styles.stateContainer}>
-                <ActivityIndicator size="large" color="#30C451" />
-                <Text style={styles.stateText}>Đang tải lịch đã đăng ký...</Text>
-              </View>
+            {enrollmentsLoading && !refreshing ? (
+              <ScrollView contentContainerStyle={styles.skeletonContainer}>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </ScrollView>
             ) : enrollmentsError ? (
-              <View style={styles.stateContainer}>
-                <Text style={styles.stateText}>{enrollmentsError}</Text>
-              </View>
+              <ScrollView 
+                contentContainerStyle={styles.emptyStateContainer}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefresh}
+                    colors={[MATERIAL_COLORS.primary]}
+                    tintColor={MATERIAL_COLORS.primary}
+                  />
+                }
+              >
+                <MaterialCommunityIcons 
+                  name="calendar-remove-outline" 
+                  size={64} 
+                  color={MATERIAL_COLORS.outline} 
+                />
+                <Text style={styles.emptyTitle}>Chưa có lịch đặt</Text>
+                <Text style={styles.emptyText}>{enrollmentsError}</Text>
+              </ScrollView>
             ) : (
               <FlatList
                 data={enrollments}
-                keyExtractor={(item) => item.enrollmentId}
+                keyExtractor={item => item.enrollmentId}
                 renderItem={renderEnrollmentItem}
-                ItemSeparatorComponent={renderSeparator}
+                ItemSeparatorComponent={() => <View style={styles.separator} />}
                 contentContainerStyle={styles.listContent}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefresh}
+                    colors={[MATERIAL_COLORS.primary]}
+                    tintColor={MATERIAL_COLORS.primary}
+                  />
+                }
                 ListEmptyComponent={
-                  <View style={styles.stateContainer}>
-                    <Text style={styles.stateText}>Bạn chưa đăng ký lớp nào.</Text>
+                  <View style={styles.emptyStateContainer}>
+                    <MaterialCommunityIcons 
+                      name="calendar-check-outline" 
+                      size={64} 
+                      color={MATERIAL_COLORS.outline} 
+                    />
+                    <Text style={styles.emptyTitle}>Chưa có lịch đặt</Text>
+                    <Text style={styles.emptyText}>
+                      Bạn chưa đăng ký lớp nào. Hãy chọn lớp phù hợp!
+                    </Text>
                   </View>
                 }
                 showsVerticalScrollIndicator={false}
@@ -514,398 +913,799 @@ const SearchCalendarScreen = () => {
         )}
       </View>
 
+      {/* Modern Modal */}
       <Modal
         transparent
-        animationType="fade"
+        animationType="slide"
         visible={modalVisible}
         onRequestClose={handleCloseModal}
       >
         <Pressable style={styles.modalOverlay} onPress={handleCloseModal}>
-          <Pressable style={styles.modalContent} onPress={(event) => event.stopPropagation()}>
-            <Text style={styles.modalTitle}>Xác nhận đăng ký</Text>
-            <Text style={styles.modalSubtitle}>
-              {selectedClass?.name || 'Lớp học'}
-            </Text>
-
-            <View style={styles.modalInfoRow}>
-              <Icon name="event" size={20} color="#30C451" />
-              <Text style={styles.modalInfoText}>
-                {selectedClass
-                  ? formatDateLabel(selectedClass.startTime)
-                  : '--/--'}
-              </Text>
-            </View>
-
-            <View style={styles.modalInfoRow}>
-              <Icon name="schedule" size={20} color="#30C451" />
-              <Text style={styles.modalInfoText}>
-                {selectedClass
-                  ? formatTimeRange(selectedClass.startTime, selectedClass.endTime)
-                  : '--:--'}
-              </Text>
-            </View>
-
-            {selectedClass?.location ? (
-              <View style={styles.modalInfoRow}>
-                <Icon name="location-on" size={20} color="#30C451" />
-                <Text style={styles.modalInfoText}>{selectedClass.location}</Text>
+          <Pressable
+            style={styles.modalContent}
+            onPress={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Xác nhận đăng ký</Text>
+                <Text style={styles.modalSubtitle}>
+                  {selectedClass?.name || 'Lớp học'}
+                </Text>
               </View>
-            ) : null}
-
-            <View style={styles.modalInfoRow}>
-              <Icon name="person-outline" size={20} color="#30C451" />
-              <Text style={styles.modalInfoText}>
-                {selectedClass?.instructor?.name || 'HLV đang cập nhật'}
-              </Text>
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={handleCloseModal}
+              >
+                <Icon name="close" size={24} color={MATERIAL_COLORS.textSecondary} />
+              </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalNote}>
-              {selectedClass?.isEnrolledByUser
-                ? 'Bạn đã đăng ký lớp học này.'
-                : selectedClass?.isFull
-                ? 'Lớp đã đầy, vui lòng chọn lớp khác.'
-                : 'Bạn chắc chắn muốn đăng ký lớp này chứ?'}
-            </Text>
+            {/* Modal Content */}
+            <View style={styles.modalBody}>
+              <View style={styles.modalInfoCard}>
+                <View style={styles.modalInfoRow}>
+                  <View style={styles.modalIconContainer}>
+                    <Icon name="event" size={20} color={MATERIAL_COLORS.primary} />
+                  </View>
+                  <View style={styles.modalInfoTextContainer}>
+                    <Text style={styles.modalInfoLabel}>Ngày học</Text>
+                    <Text style={styles.modalInfoValue}>
+                      {selectedClass ? formatDateLabel(selectedClass.startTime) : '--/--'}
+                    </Text>
+                  </View>
+                </View>
 
+                <View style={styles.modalInfoRow}>
+                  <View style={styles.modalIconContainer}>
+                    <Icon name="schedule" size={20} color={MATERIAL_COLORS.primary} />
+                  </View>
+                  <View style={styles.modalInfoTextContainer}>
+                    <Text style={styles.modalInfoLabel}>Thời gian</Text>
+                    <Text style={styles.modalInfoValue}>
+                      {selectedClass
+                        ? formatTimeRange(selectedClass.startTime, selectedClass.endTime)
+                        : '--:--'}
+                    </Text>
+                  </View>
+                </View>
+
+                {selectedClass?.location && (
+                  <View style={styles.modalInfoRow}>
+                    <View style={styles.modalIconContainer}>
+                      <Icon name="location-on" size={20} color={MATERIAL_COLORS.primary} />
+                    </View>
+                    <View style={styles.modalInfoTextContainer}>
+                      <Text style={styles.modalInfoLabel}>Địa điểm</Text>
+                      <Text style={styles.modalInfoValue}>{selectedClass.location}</Text>
+                    </View>
+                  </View>
+                )}
+
+                <View style={styles.modalInfoRow}>
+                  <View style={styles.modalIconContainer}>
+                    <Icon name="person-outline" size={20} color={MATERIAL_COLORS.primary} />
+                  </View>
+                  <View style={styles.modalInfoTextContainer}>
+                    <Text style={styles.modalInfoLabel}>Huấn luyện viên</Text>
+                    <Text style={styles.modalInfoValue}>
+                      {selectedClass?.instructor?.name || 'Đang cập nhật'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Status Note */}
+              {(selectedClass?.isEnrolledByUser || selectedClass?.isFull) && (
+                <View style={[
+                  styles.modalNote,
+                  selectedClass?.isEnrolledByUser 
+                    ? styles.modalNoteSuccess 
+                    : styles.modalNoteWarning
+                ]}>
+                  <Icon 
+                    name={selectedClass?.isEnrolledByUser ? 'check-circle' : 'error'} 
+                    size={20} 
+                    color={selectedClass?.isEnrolledByUser ? MATERIAL_COLORS.success : MATERIAL_COLORS.warning} 
+                  />
+                  <Text style={styles.modalNoteText}>
+                    {selectedClass?.isEnrolledByUser
+                      ? 'Bạn đã đăng ký lớp học này'
+                      : 'Lớp đã đầy, vui lòng chọn lớp khác'}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Modal Actions */}
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalSecondary]}
                 onPress={handleCloseModal}
               >
-                <Text style={styles.modalSecondaryText}>Đóng</Text>
+                <Text style={styles.modalSecondaryText}>Hủy</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
                   styles.modalButton,
                   styles.modalPrimary,
-                  (selectedClass?.isEnrolledByUser || selectedClass?.isFull) && styles.modalButtonDisabled,
+                  (selectedClass?.isEnrolledByUser || selectedClass?.isFull) &&
+                    styles.modalButtonDisabled,
                 ]}
                 onPress={handleConfirmEnroll}
                 disabled={
-                  isEnrolling || selectedClass?.isEnrolledByUser || selectedClass?.isFull
+                  isEnrolling ||
+                  selectedClass?.isEnrolledByUser ||
+                  selectedClass?.isFull
                 }
               >
                 {isEnrolling ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.modalPrimaryText}>Đăng ký</Text>
+                  <>
+                    <Icon name="check" size={20} color="#fff" />
+                    <Text style={styles.modalPrimaryText}>Xác nhận đăng ký</Text>
+                  </>
                 )}
               </TouchableOpacity>
             </View>
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Year Picker Modal */}
+      <Modal
+        transparent
+        animationType="fade"
+        visible={yearPickerVisible}
+        onRequestClose={() => setYearPickerVisible(false)}
+      >
+        <Pressable 
+          style={styles.yearPickerOverlay} 
+          onPress={() => setYearPickerVisible(false)}
+        >
+          <View style={styles.yearPickerContent}>
+            <View style={styles.yearPickerHeader}>
+              <Text style={styles.yearPickerTitle}>Chọn năm</Text>
+              <TouchableOpacity 
+                onPress={() => setYearPickerVisible(false)}
+                style={styles.yearPickerClose}
+              >
+                <Icon name="close" size={24} color={MATERIAL_COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView 
+              style={styles.yearPickerScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              {years.map(year => (
+                <TouchableOpacity
+                  key={year}
+                  style={[
+                    styles.yearItem,
+                    year === currentMonth.getFullYear() && styles.yearItemActive
+                  ]}
+                  onPress={() => handleYearSelect(year)}
+                >
+                  <Text 
+                    style={[
+                      styles.yearItemText,
+                      year === currentMonth.getFullYear() && styles.yearItemTextActive
+                    ]}
+                  >
+                    {year}
+                  </Text>
+                  {year === currentMonth.getFullYear() && (
+                    <Icon name="check" size={20} color={MATERIAL_COLORS.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
-
-  useEffect(() => {
-    if (!highlightClassId || !classes.length) {
-      return;
-    }
-    const target = classes.find((classItem) => classItem.classId === highlightClassId);
-    if (target) {
-      handleSelectClass(target);
-    }
-  }, [highlightClassId, classes, handleSelectClass]);
 };
 
 export default SearchCalendarScreen;
 
+/* Material Design 3 Styles */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
+  // Container
+  container: { 
+    flex: 1, 
+    backgroundColor: MATERIAL_COLORS.background,
   },
+
+  // Header
   header: {
-    backgroundColor: '#30C451',
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 16,
+    backgroundColor: MATERIAL_COLORS.primary,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 16 : 50,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: MATERIAL_COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  headerTop: {
-    marginBottom: 16,
+  headerTop: { 
+    marginBottom: 20,
   },
-  greeting: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  headerSubtitle: {
-    marginTop: 4,
-    fontSize: 14,
-    color: '#e6ffe8',
-  },
-  searchContainer: {
+  greetingRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 12,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
-  searchInput: {
-    flex: 1,
-    color: '#111',
-    fontSize: 16,
-    paddingVertical: 6,
+  greeting: { 
+    fontSize: 24, 
+    fontWeight: '700', 
+    color: MATERIAL_COLORS.onPrimary,
+    letterSpacing: 0.5,
   },
-  filterButton: {
-    backgroundColor: '#20B24A',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  filterContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  filterText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    marginTop: 16,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    padding: 4,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  activeTab: {
-    backgroundColor: '#fff',
-  },
-  tabText: {
-    color: '#e6ffe8',
-    fontSize: 15,
+  headerSubtitle: { 
+    marginTop: 6, 
+    fontSize: 14, 
+    color: MATERIAL_COLORS.primaryContainer,
     fontWeight: '500',
   },
-  activeTabText: {
-    color: '#08843a',
-    fontWeight: '700',
+
+  // Tabs
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 16,
+    padding: 4,
+    gap: 4,
   },
-  calendarWrapper: {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    backgroundColor: '#f5f5f5',
-  },
-  calendarScrollView: {
-    maxHeight: 110,
-  },
-  calendarScrollContent: {
-    paddingHorizontal: 4,
-    gap: 12,
-  },
-  dayContainer: {
-    width: 90,
-    height: 90,
-    borderRadius: 18,
-    justifyContent: 'center',
+  tab: { 
+    flex: 1, 
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
     paddingHorizontal: 8,
+    borderRadius: 12,
+    gap: 6,
   },
-  dayContainerDefault: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+  activeTab: { 
+    backgroundColor: MATERIAL_COLORS.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  selectedDayContainer: {
-    backgroundColor: '#30C451',
-    borderColor: '#30C451',
-  },
-  dayName: {
+  tabText: { 
+    color: MATERIAL_COLORS.primaryContainer,
     fontSize: 14,
-    marginBottom: 4,
+    fontWeight: '600',
   },
-  dayDate: {
-    fontSize: 18,
+  activeTabText: { 
+    color: MATERIAL_COLORS.primary,
     fontWeight: '700',
   },
-  defaultDayName: {
-    color: '#555',
+
+  // Calendar Section
+  calendarSection: {
+    backgroundColor: MATERIAL_COLORS.surface,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: MATERIAL_COLORS.outline,
   },
-  selectedDayName: {
-    color: '#fff',
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 16,
   },
-  defaultDayDate: {
-    color: '#1a1a1a',
+  calendarNavButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: MATERIAL_COLORS.primaryContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  selectedDayDate: {
-    color: '#fff',
-  },
-  listContainer: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  listContent: {
-    paddingBottom: 24,
-  },
-  separator: {
-    height: 14,
-  },
-  classCard: {
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
-  enrollmentCard: {
-    borderRadius: 16,
-    backgroundColor: '#fff',
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#d9f6e3',
-  },
-  classCardHeader: {
+  monthYearButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: MATERIAL_COLORS.surfaceVariant,
+  },
+  monthYearText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: MATERIAL_COLORS.textPrimary,
+  },
+
+  // Days Scroll
+  daysScrollContainer: {
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  dayContainer: {
+    width: ITEM_WIDTH,
+    height: 72,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: MATERIAL_COLORS.surface,
+    borderWidth: 2,
+    borderColor: MATERIAL_COLORS.outline,
+  },
+  selectedDayContainer: {
+    backgroundColor: MATERIAL_COLORS.primary,
+    borderColor: MATERIAL_COLORS.primary,
+    shadowColor: MATERIAL_COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  todayContainer: {
+    borderColor: MATERIAL_COLORS.primary,
+    borderWidth: 2,
+  },
+  dayName: { 
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    color: MATERIAL_COLORS.textSecondary,
+  },
+  dayDate: { 
+    fontSize: 20,
+    fontWeight: '700',
+    color: MATERIAL_COLORS.textPrimary,
+  },
+  selectedDayName: { 
+    color: MATERIAL_COLORS.primaryContainer,
+  },
+  selectedDayDate: { 
+    color: MATERIAL_COLORS.onPrimary,
+  },
+  todayText: {
+    color: MATERIAL_COLORS.primary,
+  },
+  todayDot: {
+    position: 'absolute',
+    bottom: 6,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: MATERIAL_COLORS.primary,
+  },
+
+  // List Container
+  listContainer: { 
+    flex: 1,
+  },
+  listContent: { 
+    padding: 16,
+    paddingBottom: 32,
+  },
+  separator: { 
+    height: 12,
+  },
+
+  // Class Card - Modern Design
+  classCard: {
+    backgroundColor: MATERIAL_COLORS.surface,
+    borderRadius: 20,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: MATERIAL_COLORS.outline,
+  },
+  classCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  classCardTitleRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginRight: 8,
   },
   className: {
     flex: 1,
     fontSize: 18,
     fontWeight: '700',
-    color: '#111',
+    color: MATERIAL_COLORS.textPrimary,
   },
-  classMeta: {
-    marginTop: 4,
+  categoryTag: {
+    alignSelf: 'flex-start',
+    backgroundColor: MATERIAL_COLORS.primaryContainer,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
     marginBottom: 12,
-    fontSize: 14,
-    color: '#4f4f4f',
+  },
+  categoryTagText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: MATERIAL_COLORS.primary,
+    textTransform: 'uppercase',
+  },
+  classInfoContainer: {
+    gap: 8,
   },
   classInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
+    gap: 10,
   },
   classInfoText: {
-    fontSize: 15,
-    color: '#222',
+    flex: 1,
+    fontSize: 14,
+    color: MATERIAL_COLORS.textSecondary,
+    fontWeight: '500',
   },
-  spotsRow: {
-    marginTop: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  spotsContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: MATERIAL_COLORS.outline,
+  },
+  spotsProgressBar: {
+    height: 6,
+    backgroundColor: MATERIAL_COLORS.surfaceVariant,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  spotsProgressFill: {
+    height: '100%',
+    borderRadius: 3,
   },
   spotsText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#08843a',
+    color: MATERIAL_COLORS.textSecondary,
   },
+
+  // Badges
   badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
   },
   badgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#fff',
+    color: MATERIAL_COLORS.onPrimary,
   },
   badgeSuccess: {
-    backgroundColor: '#34d399',
+    backgroundColor: MATERIAL_COLORS.success,
   },
   badgeWarning: {
-    backgroundColor: '#f97316',
+    backgroundColor: MATERIAL_COLORS.warning,
   },
-  badgeInfo: {
-    backgroundColor: '#60a5fa',
+
+  // Enrollment Card
+  enrollmentCard: {
+    backgroundColor: MATERIAL_COLORS.surface,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: MATERIAL_COLORS.primaryContainer,
+    shadowColor: MATERIAL_COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  stateContainer: {
-    flex: 1,
+  enrollmentBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: MATERIAL_COLORS.primaryContainer,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  enrollmentBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: MATERIAL_COLORS.primary,
+  },
+  enrollmentContent: {
     gap: 12,
   },
-  stateText: {
-    fontSize: 15,
-    color: '#555',
-    textAlign: 'center',
-    paddingHorizontal: 24,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  modalContent: {
-    width: '100%',
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111',
-  },
-  modalSubtitle: {
-    marginTop: 4,
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#30C451',
-  },
-  modalInfoRow: {
+  enrollmentTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginTop: 14,
   },
-  modalInfoText: {
+  enrollmentClassName: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '700',
+    color: MATERIAL_COLORS.textPrimary,
+  },
+  enrollmentInfoContainer: {
+    gap: 8,
+  },
+
+  // Skeleton Loading
+  skeletonContainer: {
+    padding: 16,
+    gap: 12,
+  },
+  skeletonCard: {
+    backgroundColor: MATERIAL_COLORS.surface,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: MATERIAL_COLORS.outline,
+  },
+  skeletonHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  skeletonBox: {
+    backgroundColor: MATERIAL_COLORS.surfaceVariant,
+    borderRadius: 8,
+  },
+
+  // Empty State
+  emptyStateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 32,
+    gap: 16,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: MATERIAL_COLORS.textPrimary,
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: MATERIAL_COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  retryButton: {
+    marginTop: 16,
+    backgroundColor: MATERIAL_COLORS.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: MATERIAL_COLORS.onPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // Modal - Modern Design
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: MATERIAL_COLORS.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingBottom: Platform.OS === 'android' ? 24 : 40,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: MATERIAL_COLORS.outline,
+  },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: MATERIAL_COLORS.surfaceVariant,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: MATERIAL_COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  modalSubtitle: {
+    marginTop: 4,
+    fontSize: 22,
+    fontWeight: '700',
+    color: MATERIAL_COLORS.textPrimary,
+  },
+  modalBody: {
+    padding: 24,
+    gap: 16,
+  },
+  modalInfoCard: {
+    backgroundColor: MATERIAL_COLORS.surfaceVariant,
+    borderRadius: 16,
+    padding: 16,
+    gap: 16,
+  },
+  modalInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  modalIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: MATERIAL_COLORS.primaryContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalInfoTextContainer: {
+    flex: 1,
+  },
+  modalInfoLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: MATERIAL_COLORS.textSecondary,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  modalInfoValue: {
     fontSize: 15,
-    color: '#222',
+    fontWeight: '600',
+    color: MATERIAL_COLORS.textPrimary,
   },
   modalNote: {
-    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  modalNoteSuccess: {
+    backgroundColor: MATERIAL_COLORS.primaryContainer,
+    borderColor: MATERIAL_COLORS.success,
+  },
+  modalNoteWarning: {
+    backgroundColor: '#FEF3C7',
+    borderColor: MATERIAL_COLORS.warning,
+  },
+  modalNoteText: {
+    flex: 1,
     fontSize: 14,
-    color: '#555',
-    lineHeight: 20,
+    fontWeight: '600',
+    color: MATERIAL_COLORS.textPrimary,
   },
   modalActions: {
-    marginTop: 20,
     flexDirection: 'row',
+    paddingHorizontal: 24,
     gap: 12,
   },
   modalButton: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 16,
+    gap: 8,
   },
   modalSecondary: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: MATERIAL_COLORS.surfaceVariant,
   },
   modalPrimary: {
-    backgroundColor: '#30C451',
+    backgroundColor: MATERIAL_COLORS.primary,
+    shadowColor: MATERIAL_COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   modalButtonDisabled: {
-    backgroundColor: '#a7dfb9',
+    backgroundColor: MATERIAL_COLORS.outline,
+    opacity: 0.6,
   },
   modalSecondaryText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#333',
+    color: MATERIAL_COLORS.textPrimary,
   },
   modalPrimaryText: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: '700',
+    color: MATERIAL_COLORS.onPrimary,
+  },
+
+  // Year Picker Modal
+  yearPickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  yearPickerContent: {
+    backgroundColor: MATERIAL_COLORS.surface,
+    borderRadius: 24,
+    width: '80%',
+    maxWidth: 400,
+    maxHeight: '70%',
+    overflow: 'hidden',
+  },
+  yearPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: MATERIAL_COLORS.outline,
+  },
+  yearPickerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: MATERIAL_COLORS.textPrimary,
+  },
+  yearPickerClose: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: MATERIAL_COLORS.surfaceVariant,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  yearPickerScroll: {
+    maxHeight: 400,
+  },
+  yearItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: MATERIAL_COLORS.outline,
+  },
+  yearItemActive: {
+    backgroundColor: MATERIAL_COLORS.primaryContainer,
+  },
+  yearItemText: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: MATERIAL_COLORS.textPrimary,
+  },
+  yearItemTextActive: {
+    fontWeight: '700',
+    color: MATERIAL_COLORS.primary,
   },
 });

@@ -69,3 +69,47 @@ export const cancelEnrollment = async (enrollmentId, payload = {}) => {
     throw new Error(message);
   }
 };
+
+const resolveRolePrefix = role => {
+  if (role === 'staff') return 'staff';
+  return 'customer';
+};
+
+const normaliseQrValue = qrValue => {
+  if (!qrValue) return qrValue;
+  if (typeof qrValue === 'string') return qrValue;
+  try {
+    return JSON.stringify(qrValue);
+  } catch {
+    return qrValue;
+  }
+};
+
+const buildAttendanceError = (error, fallback) =>
+  error.response?.data?.message || fallback;
+
+export const checkInToClass = async ({ classId, qrValue, role = 'customer' }) => {
+  if (!classId) throw new Error('Thiếu mã lớp học để check-in.');
+
+  const prefix = resolveRolePrefix(role);
+  const payload = { qrValue: normaliseQrValue(qrValue) };
+
+  try {
+    return await withClient().post(`/api/${prefix}/classes/${classId}/check-in`, payload);
+  } catch (error) {
+    throw new Error(buildAttendanceError(error, 'Không thể check-in bằng QR.'));
+  }
+};
+
+export const checkOutFromClass = async ({ classId, qrValue, role = 'customer' }) => {
+  if (!classId) throw new Error('Thiếu mã lớp học để check-out.');
+
+  const prefix = resolveRolePrefix(role);
+  const payload = { qrValue: normaliseQrValue(qrValue) };
+
+  try {
+    return await withClient().post(`/api/${prefix}/classes/${classId}/check-out`, payload);
+  } catch (error) {
+    throw new Error(buildAttendanceError(error, 'Không thể check-out bằng QR.'));
+  }
+};

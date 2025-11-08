@@ -1,22 +1,24 @@
-import React, { useState } from 'react';
+import React, { useCallback, useContext, useMemo, useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 // App screens
 import HomeScreen from '@screens/home/HomeScreen';
-import NotificationScreen from '@screens/home/NotificationScreen';
+import FavoriteVideosScreen from '@screens/video/FavoriteVideosScreen';
 import ProfileScreen from '@screens/profile/ProfileScreen';
 import QrScannerModal from '@screens/qr/QrScannerModal';
 import UpdateProfileScreen from '@screens/profile/UpdateProfileScreen';
 import SearchCalendarScreen from '@screens/booking/SearchCalendarScreen';
+import BookScreen from '@screens/booking/BookScreen';
 import NewsScreen from '@screens/home/NewsScreen';
 import CalendarScreen from '@screens/booking/CalendarScreen';
 import CardMembershipScreen from '@screens/membership/CardMembershipScreen';
 import WorkoutScreen from '@screens/workouts/WorkoutScreen';
-import WorkoutScreen2 from '@screens/workouts/WorkoutScreen2';
 import WorkoutVideoScreen from '@screens/video/WorkoutVideoScreen';
+import { UserContext } from '@context/UserContext';
+import { checkInToClass, checkOutFromClass } from '@api/classesApi';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -26,6 +28,87 @@ const renderCustomTabBar = props => <CustomTabBar {...props} />;
 // Custom Tab Bar với FAB
 const CustomTabBar = ({ state, descriptors, navigation }) => {
     const [showQRScanner, setShowQRScanner] = useState(false);
+    const { user } = useContext(UserContext);
+
+    const role = user?.role;
+
+    const parseQrPayload = useCallback(result => {
+        const rawValue = result?.value;
+        if (!rawValue) {
+            throw new Error('Không tìm thấy dữ liệu trong QR.');
+        }
+
+        if (typeof rawValue === 'object' && rawValue !== null) {
+            return rawValue;
+        }
+
+        if (typeof rawValue === 'string') {
+            try {
+                return JSON.parse(rawValue);
+            } catch {
+                throw new Error('Mã QR không đúng định dạng.');
+            }
+        }
+
+        throw new Error('Định dạng QR không được hỗ trợ.');
+    }, []);
+
+    const ensureRoleSupported = useCallback(() => {
+        if (!role) {
+            throw new Error('Không xác định được vai trò người dùng.');
+        }
+        if (role !== 'customer' && role !== 'staff') {
+            throw new Error('Vai trò hiện tại chưa được hỗ trợ điểm danh QR.');
+        }
+        return role;
+    }, [role]);
+
+    const performAttendance = useCallback(
+        async (actionType, result) => {
+            const userRole = ensureRoleSupported();
+            const payload = parseQrPayload(result);
+
+            const classId = payload?.classId;
+            if (!classId) {
+                throw new Error('QR không chứa thông tin lớp học hợp lệ.');
+            }
+
+            const qrValue = typeof result?.value === 'string' ? result.value : payload;
+            const action = actionType === 'checkin' ? 'check-in' : 'check-out';
+
+            const response =
+                actionType === 'checkin'
+                    ? await checkInToClass({ classId, qrValue, role: userRole })
+                    : await checkOutFromClass({ classId, qrValue, role: userRole });
+
+            return response?.message || `Hoàn tất ${action} lớp ${classId}.`;
+        },
+        [ensureRoleSupported, parseQrPayload],
+    );
+
+    const handleCheckIn = useCallback(
+        async result => {
+            const message = await performAttendance('checkin', result);
+            return message || 'Check-in thành công.';
+        },
+        [performAttendance],
+    );
+
+    const handleCheckOut = useCallback(
+        async result => {
+            const message = await performAttendance('checkout', result);
+            return message || 'Check-out thành công.';
+        },
+        [performAttendance],
+    );
+
+    const quickInfo = useMemo(
+        () =>
+            role
+                ? `Quét mã để điểm danh (${role === 'staff' ? 'PT' : 'Hội viên'})`
+                : 'Đăng nhập để dùng điểm danh QR',
+        [role],
+    );
 
     return (
         <View style={styles.tabContainer}>
@@ -33,6 +116,13 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
             <QrScannerModal
                 visible={showQRScanner}
                 onClose={() => setShowQRScanner(false)}
+                onCheckIn={role ? handleCheckIn : undefined}
+                onCheckOut={role ? handleCheckOut : undefined}
+                helperTitle={quickInfo}
+                disableActions={!role}
+                onUnsupportedRole={() =>
+                    Alert.alert('Không thể điểm danh', 'Bạn cần đăng nhập với tài khoản hội viên hoặc huấn luyện viên.')
+                }
             />
 
             {/* Nút Home */}
@@ -76,17 +166,17 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                 <Text style={styles.fabLabel}>Quét mã</Text>
             </TouchableOpacity>
 
-            {/* Nút Notification */}
+            {/* Nút Favorites */}
             <TouchableOpacity
                 style={styles.tabButton}
-                onPress={() => navigation.navigate('Notification')}
+                onPress={() => navigation.navigate('Favorites')}
             >
                 <Icon
                     name="star"
                     size={24}
-                    color={state.routes[state.index].name === 'Notification' ? '#fff' : '#ddd'}
+                    color={state.routes[state.index].name === 'Favorites' ? '#fff' : '#ddd'}
                 />
-                <Text style={[styles.tabLabel, state.routes[state.index].name === 'Notification' && styles.activeLabel]}>
+                <Text style={[styles.tabLabel, state.routes[state.index].name === 'Favorites' && styles.activeLabel]}>
                     Yêu thích
                 </Text>
             </TouchableOpacity>
@@ -118,8 +208,8 @@ const HomeStack = () => {
             <Stack.Screen name='CalendarScreen' component={CalendarScreen} />
             <Stack.Screen name='CardMembershipScreen' component={CardMembershipScreen} />
             <Stack.Screen name='WorkoutScreen' component={WorkoutScreen} />
-            <Stack.Screen name='WorkoutScreen2' component={WorkoutScreen2} />
             <Stack.Screen name='WorkoutVideo' component={WorkoutVideoScreen} />
+            <Stack.Screen name='BookScreen' component={BookScreen} />
         </Stack.Navigator>
     )
 }
@@ -144,7 +234,7 @@ const HomeNavigator = () => {
         >
             <Tab.Screen name="HomeStack" component={HomeStack} />
             <Tab.Screen name="SearchCalendarScreen" component={SearchCalendarScreen} />
-            <Tab.Screen name="Notification" component={NotificationScreen} />
+            <Tab.Screen name="Favorites" component={FavoriteVideosScreen} />
             <Tab.Screen name="ProfileStack" component={ProfileStack} />
         </Tab.Navigator>
     );

@@ -1,3 +1,4 @@
+// screens/HelpFaqScreen.js
 import React, { useState } from 'react';
 import {
   View,
@@ -5,8 +6,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Image,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import FAIcon from 'react-native-vector-icons/FontAwesome';
 
 const HelpFaqScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('Liên hệ');
@@ -14,23 +16,23 @@ const HelpFaqScreen = ({ navigation }) => {
   const contacts = [
     {
       name: 'Dịch vụ khách hàng',
-      icon: require('@assets/images/customerserviceicon.png'),
+      icon: <Icon name="support-agent" size={22} color="#0EBE7E" />,
     },
     {
       name: 'Trang web',
-      icon: require('@assets/images/websiteicon.png'),
+      icon: <Icon name="language" size={22} color="#0EBE7E" />,
     },
     {
       name: 'WhatsApp',
-      icon: require('@assets/images/whatsappicon.png'),
+      icon: <FAIcon name="whatsapp" size={22} color="#0EBE7E" />,
     },
     {
       name: 'Facebook',
-      icon: require('@assets/images/facebookicon.png'),
+      icon: <FAIcon name="facebook" size={22} color="#0EBE7E" />,
     },
     {
       name: 'Instagram',
-      icon: require('@assets/images/instagramicon.png'),
+      icon: <FAIcon name="instagram" size={22} color="#0EBE7E" />,
     },
   ];
 
@@ -39,10 +41,7 @@ const HelpFaqScreen = ({ navigation }) => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Image
-            source={require('@assets/images/back.png')}
-            style={styles.backIcon}
-          />
+          <Icon name="arrow-back-ios" size={20} color="#0EBE7E" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Trợ giúp & Câu hỏi thường gặp</Text>
       </View>
@@ -94,9 +93,7 @@ const HelpFaqScreen = ({ navigation }) => {
         {contacts.map((contact, index) => (
           <TouchableOpacity key={index} style={styles.contactItem}>
             <View style={styles.contactLeft}>
-              <View style={styles.iconWrapper}>
-                <Image source={contact.icon} style={styles.contactIcon} />
-              </View>
+              <View style={styles.iconWrapper}>{contact.icon}</View>
               <Text style={styles.contactName}>{contact.name}</Text>
             </View>
           </TouchableOpacity>
@@ -120,16 +117,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
-  backIcon: {
-    width: 20,
-    height: 20,
-    resizeMode: 'contain',
-    marginRight: 10,
-  },
   headerTitle: {
     fontSize: 17,
     fontWeight: '700',
     color: '#000',
+    marginLeft: 10,
   },
   subtitle: {
     textAlign: 'center',
@@ -166,7 +158,7 @@ const styles = StyleSheet.create({
   contactItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E9F9F2', // nền xanh nhạt như mẫu 2
+    backgroundColor: '#E9F9F2', // nền xanh nhạt
     borderRadius: 10,
     paddingVertical: 14,
     paddingHorizontal: 15,
@@ -179,17 +171,12 @@ const styles = StyleSheet.create({
   iconWrapper: {
     width: 40,
     height: 40,
-    borderRadius: 10, // bo viền vuông mềm
+    borderRadius: 10,
     borderWidth: 1.5,
     borderColor: '#0EBE7E',
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  contactIcon: {
-    width: 22,
-    height: 22,
-    resizeMode: 'contain',
   },
   contactName: {
     marginLeft: 12,

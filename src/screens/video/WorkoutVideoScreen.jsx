@@ -1,33 +1,51 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  Image,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
+  ActivityIndicator,
+  Alert,
   Platform,
-  ActivityIndicator
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-
-import Video from 'react-native-video';
-import { useRoute } from '@react-navigation/native';
-import { getVideoById } from '@api/userApi';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRoute } from '@react-navigation/native';
+import Video from 'react-native-video';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+
+import {
+  addVideoToFavorites,
+  getFavoriteVideos,
+  getVideoById,
+  removeVideoFromFavorites,
+} from '@api/userApi';
+
+const FALLBACK_DESCRIPTION =
+  'Tăng cường sức mạnh cơ bắp và độ linh hoạt cho toàn thân. Hít thở đều, giữ tư thế ổn định và thực hiện động tác với nhịp chậm để đạt hiệu quả tối đa.';
+
+const formatDurationLabel = value => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return '00:00';
+  const minutes = Math.floor(numeric / 60);
+  const seconds = Math.floor(numeric % 60);
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+};
 
 const WorkoutVideoScreen = ({ navigation }) => {
   const route = useRoute();
-  const videoId = route?.params?.videoId; // <<< Lấy videoId từ màn hình trước
-  console.log('--- WorkoutVideo: Received videoId:', videoId); // <<< DÒNG NÀY RẤT QUAN TRỌNG
-  const [videoData, setVideoData] = useState(null); // <<< State lưu thông tin video
+  const videoId = route?.params?.videoId;
+  const initialFavorite = Boolean(route?.params?.initialFavorite);
+
+  const [videoData, setVideoData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [isFavorite, setIsFavorite] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(initialFavorite);
+  const [isSyncingFavorite, setIsSyncingFavorite] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchText, setSearchText] = useState('');
 
-  // Gọi API để lấy chi tiết video khi component được mount
   useEffect(() => {
     const fetchVideoDetails = async () => {
       if (!videoId) {
@@ -35,6 +53,7 @@ const WorkoutVideoScreen = ({ navigation }) => {
         setIsLoading(false);
         return;
       }
+
       try {
         const response = await getVideoById(videoId);
         if (response.success && response.video) {
@@ -43,85 +62,164 @@ const WorkoutVideoScreen = ({ navigation }) => {
           setError(response.message || 'Không thể tải dữ liệu video.');
         }
       } catch (err) {
-        setError(err.message);
+        setError(err.message || 'Lỗi kết nối đến máy chủ.');
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchVideoDetails();
-  }, [videoId]); // Dependency là videoId
+  }, [videoId]);
 
-  const toggleFavorite = () => setIsFavorite(!isFavorite);
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncFavoriteState = async () => {
+      if (!videoId) {
+        return;
+      }
+      try {
+        const response = await getFavoriteVideos();
+        const list = Array.isArray(response?.data)
+          ? response.data
+          : response?.favorites || [];
+        const found = list.some(item => item.videoId === videoId);
+        if (isMounted) {
+          setIsFavorite(found);
+        }
+      } catch (err) {
+        console.warn('Không thể đồng bộ trạng thái yêu thích:', err?.message || err);
+      }
+    };
+
+    syncFavoriteState();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [videoId]);
+
+  const handleToggleFavorite = async () => {
+    if (!videoId) {
+      return;
+    }
+
+    setIsSyncingFavorite(true);
+    try {
+      if (isFavorite) {
+        await removeVideoFromFavorites(videoId);
+        setIsFavorite(false);
+      } else {
+        await addVideoToFavorites(videoId);
+        setIsFavorite(true);
+      }
+    } catch (err) {
+      Alert.alert(
+        'Không thể cập nhật yêu thích',
+        err.message || 'Vui lòng thử lại.',
+      );
+    } finally {
+      setIsSyncingFavorite(false);
+    }
+  };
+
+  const descriptionText = useMemo(() => {
+    const raw = `${videoData?.description || ''}`.trim();
+    return raw.length ? raw : FALLBACK_DESCRIPTION;
+  }, [videoData?.description]);
+
+  const durationLabel = useMemo(() => formatDurationLabel(videoData?.duration), [videoData?.duration]);
+
+  const viewCount = useMemo(() => {
+    const raw =
+      videoData?.views ??
+      videoData?.viewCount ??
+      videoData?.totalViews ??
+      videoData?.total_view ??
+      videoData?.watchCount ??
+      0;
+    const numeric = Number(raw);
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+  }, [videoData]);
+
+  const intensityLabel = useMemo(() => {
+    const labels = [videoData?.level, videoData?.difficulty, videoData?.subcategory, videoData?.category].filter(Boolean);
+    return labels.length ? labels[0] : 'Tổng hợp';
+  }, [videoData]);
+
+  const caloriesLabel = useMemo(() => {
+    const numeric = Number(videoData?.estimated_calories);
+    if (!Number.isFinite(numeric) || numeric <= 0) return '';
+    return `${Math.round(numeric)} Kcal`;
+  }, [videoData]);
+
+  const viewLabel = useMemo(() => {
+    if (!viewCount) return '';
+    return `${viewCount} lượt xem`;
+  }, [viewCount]);
+
+  const metaChips = useMemo(() => {
+    const chips = [{ key: 'duration', icon: 'schedule', label: durationLabel || '00:00' }];
+    if (caloriesLabel) {
+      chips.push({ key: 'calories', icon: 'local-fire-department', label: caloriesLabel });
+    }
+    if (viewLabel) {
+      chips.push({ key: 'views', icon: 'visibility', label: viewLabel });
+    }
+    if (intensityLabel) {
+      chips.push({ key: 'level', icon: 'fitness-center', label: intensityLabel });
+    }
+    return chips;
+  }, [durationLabel, caloriesLabel, viewLabel, intensityLabel]);
 
   if (isLoading) {
-    return <View style={styles.centerStatus}><ActivityIndicator size="large" color="#20B24A" /></View>;
+    return (
+      <View style={styles.centerStatus}>
+        <ActivityIndicator size="large" color="#20B24A" />
+      </View>
+    );
   }
 
   if (error) {
-    return <View style={styles.centerStatus}><Text style={styles.errorText}>{error}</Text></View>;
+    return (
+      <View style={styles.centerStatus}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
   }
 
   if (!videoData) {
-    return <View style={styles.centerStatus}><Text>Không có dữ liệu video.</Text></View>;
+    return (
+      <View style={styles.centerStatus}>
+        <Text>Không có dữ liệu video.</Text>
+      </View>
+    );
   }
-
-  const infoText =
-    'Tăng cường sức mạnh cơ bụng và cải thiện độ linh hoạt của phần thân trên. Giữ tư thế ổn định khi gập người và kiểm soát nhịp thở đều.';
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* ---------- HEADER ---------- */}
       <View style={styles.headerWrap}>
         <View style={styles.header}>
-          {/* Nút back */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.backWrap}
-            onPress={() => navigation.goBack()}
-          >
-            <Image
-              source={require('@assets/images/back.png')}
-              style={styles.backIcon}
-            />
+          <TouchableOpacity activeOpacity={0.8} style={styles.backWrap} onPress={() => navigation.goBack()}>
+            <Icon name="arrow-back" size={26} color="#20B24A" />
           </TouchableOpacity>
 
-          {/* Tiêu đề */}
-          <Text style={styles.headerText}>Nâng cao</Text>
+          <Text style={styles.headerText}>{videoData.level || 'Bài tập'}</Text>
 
-          {/* Nhóm icon bên phải */}
           <View style={styles.headerRight}>
-            {/* Nút tìm kiếm (toggle hiển thị ô tìm kiếm) */}
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => setShowSearch(!showSearch)}
-            >
-              <Image
-                source={require('@assets/images/Search_icon.png')}
-                style={styles.icon}
-              />
+            <TouchableOpacity activeOpacity={0.8} onPress={() => setShowSearch(prev => !prev)}>
+              <Icon name="search" size={26} color="#20B24A" style={styles.rightIcon} />
             </TouchableOpacity>
-
-            {/* Nút thông báo */}
             <TouchableOpacity activeOpacity={0.8}>
-              <Image
-                source={require('@assets/images/Notifications_icon.png')}
-                style={styles.icon}
-              />
+              <Icon name="notifications-none" size={26} color="#20B24A" style={styles.rightIcon} />
             </TouchableOpacity>
-
-            {/* Nút user */}
             <TouchableOpacity activeOpacity={0.8}>
-              <Image
-                source={require('@assets/images/User_Icon.png')}
-                style={styles.icon}
-              />
+              <Icon name="person-outline" size={26} color="#20B24A" style={styles.rightIcon} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Ô tìm kiếm (chỉ hiển thị khi nhấn icon) */}
-        {showSearch && (
+        {showSearch ? (
           <TextInput
             style={styles.searchInput}
             placeholder="Tìm kiếm trong mô tả bài tập..."
@@ -129,69 +227,48 @@ const WorkoutVideoScreen = ({ navigation }) => {
             value={searchText}
             onChangeText={setSearchText}
           />
-        )}
+        ) : null}
       </View>
 
-      {/* ---------- NỘI DUNG CHÍNH ---------- */}
-      <ScrollView contentContainerStyle={{ paddingBottom: 60 }}>
-        {/* Ảnh chính + Play + Sao */}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.videoContainer}>
           {videoData.streaming_url ? (
             <Video
-              source={{ uri: videoData.streaming_url }} // URL streaming HLS
+              source={{ uri: videoData.streaming_url }}
               style={styles.videoPlayer}
-              controls={true} // Hiển thị thanh điều khiển
-              resizeMode="contain" // Hoặc "cover" tùy ý
-              paused={true} // Bắt đầu ở trạng thái dừng
+              controls
+              resizeMode="contain"
+              paused={false}
             />
           ) : (
-            // Fallback nếu không có streaming_url
-            <Image source={require('@assets/images/workout1.jpg')} style={styles.videoPlayer} />
+            <View style={[styles.videoPlayer, { backgroundColor: '#000' }]} />
           )}
 
-          {/* Nút Sao yêu thích */}
-          <TouchableOpacity activeOpacity={0.8} style={styles.favoriteBtn} onPress={toggleFavorite}>
-            <Image
-              source={isFavorite ? require('@assets/images/yellowstar.png') : require('@assets/images/favorites_white_star.png')}
-              style={styles.favoriteIcon}
-            />
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.favoriteBtn}
+            onPress={handleToggleFavorite}
+            disabled={isSyncingFavorite}
+          >
+            {isSyncingFavorite ? (
+              <ActivityIndicator size="small" color="#FFD700" />
+            ) : (
+              <Icon name={isFavorite ? 'star' : 'star-border'} size={32} color={isFavorite ? '#FFD700' : '#20B24A'} />
+            )}
           </TouchableOpacity>
         </View>
 
-        {/* Thông tin bài tập */}
         <View style={styles.infoSection}>
-          <View style={styles.infoCard}>
-            <Text style={styles.infoTitle}>{videoData.title}</Text>
-            <Text style={styles.infoDesc}>{infoText}</Text>
+          <Text style={styles.videoTitle}>{videoData.title}</Text>
+          <Text style={styles.videoDescription}>{descriptionText}</Text>
 
-            {/* 3 dòng thông tin nhỏ */}
-            <View style={styles.infoRowWrapper}>
-              <View style={styles.infoItem}>
-                <Image
-                  source={require('@assets/images/time.png')}
-                  style={styles.smallIcon}
-                />
-                <Text style={styles.infoItemText}>
-                  {Math.floor(videoData.duration / 60)}:{String(videoData.duration % 60).padStart(2, '0')}
-                </Text>
+          <View style={styles.chipContainer}>
+            {metaChips.map(chip => (
+              <View key={chip.key} style={styles.chip}>
+                <Icon name={chip.icon} size={16} color="#2f6f4f" />
+                <Text style={styles.chipText}>{chip.label}</Text>
               </View>
-
-              <View style={styles.infoItem}>
-                <Image
-                  source={require('@assets/images/calories.png')}
-                  style={styles.smallIcon}
-                />
-                <Text style={styles.infoItemText}>3 lần</Text>
-              </View>
-
-              <View style={styles.infoItem}>
-                <Image
-                  source={require('@assets/images/Workout_icon.png')}
-                  style={styles.smallIcon}
-                />
-                <Text style={styles.infoItemText}>Nâng cao</Text>
-              </View>
-            </View>
+            ))}
           </View>
         </View>
       </ScrollView>
@@ -199,45 +276,47 @@ const WorkoutVideoScreen = ({ navigation }) => {
   );
 };
 
-// ---------------- STYLES ----------------
 const styles = StyleSheet.create({
-  videoContainer: { // Container cho video player
-    width: '100%',
-    aspectRatio: 16 / 9, // Tỷ lệ khung hình video phổ biến
-    backgroundColor: '#000', // Nền đen khi video đang tải
-    position: 'relative', // Để nút favorite có thể đè lên
-    marginBottom: 20
-  },
-  videoPlayer: { // Style cho chính component Video
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    right: 0,
-  },
-  favoriteBtn: { position: 'absolute', top: 16, right: 16, zIndex: 6 },
-  favoriteIcon: { width: 32, height: 32, resizeMode: 'contain' },
   container: {
     flex: 1,
     backgroundColor: '#fff',
-    paddingTop: Platform.OS === 'ios' ? 36 : 10
+    paddingTop: Platform.OS === 'ios' ? 36 : 10,
   },
-
-  // Header
-  headerWrap: { paddingHorizontal: 18, marginBottom: 10 },
+  centerStatus: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 16,
+  },
+  headerWrap: {
+    paddingHorizontal: 18,
+    marginBottom: 10,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 8,
   },
-  backWrap: { width: 30, alignItems: 'flex-start' },
-  backIcon: { width: 22, height: 22, resizeMode: 'contain' },
-  headerText: { fontSize: 22, fontWeight: '700', color: '#111' },
-  headerRight: { flexDirection: 'row', alignItems: 'center' },
-  icon: { width: 26, height: 26, marginLeft: 14, resizeMode: 'contain' },
-
-  // Ô tìm kiếm
+  backWrap: {
+    width: 30,
+    alignItems: 'flex-start',
+  },
+  headerText: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rightIcon: {
+    marginLeft: 14,
+  },
   searchInput: {
     marginTop: 10,
     backgroundColor: '#f1f1f1',
@@ -249,65 +328,73 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
   },
-
-  // Ảnh chính
-  featuredWrapper: {
+  scrollContent: {
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 60,
+  },
+  videoContainer: {
     width: '100%',
-    backgroundColor: '#20B24A',
-    paddingVertical: 20,
-    marginBottom: 22,
-  },
-  featuredCard: {
-    marginHorizontal: 18,
-    borderRadius: 24,
-    overflow: 'hidden',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#000',
     position: 'relative',
+    marginBottom: 20,
   },
-  workoutImage: { width: '100%', height: 500, resizeMode: 'cover' },
-  playButton: {
+  videoPlayer: {
     position: 'absolute',
-    alignSelf: 'center',
-    top: '42%',
-    zIndex: 5,
+    top: 0,
+    left: 0,
+    bottom: 0,
+    right: 0,
   },
-  playIcon: { width: 110, height: 110, resizeMode: 'contain' },
-
-  // Thông tin bài tập
-  infoSection: { paddingHorizontal: 18, marginTop: 14 },
-  infoCard: {
-    backgroundColor: '#EEF94E',
-    borderRadius: 45,
-    paddingVertical: 22,
-    paddingHorizontal: 22,
-    alignItems: 'center',
+  favoriteBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 6,
   },
-  infoTitle: {
+  infoSection: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 20,
+    marginTop: 12,
+    marginBottom: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+    gap: 12,
+  },
+  videoTitle: {
     fontSize: 20,
     fontWeight: '700',
-    marginBottom: 8,
-    textAlign: 'center',
-    color: '#111',
+    color: '#10381d',
   },
-  infoDesc: {
+  videoDescription: {
     fontSize: 14,
-    color: '#555',
-    textAlign: 'center',
-    marginBottom: 16,
+    color: '#465b4c',
     lineHeight: 20,
   },
-  infoRowWrapper: {
+  chipContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 35,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    width: '100%',
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  infoItem: { flexDirection: 'row', alignItems: 'center' },
-  smallIcon: { width: 18, height: 18, resizeMode: 'contain', marginRight: 6 },
-  infoItemText: { fontSize: 14, color: '#333', fontWeight: '500' },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#e6f3ec',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  chipText: {
+    fontSize: 13,
+    color: '#2f6f4f',
+    fontWeight: '600',
+  },
 });
 
 export default WorkoutVideoScreen;
