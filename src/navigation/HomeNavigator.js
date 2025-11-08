@@ -6,7 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 // App screens
 import HomeScreen from '@screens/home/HomeScreen';
-import NotificationScreen from '@screens/home/NotificationScreen';
+import FavoriteVideosScreen from '@screens/video/FavoriteVideosScreen';
 import ProfileScreen from '@screens/profile/ProfileScreen';
 import QrScannerModal from '@screens/qr/QrScannerModal';
 import UpdateProfileScreen from '@screens/profile/UpdateProfileScreen';
@@ -167,17 +167,17 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                 <Text style={styles.fabLabel}>Quét mã</Text>
             </TouchableOpacity>
 
-            {/* Nút Notification */}
+            {/* Nút Favorites */}
             <TouchableOpacity
                 style={styles.tabButton}
-                onPress={() => navigation.navigate('Notification')}
+                onPress={() => navigation.navigate('Favorites')}
             >
                 <Icon
                     name="star"
                     size={24}
-                    color={state.routes[state.index].name === 'Notification' ? '#fff' : '#ddd'}
+                    color={state.routes[state.index].name === 'Favorites' ? '#fff' : '#ddd'}
                 />
-                <Text style={[styles.tabLabel, state.routes[state.index].name === 'Notification' && styles.activeLabel]}>
+                <Text style={[styles.tabLabel, state.routes[state.index].name === 'Favorites' && styles.activeLabel]}>
                     Yêu thích
                 </Text>
             </TouchableOpacity>
@@ -236,7 +236,7 @@ const HomeNavigator = () => {
         >
             <Tab.Screen name="HomeStack" component={HomeStack} />
             <Tab.Screen name="SearchCalendarScreen" component={SearchCalendarScreen} />
-            <Tab.Screen name="Notification" component={NotificationScreen} />
+            <Tab.Screen name="Favorites" component={FavoriteVideosScreen} />
             <Tab.Screen name="ProfileStack" component={ProfileStack} />
         </Tab.Navigator>
     );

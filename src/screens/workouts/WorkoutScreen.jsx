@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
+  Alert,
   View,
   Text,
   TouchableOpacity,
@@ -11,9 +12,15 @@ import {
   SafeAreaView,
   Keyboard,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { getAllVideos } from '@api/userApi';
+import {
+  addVideoToFavorites,
+  getAllVideos,
+  getFavoriteVideos,
+  removeVideoFromFavorites,
+} from '@api/userApi';
 
 const formatDuration = (seconds) => {
   if (!seconds && seconds !== 0) {
@@ -38,7 +45,8 @@ const WorkoutScreen = ({ navigation, route }) => {
 
   const [searchText, setSearchText] = useState(incomingKeyword);
   const [debouncedSearch, setDebouncedSearch] = useState(incomingKeyword.trim());
-  const [favorites, setFavorites] = useState({});
+  const [favoriteMap, setFavoriteMap] = useState({});
+  const [updatingFavoriteId, setUpdatingFavoriteId] = useState(null);
   const [activeLevel, setActiveLevel] = useState(LEVEL_OPTIONS[0].key);
 
   const [videos, setVideos] = useState([]);
@@ -99,6 +107,25 @@ const WorkoutScreen = ({ navigation, route }) => {
     }
   }, []);
 
+  const fetchFavorites = useCallback(async () => {
+    try {
+      const response = await getFavoriteVideos();
+      const list = Array.isArray(response?.data)
+        ? response.data
+        : response?.favorites || [];
+      const mapped = {};
+      list.forEach(item => {
+        const videoId = item.videoId || item.id;
+        if (videoId) {
+          mapped[videoId] = item;
+        }
+      });
+      setFavoriteMap(mapped);
+    } catch (err) {
+      console.warn('Không thể tải danh sách yêu thích:', err?.message || err);
+    }
+  }, []);
+
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearch(searchText.trim());
@@ -109,6 +136,12 @@ const WorkoutScreen = ({ navigation, route }) => {
   useEffect(() => {
     fetchVideos(debouncedSearch);
   }, [debouncedSearch, fetchVideos]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchFavorites();
+    }, [fetchFavorites]),
+  );
 
   const handleSearchChange = useCallback((text) => {
     setSearchText(text);
@@ -125,19 +158,56 @@ const WorkoutScreen = ({ navigation, route }) => {
     Keyboard.dismiss();
   }, []);
 
-  const toggleFavorite = (id) => {
-    setFavorites((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  };
+  const toggleFavorite = useCallback(
+    async video => {
+      const videoId = video?.id;
+      if (!videoId) {
+        return;
+      }
+
+      const currentlyFavorite = Boolean(favoriteMap[videoId]);
+      setUpdatingFavoriteId(videoId);
+
+      try {
+        if (currentlyFavorite) {
+          await removeVideoFromFavorites(videoId);
+          setFavoriteMap(prev => {
+            const next = { ...prev };
+            delete next[videoId];
+            return next;
+          });
+        } else {
+          const response = await addVideoToFavorites(videoId);
+          const payload =
+            response?.data || response?.favorite || response?.data?.data || {};
+          setFavoriteMap(prev => ({
+            ...prev,
+            [videoId]: { ...payload, videoId },
+          }));
+        }
+      } catch (error) {
+        Alert.alert(
+          'Không thể cập nhật yêu thích',
+          error.message || 'Vui lòng thử lại.',
+        );
+      } finally {
+        setUpdatingFavoriteId(null);
+      }
+    },
+    [favoriteMap],
+  );
 
   const handleNavigateToVideo = (videoId) => {
-    navigation.navigate('WorkoutVideo', { videoId });
+    navigation.navigate('WorkoutVideo', {
+      videoId,
+      initialFavorite: Boolean(favoriteMap[videoId]),
+    });
   };
 
   const renderWorkoutItem = ({ item, index }) => {
     const isTopResult = Boolean(searchText.trim().length) && index === 0;
+    const isFavorite = Boolean(favoriteMap[item.id]);
+    const isUpdating = updatingFavoriteId === item.id;
     const caloriesLabel = Number.isFinite(Number(item.estimated_calories))
       ? `${Math.round(Number(item.estimated_calories))} Kcal`
       : '--';
@@ -184,14 +254,15 @@ const WorkoutScreen = ({ navigation, route }) => {
             <Image source={require('@assets/images/workout1.jpg')} style={styles.resultThumbnail} />
           )}
           <TouchableOpacity
-            style={[styles.favoriteButton, favorites[item.id] && styles.favoriteButtonActive]}
-            onPress={() => toggleFavorite(item.id)}
+            style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive, isUpdating && { opacity: 0.6 }]}
+            onPress={() => toggleFavorite(item)}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            disabled={isUpdating}
           >
             <MaterialIcons
-              name={favorites[item.id] ? 'favorite' : 'favorite-border'}
+              name={isFavorite ? 'favorite' : 'favorite-border'}
               size={20}
-              color={favorites[item.id] ? '#f05454' : '#ffffff'}
+              color={isFavorite ? '#f05454' : '#ffffff'}
             />
           </TouchableOpacity>
         </View>
