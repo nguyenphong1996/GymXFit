@@ -33,6 +33,7 @@ import {
   searchAvailableClasses,
   enrollInClass,
   getMyEnrollments,
+  cancelEnrollment,
 } from '@api/classesApi';
 import { useRoute } from '@react-navigation/native';
 
@@ -283,13 +284,17 @@ const ClassCard = ({ item, onSelect }) => {
 };
 
 /* Enrollment Card - Modern Design */
-const EnrollmentCard = ({ enrollment }) => {
+const EnrollmentCard = ({ enrollment, onPress }) => {
   const classInfo = enrollment.class || {};
   const timeRange = formatTimeRange(classInfo.startTime, classInfo.endTime);
   const dateLabel = formatDateLabel(classInfo.startTime || enrollment.enrolledAt);
 
   return (
-    <View style={styles.enrollmentCard}>
+    <TouchableOpacity 
+      style={styles.enrollmentCard}
+      activeOpacity={0.8}
+      onPress={() => onPress(enrollment)}
+    >
       {/* Status badge */}
       <View style={styles.enrollmentBadge}>
         <Icon name="check-circle" size={16} color={MATERIAL_COLORS.success} />
@@ -309,6 +314,7 @@ const EnrollmentCard = ({ enrollment }) => {
           <Text style={styles.enrollmentClassName} numberOfLines={2}>
             {classInfo.name || 'Lớp học'}
           </Text>
+          <Icon name="chevron-right" size={24} color={MATERIAL_COLORS.textSecondary} />
         </View>
 
         <View style={styles.enrollmentInfoContainer}>
@@ -341,7 +347,7 @@ const EnrollmentCard = ({ enrollment }) => {
           )}
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -368,6 +374,11 @@ const SearchCalendarScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEnrolling, setIsEnrolling] = useState(false);
   const [yearPickerVisible, setYearPickerVisible] = useState(false);
+  
+  // Enrollment detail modal
+  const [selectedEnrollment, setSelectedEnrollment] = useState(null);
+  const [enrollmentModalVisible, setEnrollmentModalVisible] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Calendar state - Infinite scroll with month navigation
   const flatListRef = useRef(null);
@@ -595,6 +606,52 @@ const SearchCalendarScreen = () => {
     setCurrentMonth(new Date(day.dateObj.getFullYear(), day.dateObj.getMonth(), 1));
   }, []);
 
+  /* Handle enrollment detail */
+  const handleSelectEnrollment = useCallback((enrollment) => {
+    setSelectedEnrollment(enrollment);
+    setEnrollmentModalVisible(true);
+  }, []);
+
+  const handleCloseEnrollmentModal = useCallback(() => {
+    setEnrollmentModalVisible(false);
+    setSelectedEnrollment(null);
+  }, []);
+
+  const handleCancelEnrollment = useCallback(async () => {
+    if (!selectedEnrollment) return;
+    
+    Alert.alert(
+      'Xác nhận hủy đăng ký',
+      'Bạn có chắc chắn muốn hủy đăng ký lớp học này?',
+      [
+        {
+          text: 'Không',
+          style: 'cancel',
+        },
+        {
+          text: 'Hủy đăng ký',
+          style: 'destructive',
+          onPress: async () => {
+            setIsCancelling(true);
+            try {
+              const response = await cancelEnrollment(selectedEnrollment.enrollmentId);
+              Alert.alert(
+                'Thành công',
+                response?.message || 'Đã hủy đăng ký lớp học.',
+              );
+              handleCloseEnrollmentModal();
+              await fetchEnrollments();
+            } catch (error) {
+              Alert.alert('Hủy đăng ký thất bại', error.message);
+            } finally {
+              setIsCancelling(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [selectedEnrollment, handleCloseEnrollmentModal, fetchEnrollments]);
+
   /* handle class modal */
   const handleSelectClass = useCallback(classItem => {
     setSelectedClass(classItem);
@@ -642,7 +699,7 @@ const SearchCalendarScreen = () => {
     <ClassCard item={item} onSelect={handleSelectClass} />
   );
   const renderEnrollmentItem = ({ item }) => (
-    <EnrollmentCard enrollment={item} />
+    <EnrollmentCard enrollment={item} onPress={handleSelectEnrollment} />
   );
 
   const currentMonthYear = formatMonthYear(currentMonth);
@@ -1103,6 +1160,148 @@ const SearchCalendarScreen = () => {
               ))}
             </ScrollView>
           </View>
+        </Pressable>
+      </Modal>
+
+      {/* Enrollment Detail Modal */}
+      <Modal
+        transparent
+        animationType="slide"
+        visible={enrollmentModalVisible}
+        onRequestClose={handleCloseEnrollmentModal}
+      >
+        <Pressable style={styles.modalOverlay} onPress={handleCloseEnrollmentModal}>
+          <Pressable
+            style={styles.modalContent}
+            onPress={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Chi tiết lớp đã đăng ký</Text>
+                <Text style={styles.modalSubtitle}>
+                  {selectedEnrollment?.class?.name || 'Lớp học'}
+                </Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.modalCloseButton}
+                onPress={handleCloseEnrollmentModal}
+              >
+                <Icon name="close" size={24} color={MATERIAL_COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Content */}
+            <View style={styles.modalBody}>
+              <View style={styles.modalInfoCard}>
+                <View style={styles.modalInfoRow}>
+                  <View style={styles.modalIconContainer}>
+                    <Icon name="event" size={20} color={MATERIAL_COLORS.primary} />
+                  </View>
+                  <View style={styles.modalInfoTextContainer}>
+                    <Text style={styles.modalInfoLabel}>Ngày học</Text>
+                    <Text style={styles.modalInfoValue}>
+                      {selectedEnrollment?.class?.startTime 
+                        ? formatDateLabel(selectedEnrollment.class.startTime) 
+                        : '--/--'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.modalInfoRow}>
+                  <View style={styles.modalIconContainer}>
+                    <Icon name="schedule" size={20} color={MATERIAL_COLORS.primary} />
+                  </View>
+                  <View style={styles.modalInfoTextContainer}>
+                    <Text style={styles.modalInfoLabel}>Thời gian</Text>
+                    <Text style={styles.modalInfoValue}>
+                      {selectedEnrollment?.class?.startTime
+                        ? formatTimeRange(
+                            selectedEnrollment.class.startTime, 
+                            selectedEnrollment.class.endTime
+                          )
+                        : '--:--'}
+                    </Text>
+                  </View>
+                </View>
+
+                {selectedEnrollment?.class?.location && (
+                  <View style={styles.modalInfoRow}>
+                    <View style={styles.modalIconContainer}>
+                      <Icon name="location-on" size={20} color={MATERIAL_COLORS.primary} />
+                    </View>
+                    <View style={styles.modalInfoTextContainer}>
+                      <Text style={styles.modalInfoLabel}>Địa điểm</Text>
+                      <Text style={styles.modalInfoValue}>
+                        {selectedEnrollment.class.location}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                <View style={styles.modalInfoRow}>
+                  <View style={styles.modalIconContainer}>
+                    <Icon name="person-outline" size={20} color={MATERIAL_COLORS.primary} />
+                  </View>
+                  <View style={styles.modalInfoTextContainer}>
+                    <Text style={styles.modalInfoLabel}>Huấn luyện viên</Text>
+                    <Text style={styles.modalInfoValue}>
+                      {selectedEnrollment?.class?.instructor?.name || 'Đang cập nhật'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.modalInfoRow}>
+                  <View style={styles.modalIconContainer}>
+                    <Icon name="confirmation-number" size={20} color={MATERIAL_COLORS.primary} />
+                  </View>
+                  <View style={styles.modalInfoTextContainer}>
+                    <Text style={styles.modalInfoLabel}>Mã đăng ký</Text>
+                    <Text style={styles.modalInfoValue}>
+                      #{selectedEnrollment?.enrollmentId?.slice(-8) || 'N/A'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Status Badge */}
+              <View style={[styles.modalNote, styles.modalNoteSuccess]}>
+                <Icon name="check-circle" size={20} color={MATERIAL_COLORS.success} />
+                <Text style={styles.modalNoteText}>
+                  Bạn đã đăng ký lớp học này
+                </Text>
+              </View>
+            </View>
+
+            {/* Modal Actions */}
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalSecondary]}
+                onPress={handleCloseEnrollmentModal}
+              >
+                <Text style={styles.modalSecondaryText}>Đóng</Text>
+              </TouchableOpacity>
+              
+              {/* Only show cancel button if class hasn't started yet */}
+              {selectedEnrollment?.class?.startTime && 
+               new Date(selectedEnrollment.class.startTime) > new Date() && (
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalDanger]}
+                  onPress={handleCancelEnrollment}
+                  disabled={isCancelling}
+                >
+                  {isCancelling ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <>
+                      <Icon name="cancel" size={20} color="#fff" />
+                      <Text style={styles.modalDangerText}>Hủy đăng ký</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </View>
@@ -1632,6 +1831,14 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  modalDanger: {
+    backgroundColor: MATERIAL_COLORS.error,
+    shadowColor: MATERIAL_COLORS.error,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
   modalButtonDisabled: {
     backgroundColor: MATERIAL_COLORS.outline,
     opacity: 0.6,
@@ -1642,6 +1849,11 @@ const styles = StyleSheet.create({
     color: MATERIAL_COLORS.textPrimary,
   },
   modalPrimaryText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: MATERIAL_COLORS.onPrimary,
+  },
+  modalDangerText: {
     fontSize: 15,
     fontWeight: '700',
     color: MATERIAL_COLORS.onPrimary,
