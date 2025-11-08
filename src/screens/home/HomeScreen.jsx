@@ -289,7 +289,7 @@ const QuickActions = ({
         <View style={styles.bgImage}>
           <MaterialCommunityIcons name="dumbbell" size={28} color={MATERIAL_COLORS.primary} />
         </View>
-        <Text style={styles.itemText}>Tập luyện</Text>
+        <Text style={styles.itemText}>Workout</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -310,7 +310,7 @@ const QuickActions = ({
             <MaterialCommunityIcons name="calendar-plus" size={28} color={MATERIAL_COLORS.primary} />
           )}
         </View>
-        <Text style={styles.itemText}>Đặt lịch tập</Text>
+        <Text style={styles.itemText}>Schedule</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -331,7 +331,7 @@ const QuickActions = ({
             <MaterialCommunityIcons name="account-tie" size={28} color={MATERIAL_COLORS.primary} />
           )}
         </View>
-        <Text style={styles.itemText}>Đặt lịch HLV</Text>
+        <Text style={styles.itemText}>Coaching</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -341,7 +341,7 @@ const QuickActions = ({
         <View style={styles.bgImage}>
           <MaterialCommunityIcons name="cart-outline" size={28} color={MATERIAL_COLORS.primary} />
         </View>
-        <Text style={styles.itemText}>Mua dịch vụ</Text>
+        <Text style={styles.itemText}>Services</Text>
       </TouchableOpacity>
     </View>
   </View>
