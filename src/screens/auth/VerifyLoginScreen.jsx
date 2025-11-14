@@ -85,8 +85,8 @@ const VerifyLoginScreen = ({ navigation }) => {
       const response = await verifyLoginOtp(phone, otp);
       if (response.ok && response.token) {
         await login(response.token, response.user);
-        // Chuyển đến màn hình chính
-        navigation.navigate('Home');
+        // UserContext sẽ tự động điều hướng sau khi login
+        // Không cần navigate thủ công
       } else {
         throw new Error(response.message || 'Xác thực thất bại');
       }

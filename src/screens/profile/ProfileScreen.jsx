@@ -98,7 +98,6 @@ const ProfileScreen = () => {
         <OptionItem icon="book-open-page-variant" text="Hướng dẫn sử dụng" />
         <OptionItem icon="headset" text="Liên hệ hỗ trợ" />
         <OptionItem icon="file-document" text="Hợp đồng của tôi" />
-        <OptionItem icon="lock-reset" text="Đổi mật khẩu" />
       </View>
 
       {/* Logout */}
@@ -179,7 +178,7 @@ const styles = StyleSheet.create({
   },
 
   logoutButton: {
-    backgroundColor: '#E53935',
+    backgroundColor: '#20B24A',
     marginHorizontal: 30,
     marginTop: 40,
     marginBottom: 50,
@@ -189,6 +188,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     elevation: 3,
+    shadowColor: '#0F6427',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
   },
-  logoutText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  logoutText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
 });

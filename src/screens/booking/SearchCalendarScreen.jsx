@@ -127,6 +127,16 @@ const formatDateLabel = date => {
   }
 };
 
+const formatDateTime = date => {
+  try {
+    if (!date) return null;
+    const d = new Date(date);
+    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()} lúc ${d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+  } catch {
+    return null;
+  }
+};
+
 const isSameDay = (date1, date2) => {
   return (
     date1.getDate() === date2.getDate() &&
@@ -288,6 +298,11 @@ const EnrollmentCard = ({ enrollment, onPress }) => {
   const classInfo = enrollment.class || {};
   const timeRange = formatTimeRange(classInfo.startTime, classInfo.endTime);
   const dateLabel = formatDateLabel(classInfo.startTime || enrollment.enrolledAt);
+  
+  // Determine status
+  const hasCheckedIn = !!enrollment.checkInTime;
+  const hasCheckedOut = !!enrollment.checkOutTime;
+  const isCompleted = hasCheckedIn && hasCheckedOut;
 
   return (
     <TouchableOpacity 
@@ -296,11 +311,24 @@ const EnrollmentCard = ({ enrollment, onPress }) => {
       onPress={() => onPress(enrollment)}
     >
       {/* Status badge */}
-      <View style={styles.enrollmentBadge}>
-        <Icon name="check-circle" size={16} color={MATERIAL_COLORS.success} />
-        <Text style={styles.enrollmentBadgeText}>
-          {enrollment.status === 'active' ? 'Đã xác nhận' : enrollment.status}
-        </Text>
+      <View style={styles.enrollmentBadgeRow}>
+        <View style={[
+          styles.enrollmentBadge,
+          isCompleted && { backgroundColor: '#D4F4DD' },
+        ]}>
+          <Icon 
+            name={isCompleted ? 'check-circle' : hasCheckedIn ? 'access-time' : 'event-available'} 
+            size={16} 
+            color={isCompleted ? MATERIAL_COLORS.success : hasCheckedIn ? '#2196F3' : MATERIAL_COLORS.primary} 
+          />
+          <Text style={[
+            styles.enrollmentBadgeText,
+            isCompleted && { color: MATERIAL_COLORS.success },
+            hasCheckedIn && !hasCheckedOut && { color: '#2196F3' },
+          ]}>
+            {isCompleted ? 'Đã hoàn thành' : hasCheckedIn ? 'Đang diễn ra' : 'Đã đăng ký'}
+          </Text>
+        </View>
       </View>
 
       {/* Class info */}
@@ -687,12 +715,78 @@ const SearchCalendarScreen = () => {
     }
   }, [selectedClass, handleCloseModal, fetchClasses, fetchEnrollments, selectedDate]);
 
-  /* highlight class from route params */
+  /* highlight class from route params - scroll to class date first */
   useEffect(() => {
-    if (!highlightClassId || !classes.length) return;
-    const target = classes.find(c => c.classId === highlightClassId);
-    if (target) handleSelectClass(target);
-  }, [highlightClassId, classes, handleSelectClass]);
+    if (!highlightClassId) return;
+    
+    let isMounted = true;
+    
+    // Function to scroll to class date and open modal
+    const scrollToClassDate = async () => {
+      try {
+        // Fetch all classes in next 90 days to find the target class
+        const response = await searchAvailableClasses({
+          startDate: new Date().toISOString(),
+          endDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+        });
+        
+        if (!isMounted) return;
+        
+        if (response?.success && response.data) {
+          const allClasses = normalizeClasses(response.data);
+          const target = allClasses.find(c => c.classId === highlightClassId);
+          
+          if (target && target.startTime) {
+            const classDate = new Date(target.startTime);
+            classDate.setHours(0, 0, 0, 0);
+            
+            // Calculate index in infiniteDays for this date
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const diffTime = classDate.getTime() - today.getTime();
+            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+            const targetIndex = anchorIndex + diffDays;
+            
+            // Make sure index is within bounds
+            if (targetIndex >= 0 && targetIndex < infiniteDays.length) {
+              if (!isMounted) return;
+              
+              // Update states to scroll to the date
+              setSelectedDate(classDate);
+              setSelectedDateIndex(targetIndex);
+              setCurrentMonth(new Date(classDate.getFullYear(), classDate.getMonth(), 1));
+              
+              // Scroll calendar
+              setTimeout(() => {
+                if (!isMounted) return;
+                flatListRef.current?.scrollToIndex({
+                  index: targetIndex,
+                  animated: true,
+                  viewPosition: 0.5,
+                });
+              }, 100);
+              
+              // The fetchClasses will be triggered by the selectedDate change effect
+              // After classes are loaded, select the target class
+              setTimeout(() => {
+                if (!isMounted) return;
+                handleSelectClass(target);
+              }, 800);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error scrolling to class date:', error);
+      }
+    };
+    
+    scrollToClassDate();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [highlightClassId, anchorIndex, infiniteDays.length, normalizeClasses, handleSelectClass]);
 
   /* Renderers for lists */
   const renderClassItem = ({ item }) => (
@@ -1251,6 +1345,21 @@ const SearchCalendarScreen = () => {
                   </View>
                 </View>
 
+                {/* Description */}
+                {selectedEnrollment?.class?.description && (
+                  <View style={styles.modalInfoRow}>
+                    <View style={styles.modalIconContainer}>
+                      <Icon name="description" size={20} color={MATERIAL_COLORS.primary} />
+                    </View>
+                    <View style={styles.modalInfoTextContainer}>
+                      <Text style={styles.modalInfoLabel}>Mô tả</Text>
+                      <Text style={styles.modalInfoValue}>
+                        {selectedEnrollment.class.description}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
                 <View style={styles.modalInfoRow}>
                   <View style={styles.modalIconContainer}>
                     <Icon name="confirmation-number" size={20} color={MATERIAL_COLORS.primary} />
@@ -1262,15 +1371,71 @@ const SearchCalendarScreen = () => {
                     </Text>
                   </View>
                 </View>
+
+                {/* Check-in Time */}
+                {selectedEnrollment?.checkInTime && (
+                  <View style={styles.modalInfoRow}>
+                    <View style={[styles.modalIconContainer, { backgroundColor: '#D4F4DD' }]}>
+                      <Icon name="login" size={20} color={MATERIAL_COLORS.success} />
+                    </View>
+                    <View style={styles.modalInfoTextContainer}>
+                      <Text style={styles.modalInfoLabel}>Thời gian check-in</Text>
+                      <Text style={styles.modalInfoValue}>
+                        {formatDateTime(selectedEnrollment.checkInTime)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Check-out Time */}
+                {selectedEnrollment?.checkOutTime && (
+                  <View style={styles.modalInfoRow}>
+                    <View style={[styles.modalIconContainer, { backgroundColor: '#FFE4E1' }]}>
+                      <Icon name="logout" size={20} color="#E57373" />
+                    </View>
+                    <View style={styles.modalInfoTextContainer}>
+                      <Text style={styles.modalInfoLabel}>Thời gian check-out</Text>
+                      <Text style={styles.modalInfoValue}>
+                        {formatDateTime(selectedEnrollment.checkOutTime)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Show pending if not checked in yet and class has started */}
+                {!selectedEnrollment?.checkInTime && 
+                 selectedEnrollment?.class?.startTime &&
+                 new Date(selectedEnrollment.class.startTime) <= new Date() && (
+                  <View style={styles.modalInfoRow}>
+                    <View style={[styles.modalIconContainer, { backgroundColor: '#FFF4E6' }]}>
+                      <Icon name="schedule" size={20} color={MATERIAL_COLORS.warning} />
+                    </View>
+                    <View style={styles.modalInfoTextContainer}>
+                      <Text style={styles.modalInfoLabel}>Trạng thái điểm danh</Text>
+                      <Text style={[styles.modalInfoValue, { color: MATERIAL_COLORS.warning }]}>
+                        Chưa điểm danh
+                      </Text>
+                    </View>
+                  </View>
+                )}
               </View>
 
               {/* Status Badge */}
-              <View style={[styles.modalNote, styles.modalNoteSuccess]}>
-                <Icon name="check-circle" size={20} color={MATERIAL_COLORS.success} />
-                <Text style={styles.modalNoteText}>
-                  Bạn đã đăng ký lớp học này
-                </Text>
-              </View>
+              {selectedEnrollment?.checkInTime && selectedEnrollment?.checkOutTime ? (
+                <View style={[styles.modalNote, styles.modalNoteSuccess]}>
+                  <Icon name="check-circle" size={20} color={MATERIAL_COLORS.success} />
+                  <Text style={styles.modalNoteText}>
+                    Đã hoàn thành lớp học
+                  </Text>
+                </View>
+              ) : selectedEnrollment?.checkInTime ? (
+                <View style={[styles.modalNote, { backgroundColor: '#E3F2FD', borderColor: '#2196F3' }]}>
+                  <Icon name="info" size={20} color="#2196F3" />
+                  <Text style={styles.modalNoteText}>
+                    Đang tham gia lớp học
+                  </Text>
+                </View>
+              ) : null}
             </View>
 
             {/* Modal Actions */}
@@ -1613,6 +1778,9 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+  enrollmentBadgeRow: {
+    marginBottom: 12,
+  },
   enrollmentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1622,7 +1790,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
-    marginBottom: 12,
   },
   enrollmentBadgeText: {
     fontSize: 12,

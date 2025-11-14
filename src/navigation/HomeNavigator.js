@@ -1,6 +1,6 @@
-import React, { useCallback, useContext, useMemo, useState } from 'react';
+import React, { useCallback, useContext, useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, TouchableOpacity, Text, StyleSheet, Alert } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -18,7 +18,33 @@ import CardMembershipScreen from '@screens/membership/CardMembershipScreen';
 import WorkoutScreen from '@screens/workouts/WorkoutScreen';
 import WorkoutVideoScreen from '@screens/video/WorkoutVideoScreen';
 import { UserContext } from '@context/UserContext';
-import { checkInToClass, checkOutFromClass } from '@api/classesApi';
+import { scanAttendance } from '@api/classesApi';
+
+const resolveCheckinWindowMessage = (message = '', code = '') => {
+    const normalizedMessage = typeof message === 'string' ? message.toLowerCase() : '';
+    const normalizedCode = typeof code === 'string' ? code.toLowerCase() : '';
+
+    if (
+        normalizedCode === 'checkin_window_not_started' ||
+        normalizedMessage.includes('pre-defined time window') ||
+        normalizedMessage.includes('check-in is only allowed') ||
+        normalizedMessage.includes('chỉ được điểm danh trong khung giờ') ||
+        normalizedMessage.includes('chưa đến giờ điểm danh')
+    ) {
+        return 'Chưa đến giờ điểm danh - Vui lòng quay lại gần giờ bắt đầu lớp.';
+    }
+
+    if (
+        normalizedCode === 'checkin_window_closed' ||
+        normalizedMessage.includes('window is closed') ||
+        normalizedMessage.includes('đã hết giờ điểm danh') ||
+        normalizedMessage.includes('quá giờ điểm danh')
+    ) {
+        return 'Đã hết giờ điểm danh - Vui lòng liên hệ lễ tân hoặc PT để được hỗ trợ.';
+    }
+
+    return null;
+};
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -30,84 +56,161 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
     const [showQRScanner, setShowQRScanner] = useState(false);
     const { user } = useContext(UserContext);
 
-    const role = user?.role;
-
-    const parseQrPayload = useCallback(result => {
-        const rawValue = result?.value;
-        if (!rawValue) {
-            throw new Error('Không tìm thấy dữ liệu trong QR.');
-        }
-
-        if (typeof rawValue === 'object' && rawValue !== null) {
-            return rawValue;
-        }
-
-        if (typeof rawValue === 'string') {
+    // Handle QR scan with new API
+    const handleScanSuccess = useCallback(
+        async (qrData) => {
             try {
-                return JSON.parse(rawValue);
-            } catch {
-                throw new Error('Mã QR không đúng định dạng.');
+                console.log('=== QR SCAN - START ===');
+                console.log('User:', user);
+                console.log('User Role:', user?.role);
+                console.log('QR Data:', qrData);
+                
+                // Check if user is logged in
+                if (!user) {
+                    console.error('User not found - not logged in');
+                    return {
+                        success: false,
+                        message: 'Vui lòng đăng nhập để sử dụng chức năng điểm danh',
+                    };
+                }
+
+                // Get role, default to 'customer' if not set
+                const role = user.role || 'customer';
+                console.log('Resolved role:', role);
+
+                // Validate role
+                if (role !== 'customer' && role !== 'staff') {
+                    console.error('Invalid role:', role);
+                    return {
+                        success: false,
+                        message: 'Vai trò hiện tại chưa được hỗ trợ điểm danh QR',
+                    };
+                }
+
+                // Validate QR data structure
+                if (!qrData || typeof qrData !== 'object') {
+                    return {
+                        success: false,
+                        message: 'Mã QR không hợp lệ - Dữ liệu không đúng định dạng',
+                    };
+                }
+
+                const classId = qrData?.classId;
+                if (!classId) {
+                    return {
+                        success: false,
+                        message: 'Mã QR không hợp lệ - Thiếu thông tin lớp học',
+                    };
+                }
+
+                // Check if QR has expired
+                if (qrData.expiresAt) {
+                    const expiryTime = new Date(qrData.expiresAt).getTime();
+                    const currentTime = new Date().getTime();
+                    
+                    if (currentTime > expiryTime) {
+                        return {
+                            success: false,
+                            message: 'Mã QR đã hết hạn',
+                        };
+                    }
+                }
+
+                // Call check-in API
+                console.log('=== SCAN SUCCESS - CALLING API ===');
+                console.log('QR Data:', qrData);
+                console.log('Class ID:', classId);
+                console.log('Role:', role);
+                
+                const response = await scanAttendance({ 
+                    classId, 
+                    qrValue: qrData,  // Pass object directly, API will handle it
+                    role 
+                });
+
+                console.log('=== SCAN SUCCESS - API RESPONSE ===');
+                console.log('Response:', response);
+                console.log('Response.success:', response?.success);
+                console.log('Response.message:', response?.message);
+
+                // Check API response
+                if (response?.success === false) {
+                    const errorMsg = response?.message || '';
+                    
+                    console.log('=== RESPONSE SUCCESS = FALSE ===');
+                    console.log('Error Message:', errorMsg);
+
+                    const checkinWindowMessage = resolveCheckinWindowMessage(errorMsg, response?.error);
+                    if (checkinWindowMessage) {
+                        return {
+                            success: false,
+                            message: checkinWindowMessage,
+                        };
+                    }
+                    
+                    // Handle specific errors
+                    if (errorMsg.includes('not enrolled') || errorMsg.includes('không đăng ký')) {
+                        return {
+                            success: false,
+                            message: 'Quét sai lớp học - Bạn chưa đăng ký lớp này',
+                        };
+                    }
+                    
+                    if (errorMsg.includes('expired') || errorMsg.includes('hết hạn')) {
+                        return {
+                            success: false,
+                            message: 'Mã QR đã hết hạn',
+                        };
+                    }
+                    
+                    return {
+                        success: false,
+                        message: errorMsg || 'Quét QR lỗi',
+                    };
+                }
+
+                console.log('=== CHECK-IN SUCCESS ===');
+                
+                // Success
+                return {
+                    success: true,
+                    message: response?.message || 'Quét mã thành công! Đã check-in vào lớp học.',
+                };
+            } catch (error) {
+                console.error('Error in handleScanSuccess:', error);
+                
+                const errorMsg = error?.message || '';
+
+                const checkinWindowMessage = resolveCheckinWindowMessage(errorMsg, error?.response?.data?.error);
+                if (checkinWindowMessage) {
+                    return {
+                        success: false,
+                        message: checkinWindowMessage,
+                    };
+                }
+                
+                // Handle specific errors
+                if (errorMsg.includes('not enrolled') || errorMsg.includes('không đăng ký')) {
+                    return {
+                        success: false,
+                        message: 'Quét sai lớp học - Bạn chưa đăng ký lớp này',
+                    };
+                }
+                
+                if (errorMsg.includes('expired') || errorMsg.includes('hết hạn')) {
+                    return {
+                        success: false,
+                        message: 'Mã QR đã hết hạn',
+                    };
+                }
+                
+                return {
+                    success: false,
+                    message: 'Quét QR lỗi - ' + (errorMsg || 'Không thể xử lý mã QR'),
+                };
             }
-        }
-
-        throw new Error('Định dạng QR không được hỗ trợ.');
-    }, []);
-
-    const ensureRoleSupported = useCallback(() => {
-        if (!role) {
-            throw new Error('Không xác định được vai trò người dùng.');
-        }
-        if (role !== 'customer' && role !== 'staff') {
-            throw new Error('Vai trò hiện tại chưa được hỗ trợ điểm danh QR.');
-        }
-        return role;
-    }, [role]);
-
-    const performAttendance = useCallback(
-        async (actionType, result) => {
-            const userRole = ensureRoleSupported();
-            const payload = parseQrPayload(result);
-
-            const classId = payload?.classId;
-            if (!classId) {
-                throw new Error('QR không chứa thông tin lớp học hợp lệ.');
-            }
-
-            const qrValue = typeof result?.value === 'string' ? result.value : payload;
-            const action = actionType === 'checkin' ? 'check-in' : 'check-out';
-
-            const response =
-                actionType === 'checkin'
-                    ? await checkInToClass({ classId, qrValue, role: userRole })
-                    : await checkOutFromClass({ classId, qrValue, role: userRole });
-
-            return response?.message || `Hoàn tất ${action} lớp ${classId}.`;
         },
-        [ensureRoleSupported, parseQrPayload],
-    );
-
-    const handleCheckIn = useCallback(
-        async result => {
-            const message = await performAttendance('checkin', result);
-            return message || 'Check-in thành công.';
-        },
-        [performAttendance],
-    );
-
-    const handleCheckOut = useCallback(
-        async result => {
-            const message = await performAttendance('checkout', result);
-            return message || 'Check-out thành công.';
-        },
-        [performAttendance],
-    );
-
-    const quickInfo = useMemo(
-        () =>
-            role
-                ? `Quét mã để điểm danh (${role === 'staff' ? 'PT' : 'Hội viên'})`
-                : 'Đăng nhập để dùng điểm danh QR',
-        [role],
+        [user],
     );
 
     return (
@@ -116,13 +219,8 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
             <QrScannerModal
                 visible={showQRScanner}
                 onClose={() => setShowQRScanner(false)}
-                onCheckIn={role ? handleCheckIn : undefined}
-                onCheckOut={role ? handleCheckOut : undefined}
-                helperTitle={quickInfo}
-                disableActions={!role}
-                onUnsupportedRole={() =>
-                    Alert.alert('Không thể điểm danh', 'Bạn cần đăng nhập với tài khoản hội viên hoặc huấn luyện viên.')
-                }
+                onScanSuccess={handleScanSuccess}
+                helperTitle="Quét mã QR để điểm danh vào lớp học"
             />
 
             {/* Nút Home */}
@@ -187,12 +285,12 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                 onPress={() => navigation.navigate('ProfileStack')}
             >
                 <Icon
-                    name="headset-mic"
+                    name="person"
                     size={24}
                     color={state.routes[state.index].name === 'ProfileStack' ? '#fff' : '#ddd'}
                 />
                 <Text style={[styles.tabLabel, state.routes[state.index].name === 'ProfileStack' && styles.activeLabel]}>
-                    Hỗ trợ
+                    Profile
                 </Text>
             </TouchableOpacity>
         </View>

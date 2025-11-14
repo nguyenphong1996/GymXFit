@@ -29,26 +29,51 @@ export async function verifyOtp(phoneNumber, code) {
 
 export async function requestLoginOtp(phoneNumber) {
     try {
+        console.log('=== Requesting Login OTP ===');
+        console.log('Phone:', phoneNumber);
+        
         const response = await createAxiosInstance().post('/api/auth/login', {
             phone: phoneNumber,
         });
+        
+        console.log('Login OTP Response:', response);
         return response;
     } catch (error) {
-        const errorMessage = error.response?.data?.error || 'Số điện thoại chưa được đăng ký.';
+        console.error('=== Login OTP Error ===');
+        console.error('Phone:', phoneNumber);
+        console.error('Error:', error.response?.data || error.message);
+        
+        const errorMessage = error.response?.data?.error 
+            || error.response?.data?.message 
+            || error.message 
+            || 'Không thể gửi mã OTP. Vui lòng thử lại.';
         throw new Error(errorMessage);
     }
 }
 
 export async function verifyLoginOtp(phoneNumber, code) {
     try {
+        console.log('=== Verifying Login OTP ===');
+        console.log('Phone:', phoneNumber);
+        console.log('Code:', code);
+        
         const response = await createAxiosInstance().post('/api/auth/verify-login', {
             phone: phoneNumber,
             code: code,
         });
+        
+        console.log('Verify Login Response:', response);
         // Nếu thành công, response sẽ chứa token và thông tin user
         return response;
     } catch (error) {
-        const errorMessage = error.response?.data?.message || 'Mã OTP không hợp lệ.';
+        console.error('=== Verify Login Error ===');
+        console.error('Phone:', phoneNumber);
+        console.error('Code:', code);
+        console.error('Error:', error.response?.data || error.message);
+        
+        const errorMessage = error.response?.data?.message 
+            || error.message 
+            || 'Mã OTP không hợp lệ. Vui lòng thử lại.';
         throw new Error(errorMessage);
     }
 }

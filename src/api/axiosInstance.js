@@ -8,6 +8,8 @@ const DEFAULT_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL
 const createAxiosInstance = (contentType = 'application/json') => {
   const axiosInstance = axios.create({
     baseURL: DEFAULT_BASE_URL,
+    timeout: 30000, // 30 seconds timeout
+    timeoutErrorMessage: 'Yêu cầu quá lâu, vui lòng thử lại',
   });
 
   axiosInstance.interceptors.request.use(
@@ -36,8 +38,27 @@ const createAxiosInstance = (contentType = 'application/json') => {
   );
 
   axiosInstance.interceptors.response.use(
-    response => response.data,
-    error => Promise.reject(error),
+    response => {
+      // Log response thành công
+      console.log('=== Axios Success ===');
+      console.log('URL:', response.config?.url);
+      console.log('Status:', response.status);
+      console.log('Data:', JSON.stringify(response.data, null, 2));
+      console.log('====================');
+      return response.data;
+    },
+    error => {
+      // Log chi tiết lỗi để debug
+      console.error('=== Axios Error ===');
+      console.error('URL:', error.config?.url);
+      console.error('Method:', error.config?.method);
+      console.error('Status:', error.response?.status);
+      console.error('Data:', error.response?.data);
+      console.error('Message:', error.message);
+      console.error('==================');
+      
+      return Promise.reject(error);
+    },
   );
 
   return axiosInstance;
