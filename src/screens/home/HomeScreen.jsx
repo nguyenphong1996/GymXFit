@@ -339,7 +339,11 @@ const QuickActions = ({
         onPress={() => navigation.navigate('CardMembershipScreen')}
       >
         <View style={styles.bgImage}>
-          <MaterialCommunityIcons name="cart-outline" size={28} color={MATERIAL_COLORS.primary} />
+          <MaterialCommunityIcons
+            name="card-account-details-outline"
+            size={28}
+            color={MATERIAL_COLORS.primary}
+          />
         </View>
         <Text style={styles.itemText}>Services</Text>
       </TouchableOpacity>
