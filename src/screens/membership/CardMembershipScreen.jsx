@@ -247,6 +247,9 @@ const MembershipCard = ({ plan, onShowDetails, onRegister }) => {
 };
 
 const CardMembershipScreen = ({ navigation }) => {
+  const scrollViewRef = React.useRef(null);
+  const plansHeaderRef = React.useRef(null);
+
   const handleContactPress = () => {
     Linking.openURL(`tel:${CONTACT_PHONE}`).catch(() => undefined);
   };
@@ -257,6 +260,25 @@ const CardMembershipScreen = ({ navigation }) => {
 
   const handleRegisterLater = () => {
     Alert.alert('Đang phát triển', 'Tính năng đăng ký trực tuyến sẽ sớm có mặt.');
+  };
+
+  const handleViewPricing = () => {
+    plansHeaderRef.current?.measureLayout(
+      scrollViewRef.current?.getInnerViewNode?.(),
+      (x, y) => {
+        scrollViewRef.current?.scrollTo({ y: y - 20, animated: true });
+      },
+      () => {}
+    );
+  };
+
+  const handleStatPress = (statType) => {
+    const messages = {
+      branches: '20+ chi nhánh GymXFit trải dài khắp cả nước:\n\n• Hà Nội: 8 chi nhánh\n• TP.HCM: 10 chi nhánh\n• Đà Nẵng: 3 chi nhánh\n• Các tỉnh khác: 5+ chi nhánh\n\nTất cả đều mở cửa 24/7!',
+      trainers: '50+ lớp học đa dạng:\n\n• Yoga & Pilates\n• HIIT & Cardio\n• Dance Fitness\n• Strength Training\n• Spinning & Cycling\n\nLịch linh hoạt từ sáng đến tối!',
+      freeze: 'Mở cửa 24/7 tại hầu hết chi nhánh:\n\n• Tự do lịch trình\n• Tập bất kỳ lúc nào\n• Thiết bị hiện đại\n• An toàn 24/7\n\nLiên hệ chi nhánh cụ thể để biết chi tiết!',
+    };
+    Alert.alert('Chi tiết', messages[statType]);
   };
 
   return (
@@ -283,6 +305,7 @@ const CardMembershipScreen = ({ navigation }) => {
       </View>
 
       <ScrollView 
+        ref={scrollViewRef}
         contentContainerStyle={styles.content} 
         showsVerticalScrollIndicator={false}
         bounces={true}
@@ -296,28 +319,53 @@ const CardMembershipScreen = ({ navigation }) => {
                 <Text style={styles.heroLabelText}>GYMXFIT PASS</Text>
               </View>
               <Text style={styles.heroTitle}>
-                Chọn gói tập{'\n'}phù hợp với bạn
+                Chọn gói phù hợp với bạn
               </Text>
               <Text style={styles.heroSubtitle}>
-                Minh bạch • Linh hoạt • Chuyên nghiệp
+                Tập không giới hạn tại 20+ chi nhánh toàn quốc
               </Text>
             </View>
 
-            {/* Stats Grid */}
+            {/* Stats Grid - Tappable */}
             <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
+              <TouchableOpacity 
+                style={styles.statCard}
+                onPress={() => handleStatPress('branches')}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="place" size={20} color={MD3_COLORS.onPrimaryContainer} />
                 <Text style={styles.statValue}>20+</Text>
                 <Text style={styles.statLabel}>Chi nhánh</Text>
-              </View>
-              <View style={styles.statCard}>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.statCard}
+                onPress={() => handleStatPress('trainers')}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons name="arm-flex" size={20} color={MD3_COLORS.onPrimaryContainer} />
                 <Text style={styles.statValue}>50+</Text>
-                <Text style={styles.statLabel}>HLV chuyên nghiệp</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>45</Text>
-                <Text style={styles.statLabel}>Ngày bảo lưu</Text>
-              </View>
+                <Text style={styles.statLabel}>Lớp học</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.statCard}
+                onPress={() => handleStatPress('freeze')}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="access-time" size={20} color={MD3_COLORS.onPrimaryContainer} />
+                <Text style={styles.statValue}>24/7</Text>
+                <Text style={styles.statLabel}>Mở cửa</Text>
+              </TouchableOpacity>
             </View>
+
+            {/* CTA Button */}
+            <TouchableOpacity 
+              style={styles.heroCTA}
+              onPress={handleViewPricing}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.heroCTAText}>Xem bảng giá</Text>
+              <MaterialIcons name="arrow-forward" size={18} color={MD3_COLORS.primary} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -337,7 +385,10 @@ const CardMembershipScreen = ({ navigation }) => {
         </View>
 
         {/* Plans Header */}
-        <View style={styles.plansHeader}>
+        <View 
+          ref={plansHeaderRef}
+          style={styles.plansHeader}
+        >
           <View>
             <Text style={styles.sectionTitle}>Gói thành viên</Text>
             <Text style={styles.sectionDescription}>
@@ -475,6 +526,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
     alignItems: 'center',
+    gap: 4,
   },
   statValue: {
     ...MD3_TYPE.titleLarge,
@@ -486,6 +538,25 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     marginTop: 4,
     textAlign: 'center',
+  },
+
+  // Hero CTA Button - MD3 Tonal Button
+  heroCTA: {
+    backgroundColor: MD3_COLORS.surface,
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+    ...MD3_ELEVATION.level1,
+  },
+  heroCTAText: {
+    ...MD3_TYPE.labelLarge,
+    color: MD3_COLORS.primary,
+    fontWeight: '600',
   },
 
   // Section
