@@ -273,7 +273,11 @@ const CardMembershipScreen = ({ navigation }) => {
           <MaterialIcons name="arrow-back" size={24} color={MD3_COLORS.onSurface} />
         </TouchableOpacity>
         <Text style={styles.appBarTitle}>Gói dịch vụ</Text>
-        <TouchableOpacity style={styles.appBarButton} activeOpacity={0.7}>
+        <TouchableOpacity 
+          style={styles.appBarButton} 
+          onPress={() => navigation.navigate('MembershipFAQ')}
+          activeOpacity={0.7}
+        >
           <MaterialIcons name="info-outline" size={24} color={MD3_COLORS.onSurface} />
         </TouchableOpacity>
       </View>
