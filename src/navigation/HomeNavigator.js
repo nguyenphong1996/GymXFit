@@ -15,6 +15,7 @@ import BookScreen from '@screens/booking/BookScreen';
 import NewsScreen from '@screens/home/NewsScreen';
 import CalendarScreen from '@screens/booking/CalendarScreen';
 import CardMembershipScreen from '@screens/membership/CardMembershipScreen';
+import CardMembershipDetailScreen from '@screens/membership/CardMembershipDetailScreen';
 import WorkoutScreen from '@screens/workouts/WorkoutScreen';
 import WorkoutVideoScreen from '@screens/video/WorkoutVideoScreen';
 import { UserContext } from '@context/UserContext';
@@ -305,6 +306,7 @@ const HomeStack = () => {
             <Stack.Screen name='News' component={NewsScreen} />
             <Stack.Screen name='CalendarScreen' component={CalendarScreen} />
             <Stack.Screen name='CardMembershipScreen' component={CardMembershipScreen} />
+            <Stack.Screen name='CardMembershipDetail' component={CardMembershipDetailScreen} />
             <Stack.Screen name='WorkoutScreen' component={WorkoutScreen} />
             <Stack.Screen name='WorkoutVideo' component={WorkoutVideoScreen} />
             <Stack.Screen name='BookScreen' component={BookScreen} />

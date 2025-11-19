@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -7,83 +8,33 @@ import {
   TouchableOpacity,
   View,
   Image,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { membershipPlans, MEMBERSHIP_CONTACT } from './membershipPlans';
 
 const PALETTE = {
-  primary: '#1F8E4A',
+  primary: '#2F5D44',
   onPrimary: '#FFFFFF',
-  secondary: '#2D4E3B',
-  background: '#F6F7F5',
+  secondary: '#1F3E2D',
+  background: '#F6F2EB',
   surface: '#FFFFFF',
-  surfaceVariant: '#E3F2E6',
-  outline: '#D6E7DA',
-  textPrimary: '#10241A',
-  textSecondary: '#4A5F52',
-  accent: '#30C451',
+  surfaceVariant: '#ECE4D8',
+  outline: '#D8CEC2',
+  textPrimary: '#1F2A24',
+  textSecondary: '#59665E',
+  accent: '#7EC7A1',
 };
+
+const CONTACT_PHONE = MEMBERSHIP_CONTACT;
 
 const serviceHighlights = [
   { icon: 'flash-on', label: '24/7 mở cửa' },
   { icon: 'favorite-border', label: 'PT 1-1' },
   { icon: 'monitor-heart', label: 'InBody miễn phí' },
   { icon: 'spa', label: 'Phòng xông hơi' },
-];
-
-const membershipPlans = [
-  {
-    id: 'classic',
-    name: 'Classic',
-    caption: 'Tập tại 1 CLB yêu thích',
-    badge: 'Phổ biến',
-    price: '690.000đ/tháng',
-    accent: '#FFE4D5',
-    accentText: '#C2571A',
-    cardColor: '#FDFBF8',
-    image: require('@assets/images/cardmemberclassic.png'),
-    features: [
-      'Không giới hạn buổi tập',
-      '01 buổi PT định hướng',
-      'Locker cá nhân',
-      'Booking lớp nhóm trên app',
-    ],
-  },
-  {
-    id: 'classic_plus',
-    name: 'Classic Plus',
-    caption: 'Truy cập toàn bộ CLB cơ bản',
-    badge: 'Ưa chuộng',
-    price: '890.000đ/tháng',
-    accent: '#E8F4FF',
-    accentText: '#0D6EFD',
-    cardColor: '#FBFEFF',
-    image: require('@assets/images/cardmemberplus.png'),
-    features: [
-      'Không giới hạn phòng tập',
-      '02 buổi PT cá nhân',
-      'Xông hơi & khăn tắm',
-      'Ưu đãi mua gói PT 10%',
-    ],
-  },
-  {
-    id: 'premium',
-    name: 'Premium',
-    caption: 'Full access + Privilege Lounge',
-    badge: 'VIP',
-    price: '1.290.000đ/tháng',
-    accent: '#FCE7FF',
-    accentText: '#A629C3',
-    cardColor: '#FDF8FF',
-    image: require('@assets/images/cardmembervip.png'),
-    features: [
-      'Không giới hạn tất cả CLB',
-      '04 buổi PT chuyên sâu',
-      'Phòng lounge & dịch vụ đồ uống',
-      'Ưu tiên đặt lịch, tặng 1 khách đi kèm',
-    ],
-  },
 ];
 
 const ServiceChip = ({ icon, label }) => (
@@ -93,22 +44,24 @@ const ServiceChip = ({ icon, label }) => (
   </View>
 );
 
-const MembershipCard = ({ plan }) => (
+const MembershipCard = ({ plan, onShowDetails, onRegister }) => (
   <View style={[styles.planCard, { backgroundColor: plan.cardColor }]}>
     <View style={[styles.planBadge, { backgroundColor: plan.accent }]}>
       <Text style={[styles.planBadgeText, { color: plan.accentText }]}>{plan.badge}</Text>
     </View>
     <View style={styles.planHeader}>
-      <View>
+      <View style={styles.planHeaderText}>
         <Text style={styles.planName}>{plan.name}</Text>
         <Text style={styles.planCaption}>{plan.caption}</Text>
       </View>
-      <Image source={plan.image} style={styles.planImage} resizeMode="contain" />
+      <View style={styles.planImageWrapper}>
+        <Image source={plan.image} style={styles.planImage} resizeMode="contain" />
+      </View>
     </View>
     <Text style={styles.planPrice}>{plan.price}</Text>
     <View style={styles.divider} />
     <View style={styles.featureList}>
-      {plan.features.map(feature => (
+      {plan.summary.map(feature => (
         <View key={feature} style={styles.featureRow}>
           <MaterialCommunityIcons name="check-circle" size={20} color={PALETTE.primary} />
           <Text style={styles.featureText}>{feature}</Text>
@@ -116,10 +69,10 @@ const MembershipCard = ({ plan }) => (
       ))}
     </View>
     <View style={styles.planActions}>
-      <TouchableOpacity style={styles.secondaryButton}>
+      <TouchableOpacity style={styles.secondaryButton} onPress={() => onShowDetails?.(plan)}>
         <Text style={styles.secondaryButtonText}>Xem chi tiết</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.primaryButton}>
+      <TouchableOpacity style={styles.primaryButton} onPress={() => onRegister?.(plan)}>
         <Text style={styles.primaryButtonText}>Đăng ký ngay</Text>
       </TouchableOpacity>
     </View>
@@ -127,9 +80,21 @@ const MembershipCard = ({ plan }) => (
 );
 
 const CardMembershipScreen = ({ navigation }) => {
+  const handleContactPress = () => {
+    Linking.openURL(`tel:${CONTACT_PHONE}`).catch(() => undefined);
+  };
+
+  const handleShowDetails = plan => {
+    navigation.navigate('CardMembershipDetail', { planId: plan?.id });
+  };
+
+  const handleRegisterLater = () => {
+    Alert.alert('Đang phát triển', 'Tính năng đăng ký trực tuyến sẽ sớm có mặt.');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={PALETTE.primary} />
+      <StatusBar barStyle="dark-content" backgroundColor={PALETTE.background} />
       <View style={styles.appBar}>
         <TouchableOpacity style={styles.appBarIcon} onPress={() => navigation.goBack()}>
           <MaterialIcons name="arrow-back" size={22} color={PALETTE.onPrimary} />
@@ -188,7 +153,12 @@ const CardMembershipScreen = ({ navigation }) => {
         </View>
 
         {membershipPlans.map(plan => (
-          <MembershipCard key={plan.id} plan={plan} />
+          <MembershipCard
+            key={plan.id}
+            plan={plan}
+            onShowDetails={handleShowDetails}
+            onRegister={handleRegisterLater}
+          />
         ))}
 
         <View style={styles.supportCard}>
@@ -204,7 +174,7 @@ const CardMembershipScreen = ({ navigation }) => {
             Đội ngũ GymXFit sẽ hỗ trợ bạn chọn lộ trình, thiết kế giáo án và tư vấn thanh toán chỉ
             trong 5 phút.
           </Text>
-          <TouchableOpacity style={styles.primaryButton}>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleContactPress}>
             <Text style={styles.primaryButtonText}>Liên hệ ngay</Text>
           </TouchableOpacity>
         </View>
@@ -224,9 +194,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: PALETTE.primary,
+    backgroundColor: PALETTE.background,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: PALETTE.outline,
   },
   appBarIcon: {
     width: 36,
@@ -234,10 +206,10 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(47, 93, 68, 0.08)',
   },
   appBarTitle: {
-    color: PALETTE.onPrimary,
+    color: PALETTE.textPrimary,
     fontWeight: '700',
     fontSize: 18,
   },
@@ -369,10 +341,10 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   planHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginTop: 16,
+  },
+  planHeaderText: {
+    marginBottom: 12,
   },
   planName: {
     fontSize: 22,
@@ -383,9 +355,15 @@ const styles = StyleSheet.create({
     color: PALETTE.textSecondary,
     marginTop: 4,
   },
+  planImageWrapper: {
+    width: '100%',
+    height: 140,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   planImage: {
-    width: 120,
-    height: 80,
+    width: '100%',
+    height: '100%',
   },
   planPrice: {
     fontSize: 24,
