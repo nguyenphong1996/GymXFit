@@ -16,30 +16,65 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 
 import { getPlanById, MEMBERSHIP_CONTACT } from './membershipPlans';
 
-const THEME = {
-  primary: '#2F5D44',
+// Material Design 3 Colors
+const MD3_COLORS = {
+  primary: '#1F8E4A',
   onPrimary: '#FFFFFF',
-  background: '#F6F2EB',
+  primaryContainer: '#C2F0D4',
+  onPrimaryContainer: '#00210A',
   surface: '#FFFFFF',
-  textPrimary: '#1F2A24',
-  textSecondary: '#59665E',
-  outline: '#D8CEC2',
+  surfaceContainerLow: '#F3F4F0',
+  surfaceContainerHigh: '#E7EBE6',
+  background: '#F5F7F6',
+  onBackground: '#191C19',
+  outline: '#72796F',
+  outlineVariant: '#C1C9BF',
+  textPrimary: '#10241A',
+  textSecondary: '#47614F',
+  error: '#BA1A1A',
+  success: '#34D399',
+  scrim: 'rgba(0, 0, 0, 0.32)',
 };
 
-const Section = ({ icon, title, items }) => {
+const MD3_TYPE = {
+  displaySmall: { fontSize: 36, lineHeight: 44, fontWeight: '600' },
+  headlineLarge: { fontSize: 32, lineHeight: 40, fontWeight: '600' },
+  headlineMedium: { fontSize: 28, lineHeight: 36, fontWeight: '600' },
+  headlineSmall: { fontSize: 24, lineHeight: 32, fontWeight: '600' },
+  titleLarge: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
+  titleMedium: { fontSize: 16, lineHeight: 24, fontWeight: '600' },
+  bodyLarge: { fontSize: 16, lineHeight: 24, fontWeight: '400' },
+  bodyMedium: { fontSize: 14, lineHeight: 20, fontWeight: '400' },
+  labelLarge: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
+  labelMedium: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
+};
+
+const MD3_ELEVATION = {
+  level0: { shadowColor: 'transparent', shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
+  level1: { shadowColor: MD3_COLORS.scrim, shadowOpacity: 0.15, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+  level2: { shadowColor: MD3_COLORS.scrim, shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
+};
+
+const Section = ({ icon, title, items, iconColor }) => {
   if (!items || !items.length) return null;
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <MaterialCommunityIcons name={icon} size={20} color={THEME.primary} />
+        <View style={[styles.sectionIconContainer, { backgroundColor: iconColor + '20' }]}>
+          <MaterialCommunityIcons name={icon} size={24} color={iconColor || MD3_COLORS.primary} />
+        </View>
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
-      {items.map(item => (
-        <View key={item} style={styles.sectionRow}>
-          <MaterialIcons name="check" size={18} color={THEME.primary} />
-          <Text style={styles.sectionText}>{item}</Text>
-        </View>
-      ))}
+      <View style={styles.sectionContent}>
+        {items.map((item, index) => (
+          <View key={index} style={styles.sectionRow}>
+            <View style={styles.checkIconContainer}>
+              <MaterialIcons name="check-circle" size={20} color={MD3_COLORS.primary} />
+            </View>
+            <Text style={styles.sectionText}>{item}</Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 };
@@ -51,65 +86,147 @@ const CardMembershipDetailScreen = ({ navigation, route }) => {
   const handleContact = () => {
     Linking.openURL(`tel:${MEMBERSHIP_CONTACT}`).catch(() => undefined);
   };
+  
   const handleRegister = () => {
-    Alert.alert('Đang phát triển', 'Đăng ký trực tuyến sẽ được cập nhật trong phiên bản tới.');
+    Alert.alert(
+      `Chọn gói ${plan.name}`,
+      'Bạn muốn đăng ký như thế nào?',
+      [
+        {
+          text: 'Thanh toán online',
+          onPress: () => Alert.alert('Đang phát triển', 'Tính năng thanh toán online sẽ sớm có mặt.'),
+        },
+        {
+          text: 'Liên hệ tư vấn',
+          onPress: handleContact,
+        },
+        {
+          text: 'Đăng ký tại quầy',
+          onPress: () => Alert.alert('Hướng dẫn', 'Vui lòng mang CMND/CCCD đến chi nhánh gần nhất để đăng ký. Nhân viên sẽ hỗ trợ bạn hoàn tất thủ tục trong 10 phút.'),
+        },
+        { text: 'Đóng', style: 'cancel' },
+      ],
+      { cancelable: true }
+    );
   };
+
+  // Ghép details + perks thành "Bao gồm gì?"
+  const allIncludes = useMemo(() => {
+    const combined = [...(plan.details || [])];
+    if (plan.perks && plan.perks.length > 0) {
+      combined.push(...plan.perks);
+    }
+    return combined;
+  }, [plan]);
 
   if (!plan) {
     return null;
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={THEME.background} />
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.headerButton} onPress={() => navigation.goBack()}>
-          <MaterialIcons name="arrow-back" size={22} color={THEME.primary} />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar barStyle="dark-content" backgroundColor={MD3_COLORS.surface} />
+      
+      {/* Top App Bar */}
+      <View style={styles.topAppBar}>
+        <TouchableOpacity 
+          style={styles.appBarButton} 
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons name="arrow-back" size={24} color={MD3_COLORS.onBackground} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{plan.name} Pass</Text>
-        <View style={styles.headerButton} />
+        <Text style={styles.appBarTitle}>{plan.name} Pass</Text>
+        <View style={styles.appBarButton} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={[styles.heroCard, { backgroundColor: plan.cardColor }]}>
-          <View style={styles.planBadge}>
-            <Text style={[styles.planBadgeText, { color: plan.accentText || '#1F8E4A' }]}>
-              {plan.badge}
-            </Text>
-          </View>
-          <View style={styles.heroBody}>
-            <View style={styles.heroTextBlock}>
-              <Text style={styles.heroName}>{plan.name}</Text>
-              <Text style={styles.heroCaption}>{plan.caption}</Text>
-              <Text style={styles.heroPrice}>{plan.price}</Text>
+      <ScrollView 
+        contentContainerStyle={styles.content} 
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Hero Image với Badge */}
+        <View style={styles.heroSection}>
+          {plan.id === 'plus' && (
+            <View style={[styles.heroBadge, { backgroundColor: plan.accent }]}>
+              <MaterialIcons name="star" size={16} color={plan.accentText} />
+              <Text style={[styles.heroBadgeText, { color: plan.accentText }]}>
+                {plan.badge}
+              </Text>
             </View>
-            <View style={styles.heroImageWrapper}>
-              <Image source={plan.image} style={styles.heroImage} resizeMode="contain" />
-            </View>
-          </View>
+          )}
+          <Image source={plan.image} style={styles.heroImage} resizeMode="cover" />
         </View>
 
-        <Section icon="star-circle" title="Quyền lợi nổi bật" items={plan.summary} />
-        <Section icon="format-list-bulleted" title="Chi tiết quyền lợi" items={plan.details} />
-        <Section icon="shield-check" title="Tiện ích kèm theo" items={plan.perks} />
-        <Section icon="alert-circle" title="Lưu ý & Giới hạn" items={plan.restrictions} />
+        {/* Price & Caption */}
+        <View style={styles.priceSection}>
+          <Text style={styles.planPrice}>{plan.price}</Text>
+          <Text style={styles.planCaption}>{plan.caption}</Text>
+        </View>
 
-        <View style={styles.contactCard}>
-          <Text style={styles.contactTitle}>Muốn đăng ký ngay?</Text>
-          <Text style={styles.contactDescription}>
-            Nhấn nút bên dưới hoặc gọi hotline {MEMBERSHIP_CONTACT} để gặp nhân viên GymXFit.
+        {/* Summary Highlights */}
+        <View style={styles.highlightsCard}>
+          <Text style={styles.highlightsTitle}>✨ Điểm nổi bật</Text>
+          {plan.summary.map((item, index) => (
+            <View key={index} style={styles.highlightRow}>
+              <MaterialCommunityIcons name="check-decagram" size={20} color={MD3_COLORS.success} />
+              <Text style={styles.highlightText}>{item}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Bao gồm gì? */}
+        <Section 
+          icon="gift" 
+          title="Bao gồm gì?" 
+          items={allIncludes}
+          iconColor={MD3_COLORS.primary}
+        />
+
+        {/* Restrictions */}
+        {plan.restrictions && plan.restrictions.length > 0 && (
+          <Section 
+            icon="alert-circle-outline" 
+            title="Điều kiện & Hạn chế" 
+            items={plan.restrictions}
+            iconColor={MD3_COLORS.error}
+          />
+        )}
+
+        {/* Phù hợp với ai? */}
+        <View style={styles.suitableCard}>
+          <View style={styles.suitableHeader}>
+            <MaterialCommunityIcons name="account-check" size={24} color={MD3_COLORS.primary} />
+            <Text style={styles.suitableTitle}>Phù hợp với ai?</Text>
+          </View>
+          <Text style={styles.suitableText}>
+            {plan.id === 'basic' && 'Người mới bắt đầu, chỉ cần dùng thiết bị tự do mà không tham gia lớp nhóm.'}
+            {plan.id === 'plus' && 'Hội viên thường xuyên muốn tham gia lớp nhóm, có nhu cầu tập đa dạng và linh hoạt.'}
+            {plan.id === 'premium' && 'Những người yêu cầu cao về trải nghiệm, muốn dịch vụ VIP và ưu đãi PT đặc biệt.'}
           </Text>
-          <View style={styles.ctaRow}>
-            <TouchableOpacity style={styles.ctaOutlined} onPress={handleContact}>
-              <Text style={styles.ctaOutlinedText}>Gọi hotline</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.ctaContained} onPress={handleRegister}>
-              <MaterialIcons name="shopping-cart" size={18} color="#fff" />
-              <Text style={styles.ctaContainedText}>Đăng ký ngay</Text>
-            </TouchableOpacity>
-          </View>
         </View>
+
+        <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Sticky Bottom CTAs */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity 
+          style={styles.bottomButtonOutlined} 
+          onPress={handleContact}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="phone" size={20} color={MD3_COLORS.primary} />
+          <Text style={styles.bottomButtonOutlinedText}>Gọi tư vấn</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.bottomButtonFilled} 
+          onPress={handleRegister}
+          activeOpacity={0.9}
+        >
+          <Text style={styles.bottomButtonFilledText}>Chọn gói này</Text>
+          <MaterialIcons name="arrow-forward" size={20} color={MD3_COLORS.onPrimary} />
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
@@ -119,164 +236,227 @@ export default CardMembershipDetailScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.background,
+    backgroundColor: MD3_COLORS.background,
   },
-  header: {
+
+  // Top App Bar
+  topAppBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: THEME.background,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: THEME.outline,
+    backgroundColor: MD3_COLORS.surface,
+    paddingHorizontal: 4,
+    paddingVertical: 8,
+    height: 64,
+    ...MD3_ELEVATION.level0,
   },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
+  appBarButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
-    backgroundColor: 'rgba(47, 93, 68, 0.08)',
+    justifyContent: 'center',
   },
-  headerTitle: {
-    color: THEME.textPrimary,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  content: {
-    paddingBottom: 48,
-  },
-  heroCard: {
-    margin: 20,
-    borderRadius: 20,
-    padding: 20,
-  },
-  planBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.7)',
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-  },
-  planBadgeText: {
-    fontWeight: '700',
-    fontSize: 12,
-    textTransform: 'uppercase',
-  },
-  heroBody: {
-    marginTop: 12,
-    gap: 14,
-  },
-  heroTextBlock: {
+  appBarTitle: {
+    ...MD3_TYPE.titleLarge,
+    color: MD3_COLORS.onBackground,
     flex: 1,
-    paddingRight: 12,
-    gap: 6,
+    textAlign: 'center',
   },
-  heroName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: THEME.textPrimary,
+
+  content: {
+    paddingBottom: 24,
   },
-  heroCaption: {
-    color: THEME.textSecondary,
-  },
-  heroPrice: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: THEME.primary,
-    marginTop: 8,
-  },
-  heroImageWrapper: {
+
+  // Hero Section
+  heroSection: {
     width: '100%',
-    height: 160,
-    justifyContent: 'center',
+    height: 240,
+    position: 'relative',
+  },
+  heroBadge: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    zIndex: 10,
+    ...MD3_ELEVATION.level2,
+  },
+  heroBadgeText: {
+    ...MD3_TYPE.labelMedium,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   heroImage: {
     width: '100%',
     height: '100%',
   },
-  section: {
-    marginHorizontal: 20,
+
+  // Price Section
+  priceSection: {
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+    alignItems: 'center',
+    backgroundColor: MD3_COLORS.surface,
+    marginBottom: 8,
+  },
+  planPrice: {
+    ...MD3_TYPE.displaySmall,
+    color: MD3_COLORS.primary,
+    marginBottom: 8,
+  },
+  planCaption: {
+    ...MD3_TYPE.bodyLarge,
+    color: MD3_COLORS.textSecondary,
+    textAlign: 'center',
+  },
+
+  // Highlights Card
+  highlightsCard: {
+    marginHorizontal: 16,
     marginBottom: 16,
-    backgroundColor: THEME.surface,
+    backgroundColor: MD3_COLORS.primaryContainer,
     borderRadius: 16,
-    padding: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    padding: 20,
+  },
+  highlightsTitle: {
+    ...MD3_TYPE.titleMedium,
+    color: MD3_COLORS.onPrimaryContainer,
+    marginBottom: 16,
+  },
+  highlightRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 12,
+  },
+  highlightText: {
+    ...MD3_TYPE.bodyMedium,
+    color: MD3_COLORS.onPrimaryContainer,
+    flex: 1,
+    lineHeight: 22,
+  },
+
+  // Section
+  section: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: MD3_COLORS.surface,
+    borderRadius: 16,
+    padding: 20,
+    ...MD3_ELEVATION.level1,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
+    gap: 12,
+    marginBottom: 16,
+  },
+  sectionIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: THEME.textPrimary,
+    ...MD3_TYPE.titleLarge,
+    color: MD3_COLORS.onBackground,
+    flex: 1,
+  },
+  sectionContent: {
+    gap: 12,
   },
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    marginBottom: 8,
-  },
-  sectionText: {
-    flex: 1,
-    color: THEME.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  contactCard: {
-    marginHorizontal: 20,
-    marginTop: 4,
-    backgroundColor: THEME.primary,
-    borderRadius: 18,
-    padding: 20,
-    gap: 10,
-  },
-  contactTitle: {
-    color: THEME.onPrimary || '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  contactDescription: {
-    color: 'rgba(255,255,255,0.85)',
-  },
-  ctaRow: {
-    flexDirection: 'row',
     gap: 12,
   },
-  ctaOutlined: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.8)',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  checkIconContainer: {
+    marginTop: 2,
   },
-  ctaOutlinedText: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-  ctaContained: {
+  sectionText: {
+    ...MD3_TYPE.bodyMedium,
+    color: MD3_COLORS.textSecondary,
     flex: 1,
-    backgroundColor: '#21432E',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    lineHeight: 22,
+  },
+
+  // Suitable Card
+  suitableCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: MD3_COLORS.surfaceContainerHigh,
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: MD3_COLORS.outlineVariant,
+  },
+  suitableHeader: {
     flexDirection: 'row',
-    gap: 6,
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
   },
-  ctaContainedText: {
-    color: '#fff',
-    fontWeight: '700',
+  suitableTitle: {
+    ...MD3_TYPE.titleMedium,
+    color: MD3_COLORS.onBackground,
+  },
+  suitableText: {
+    ...MD3_TYPE.bodyMedium,
+    color: MD3_COLORS.textSecondary,
+    lineHeight: 22,
+  },
+
+  // Bottom Bar - Sticky CTAs
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: MD3_COLORS.surface,
+    borderTopWidth: 1,
+    borderTopColor: MD3_COLORS.outlineVariant,
+    ...MD3_ELEVATION.level2,
+  },
+  bottomButtonOutlined: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: MD3_COLORS.outline,
+    borderRadius: 20,
+    paddingVertical: 14,
+    backgroundColor: MD3_COLORS.surface,
+  },
+  bottomButtonOutlinedText: {
+    ...MD3_TYPE.labelLarge,
+    color: MD3_COLORS.primary,
+  },
+  bottomButtonFilled: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: MD3_COLORS.primary,
+    borderRadius: 20,
+    paddingVertical: 14,
+  },
+  bottomButtonFilledText: {
+    ...MD3_TYPE.labelLarge,
+    color: MD3_COLORS.onPrimary,
   },
 });

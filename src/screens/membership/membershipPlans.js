@@ -16,6 +16,12 @@ export const membershipPlans = [
       'Locker tiêu chuẩn, tiện ích cơ bản',
       'Không tham gia lớp nhóm hoặc ưu đãi PT',
     ],
+    quickCompare: {
+      classes: false,
+      pt: false,
+      towel: false,
+      guest: false,
+    },
     details: [
       'Truy cập không giới hạn khu cardio, tạ, máy tập',
       'Locker tiêu chuẩn, phòng tắm/xông hơi chung',
@@ -49,6 +55,12 @@ export const membershipPlans = [
       'Booking & tham gia không giới hạn lớp Training',
       'Tặng PT định hướng + nước uống miễn phí',
     ],
+    quickCompare: {
+      classes: true,
+      pt: '1-2 buổi',
+      towel: false,
+      guest: false,
+    },
     details: [
       'Bao gồm toàn bộ quyền lợi gói Basic',
       'Tham gia & booking KHÔNG GIỚI HẠN mọi lớp Training',
@@ -83,6 +95,12 @@ export const membershipPlans = [
       'Khăn, nước miễn phí & tủ đồ VIP',
       'Ưu đãi PT định kỳ + guest pass cho người thân',
     ],
+    quickCompare: {
+      classes: true,
+      pt: '1-2/tháng',
+      towel: true,
+      guest: '4 lần',
+    },
     details: [
       'Bao gồm toàn bộ quyền lợi gói Plus',
       'Khăn tập lớn/nhỏ + nước suối hoặc detox miễn phí',

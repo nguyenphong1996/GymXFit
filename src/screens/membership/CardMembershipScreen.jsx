@@ -179,12 +179,15 @@ const MembershipCard = ({ plan, onShowDetails, onRegister }) => {
   return (
     <Animated.View style={[styles.planCard, { transform: [{ scale: scaleAnim }] }]}>
       <View style={styles.planCardInner}>
-        {/* Badge */}
-        <View style={[styles.planBadge, { backgroundColor: plan.accent }]}>
-          <Text style={[styles.planBadgeText, { color: plan.accentText }]}>
-            {plan.badge}
-          </Text>
-        </View>
+        {/* Badge - chỉ hiển thị cho Plus */}
+        {plan.id === 'plus' && (
+          <View style={[styles.planBadgeTop, { backgroundColor: plan.accent }]}>
+            <MaterialIcons name="star" size={14} color={plan.accentText} />
+            <Text style={[styles.planBadgeTopText, { color: plan.accentText }]}>
+              {plan.badge}
+            </Text>
+          </View>
+        )}
 
         {/* Header */}
         <View style={styles.planHeader}>
@@ -237,7 +240,7 @@ const MembershipCard = ({ plan, onShowDetails, onRegister }) => {
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
           >
-            <Text style={styles.filledButtonText}>Đăng ký ngay</Text>
+            <Text style={styles.filledButtonText}>Chọn gói này</Text>
             <MaterialIcons name="arrow-forward" size={18} color={MD3_COLORS.onPrimary} />
           </TouchableOpacity>
         </View>
@@ -258,8 +261,30 @@ const CardMembershipScreen = ({ navigation }) => {
     navigation.navigate('CardMembershipDetail', { planId: plan?.id });
   };
 
-  const handleRegisterLater = () => {
-    Alert.alert('Đang phát triển', 'Tính năng đăng ký trực tuyến sẽ sớm có mặt.');
+  const handleRegisterLater = (plan) => {
+    Alert.alert(
+      `Chọn gói ${plan.name}`,
+      'Bạn muốn đăng ký như thế nào?',
+      [
+        {
+          text: 'Thanh toán online',
+          onPress: () => Alert.alert('Đang phát triển', 'Tính năng thanh toán online sẽ sớm có mặt.'),
+        },
+        {
+          text: 'Liên hệ tư vấn',
+          onPress: () => Linking.openURL(`tel:${CONTACT_PHONE}`).catch(() => undefined),
+        },
+        {
+          text: 'Đăng ký tại quầy',
+          onPress: () => Alert.alert('Hướng dẫn', 'Vui lòng mang CMND/CCCD đến chi nhánh gần nhất để đăng ký. Nhân viên sẽ hỗ trợ bạn hoàn tất thủ tục trong 10 phút.'),
+        },
+        {
+          text: 'Đóng',
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const handleViewPricing = () => {
@@ -638,6 +663,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
+  // Badge Top for Plus plan
+  planBadgeTop: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    zIndex: 10,
+    ...MD3_ELEVATION.level1,
+  },
+  planBadgeTopText: {
+    ...MD3_TYPE.labelSmall,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
   planHeader: {
     marginBottom: 16,
   },
@@ -669,6 +714,45 @@ const styles = StyleSheet.create({
   planPrice: {
     ...MD3_TYPE.headlineMedium,
     color: MD3_COLORS.primary,
+  },
+
+  // Quick Comparison Section
+  compareSection: {
+    backgroundColor: MD3_COLORS.surfaceContainerLow,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  compareTitle: {
+    ...MD3_TYPE.labelMedium,
+    color: MD3_COLORS.textPrimary,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  compareGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  compareItem: {
+    flex: 1,
+    backgroundColor: MD3_COLORS.surface,
+    borderRadius: 8,
+    padding: 8,
+    alignItems: 'center',
+    gap: 4,
+  },
+  compareLabel: {
+    ...MD3_TYPE.labelSmall,
+    color: MD3_COLORS.textSecondary,
+    fontSize: 10,
+    textAlign: 'center',
+  },
+  compareValue: {
+    ...MD3_TYPE.labelSmall,
+    color: MD3_COLORS.primary,
+    fontSize: 10,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 
   // Divider
