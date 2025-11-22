@@ -13,10 +13,12 @@ import UpdateProfileScreen from '@screens/profile/UpdateProfileScreen';
 import SearchCalendarScreen from '@screens/booking/SearchCalendarScreen';
 import BookScreen from '@screens/booking/BookScreen';
 import NewsScreen from '@screens/home/NewsScreen';
+import PaymentScreen from '@screens/membership/PaymentScreen';
 import CalendarScreen from '@screens/booking/CalendarScreen';
 import CardMembershipScreen from '@screens/membership/CardMembershipScreen';
 import CardMembershipDetailScreen from '@screens/membership/CardMembershipDetailScreen';
 import MembershipFAQScreen from '@screens/membership/MembershipFAQScreen';
+import PaymentMethodScreen from '@screens/membership/PaymentMethodScreen';
 import WorkoutScreen from '@screens/workouts/WorkoutScreen';
 import WorkoutVideoScreen from '@screens/video/WorkoutVideoScreen';
 import { UserContext } from '@context/UserContext';
@@ -308,7 +310,9 @@ const HomeStack = () => {
             <Stack.Screen name='CalendarScreen' component={CalendarScreen} />
             <Stack.Screen name='CardMembershipScreen' component={CardMembershipScreen} />
             <Stack.Screen name='CardMembershipDetail' component={CardMembershipDetailScreen} />
+            <Stack.Screen name='PaymentScreen' component={PaymentScreen} />
             <Stack.Screen name='MembershipFAQ' component={MembershipFAQScreen} />
+            <Stack.Screen name='PaymentMethod' component={PaymentMethodScreen} />
             <Stack.Screen name='WorkoutScreen' component={WorkoutScreen} />
             <Stack.Screen name='WorkoutVideo' component={WorkoutVideoScreen} />
             <Stack.Screen name='BookScreen' component={BookScreen} />

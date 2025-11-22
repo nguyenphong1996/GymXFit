@@ -88,26 +88,7 @@ const CardMembershipDetailScreen = ({ navigation, route }) => {
   };
   
   const handleRegister = () => {
-    Alert.alert(
-      `Chọn gói ${plan.name}`,
-      'Bạn muốn đăng ký như thế nào?',
-      [
-        {
-          text: 'Thanh toán online',
-          onPress: () => Alert.alert('Đang phát triển', 'Tính năng thanh toán online sẽ sớm có mặt.'),
-        },
-        {
-          text: 'Liên hệ tư vấn',
-          onPress: handleContact,
-        },
-        {
-          text: 'Đăng ký tại quầy',
-          onPress: () => Alert.alert('Hướng dẫn', 'Vui lòng mang CMND/CCCD đến chi nhánh gần nhất để đăng ký. Nhân viên sẽ hỗ trợ bạn hoàn tất thủ tục trong 10 phút.'),
-        },
-        { text: 'Đóng', style: 'cancel' },
-      ],
-      { cancelable: true }
-    );
+    navigation.navigate('PaymentMethod', { plan });
   };
 
   // Ghép details + perks thành "Bao gồm gì?"
@@ -144,16 +125,18 @@ const CardMembershipDetailScreen = ({ navigation, route }) => {
         contentContainerStyle={styles.content} 
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero Image với Badge */}
-        <View style={styles.heroSection}>
-          {plan.id === 'plus' && (
-            <View style={[styles.heroBadge, { backgroundColor: plan.accent }]}>
+        {/* Badge (separate from the card image) */}
+        {plan.id === 'plus' && (
+          <View style={styles.badgeRow}>
+            <View pointerEvents="none" style={[styles.heroBadgeInline, { backgroundColor: plan.accent }]}> 
               <MaterialIcons name="star" size={16} color={plan.accentText} />
-              <Text style={[styles.heroBadgeText, { color: plan.accentText }]}>
-                {plan.badge}
-              </Text>
+              <Text style={[styles.heroBadgeText, { color: plan.accentText }]}>{plan.badge}</Text>
             </View>
-          )}
+          </View>
+        )}
+
+        {/* Hero Image */}
+        <View style={styles.heroSection}>
           <Image source={plan.image} style={styles.heroImage} resizeMode="cover" />
         </View>
 
@@ -205,28 +188,28 @@ const CardMembershipDetailScreen = ({ navigation, route }) => {
           </Text>
         </View>
 
-        <View style={{ height: 100 }} />
+        {/* CTA bar placed at the end of content (not sticky) */}
+        <View style={{ height: 16 }} />
+        <View style={styles.bottomBar}>
+          <TouchableOpacity 
+            style={styles.bottomButtonOutlined} 
+            onPress={handleContact}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="phone" size={20} color={MD3_COLORS.primary} />
+            <Text style={styles.bottomButtonOutlinedText}>Gọi tư vấn</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.bottomButtonFilled} 
+            onPress={handleRegister}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.bottomButtonFilledText}>Chọn gói này</Text>
+            <MaterialIcons name="arrow-forward" size={20} color={MD3_COLORS.onPrimary} />
+          </TouchableOpacity>
+        </View>
+        <View style={{ height: 40 }} />
       </ScrollView>
-
-      {/* Sticky Bottom CTAs */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity 
-          style={styles.bottomButtonOutlined} 
-          onPress={handleContact}
-          activeOpacity={0.8}
-        >
-          <MaterialIcons name="phone" size={20} color={MD3_COLORS.primary} />
-          <Text style={styles.bottomButtonOutlinedText}>Gọi tư vấn</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.bottomButtonFilled} 
-          onPress={handleRegister}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.bottomButtonFilledText}>Chọn gói này</Text>
-          <MaterialIcons name="arrow-forward" size={20} color={MD3_COLORS.onPrimary} />
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 };
@@ -296,6 +279,22 @@ const styles = StyleSheet.create({
   heroImage: {
     width: '100%',
     height: '100%',
+  },
+
+  // Inline badge (separate from the image)
+  badgeRow: {
+    paddingHorizontal: 24,
+    marginTop: 36,
+    alignItems: 'flex-end',
+  },
+  heroBadgeInline: {
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    ...MD3_ELEVATION.level2,
   },
 
   // Price Section
@@ -414,12 +413,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
-  // Bottom Bar - Sticky CTAs
+  // Bottom Bar - placed at end of content (not sticky)
   bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 16,
@@ -427,6 +422,9 @@ const styles = StyleSheet.create({
     backgroundColor: MD3_COLORS.surface,
     borderTopWidth: 1,
     borderTopColor: MD3_COLORS.outlineVariant,
+    marginHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 8,
     ...MD3_ELEVATION.level2,
   },
   bottomButtonOutlined: {
