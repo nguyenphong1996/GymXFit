@@ -13,7 +13,7 @@ import UpdateProfileScreen from '@screens/profile/UpdateProfileScreen';
 import SearchCalendarScreen from '@screens/booking/SearchCalendarScreen';
 import BookScreen from '@screens/booking/BookScreen';
 import NewsScreen from '@screens/home/NewsScreen';
-import PaymentScreen from '@screens/membership/PaymentScreen';
+import PaymentScreen from '@screens/payment/PaymentScreen';
 import CalendarScreen from '@screens/booking/CalendarScreen';
 import CardMembershipScreen from '@screens/membership/CardMembershipScreen';
 import CardMembershipDetailScreen from '@screens/membership/CardMembershipDetailScreen';

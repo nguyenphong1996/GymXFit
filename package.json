@@ -8,7 +8,8 @@
     "dev": "concurrently \"npm run start\" \"npm run android\"",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "postinstall": "node scripts/ensureVectorIconCodegenDir.js"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
