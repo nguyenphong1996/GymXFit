@@ -3,6 +3,73 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { getProfile } from '@api/userApi';
 
+const getErrorMessage = (error, fallbackMessage = 'Đã có lỗi xảy ra.') => {
+  if (!error) {
+    return fallbackMessage;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  return (
+    error?.response?.data?.message ||
+    error?.message ||
+    fallbackMessage
+  );
+};
+
+const isUnauthorizedError = (error) => {
+  const status = error?.response?.status;
+  if (status === 401 || status === 403 || status === 498) {
+    return true;
+  }
+
+  const message = getErrorMessage(error, '').toLowerCase();
+  const unauthorizedKeywords = [
+    'token expired',
+    'please login',
+    'unauthorized',
+    'invalid token',
+    'jwt expired',
+    'jwt malformed',
+    'đăng nhập',
+    'dang nhap',
+    'hết hạn',
+    'het han',
+  ];
+
+  return unauthorizedKeywords.some(keyword => message.includes(keyword));
+};
+
+const clearStoredAuthState = async (setUser, setUserToken) => {
+  setUser(null);
+  setUserToken(null);
+  await AsyncStorage.removeItem('token');
+};
+
+const resolveTokenValue = (rawToken) => {
+  if (!rawToken) {
+    return null;
+  }
+
+  if (typeof rawToken === 'string') {
+    return rawToken.trim();
+  }
+
+  if (typeof rawToken === 'object') {
+    return (
+      rawToken.accessToken ||
+      rawToken.access_token ||
+      rawToken.token ||
+      rawToken.value ||
+      null
+    );
+  }
+
+  return null;
+};
+
 export const UserContext = createContext();
 
 export const UserProvider = ({ children }) => {
@@ -16,20 +83,36 @@ export const UserProvider = ({ children }) => {
    */
   const login = useCallback(async (token, initialUser = null) => {
     setIsLoading(true);
-    setUserToken(token);
-    await AsyncStorage.setItem('token', token);
+    const resolvedToken = resolveTokenValue(token);
+
+    if (!resolvedToken) {
+      setIsLoading(false);
+      throw new Error('Không nhận được token hợp lệ từ server.');
+    }
+
+    setUserToken(resolvedToken);
+    await AsyncStorage.setItem('token', resolvedToken);
 
     if (initialUser) {
-      setUser(prev => ({ ...prev, ...initialUser }));
+      setUser(prev => ({ ...(prev || {}), ...initialUser }));
     }
 
     try {
       const response = await getProfile();
       if (response?.ok && response?.user) {
         setUser(response.user);
+        return response.user;
       }
+      return null;
     } catch (error) {
+      if (isUnauthorizedError(error)) {
+        await clearStoredAuthState(setUser, setUserToken);
+        console.warn('Token không hợp lệ hoặc đã hết hạn sau khi đăng nhập:', error);
+        throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      }
+
       console.error('Lỗi khi lấy profile sau khi đăng nhập:', error);
+      throw new Error(getErrorMessage(error, 'Không thể tải thông tin cá nhân.'));
     } finally {
       setIsLoading(false);
     }
@@ -40,9 +123,7 @@ export const UserProvider = ({ children }) => {
    */
   const logout = useCallback(async () => {
     setIsLoading(true);
-    setUser(null);
-    setUserToken(null);
-    await AsyncStorage.removeItem('token');
+    await clearStoredAuthState(setUser, setUserToken);
     setIsLoading(false);
   }, []);
 
@@ -57,6 +138,9 @@ export const UserProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Lỗi khi làm mới thông tin user:', error);
+      if (isUnauthorizedError(error)) {
+        await clearStoredAuthState(setUser, setUserToken);
+      }
     }
   }, []);
 
@@ -72,7 +156,12 @@ export const UserProvider = ({ children }) => {
           return;
         }
       } catch (error) {
-        console.error('Lỗi khi kiểm tra trạng thái đăng nhập:', error);
+        if (isUnauthorizedError(error)) {
+          await clearStoredAuthState(setUser, setUserToken);
+          console.warn('Token không hợp lệ hoặc đã hết hạn, tự động đăng xuất.');
+        } else {
+          console.error('Lỗi khi kiểm tra trạng thái đăng nhập:', error);
+        }
       } finally {
         setIsLoading(false);
       }

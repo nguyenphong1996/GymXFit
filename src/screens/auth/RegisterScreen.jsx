@@ -59,7 +59,7 @@ const RegisterScreen = props => {
       />
 
       {/* 🟩 Tiêu đề */}
-      <Text style={styles.subtitle}>Đăng ký với FitNexus</Text>
+      <Text style={styles.subtitle}>Đăng ký với GymXFit</Text>
 
       {/* 🟩 Ô nhập số điện thoại có icon */}
       <View style={styles.inputWrapper}>
