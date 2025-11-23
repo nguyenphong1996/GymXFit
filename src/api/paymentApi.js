@@ -4,7 +4,7 @@ import createAxiosInstance from './axiosInstance';
 export const createVnpayPaymentUrl = async (paymentDetails) => {
   try {
     const axiosInstance = createAxiosInstance();
-    const response = await axiosInstance.post('/payment/create_payment_url', paymentDetails);
+    const response = await axiosInstance.post('/api/v1/payment/create-payment-url', paymentDetails);
     return response;
   } catch (error) {
     console.error('Error creating VNPAY payment URL:', error);
@@ -15,7 +15,7 @@ export const createVnpayPaymentUrl = async (paymentDetails) => {
 export const checkVnpayPaymentStatus = async (queryParams) => {
     try {
       const axiosInstance = createAxiosInstance();
-      const response = await axiosInstance.get('/payment/vnpay_return', { params: queryParams });
+      const response = await axiosInstance.get('/api/v1/payment/vnpay-return', { params: queryParams });
       return response;
     } catch (error) {
       console.error('Error checking VNPAY payment status:', error);

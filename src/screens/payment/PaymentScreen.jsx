@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,8 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createVnpayPaymentUrl, checkVnpayPaymentStatus } from '../../api/paymentApi';
+import { UserContext } from '@context/UserContext';
 
 // Reusing MD3 design tokens for consistency
 const MD3_COLORS = {
@@ -31,15 +31,40 @@ const MD3_TYPE = {
   labelLarge: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
 };
 
+const resolveUserId = (user) => {
+  if (!user) {
+    return null;
+  }
+
+  return (
+    user.id ||
+    user._id ||
+    user.userId ||
+    user.user_id ||
+    user.customerId ||
+    user.customer_id ||
+    null
+  );
+};
+
 const PaymentScreen = ({ route, navigation }) => {
   const { plan } = route.params;
+  const { user, isLoading: isUserLoading } = useContext(UserContext);
   const [isLoading, setIsLoading] = useState(true);
   const [paymentUrl, setPaymentUrl] = useState('');
 
   useEffect(() => {
+    let isMounted = true;
+
     const getPaymentUrl = async () => {
+      if (isUserLoading) {
+        return;
+      }
+
+      setIsLoading(true);
+
       try {
-        const userId = await AsyncStorage.getItem('userId');
+        const userId = resolveUserId(user);
         if (!userId) {
           Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.', [
             { text: 'OK', onPress: () => navigation.goBack() }
@@ -57,7 +82,9 @@ const PaymentScreen = ({ route, navigation }) => {
 
         const response = await createVnpayPaymentUrl(paymentDetails);
         if (response && response.vnpUrl) {
-          setPaymentUrl(response.vnpUrl);
+          if (isMounted) {
+            setPaymentUrl(response.vnpUrl);
+          }
         } else {
           Alert.alert('Lỗi', 'Không thể tạo URL thanh toán.', [
             { text: 'OK', onPress: () => navigation.goBack() }
@@ -68,14 +95,21 @@ const PaymentScreen = ({ route, navigation }) => {
         Alert.alert('Lỗi', 'Đã có lỗi xảy ra khi chuẩn bị thanh toán.', [
           { text: 'OK', onPress: () => navigation.goBack() }
         ]);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     getPaymentUrl();
-  }, [plan, navigation]);
+    return () => {
+      isMounted = false;
+    };
+  }, [plan, navigation, user, isUserLoading]);
   
   const handleNavigationStateChange = async (navState) => {
-    const returnUrlPattern = new RegExp(`^https://be.phongnguyen.software/api/payment/vnpay_return`);
+    const returnUrlPattern = new RegExp(`^https://be.phongnguyen.software/api/v1/payment/vnpay-return`);
     if (navState.url.match(returnUrlPattern)) {
       navigation.goBack(); // Close this screen immediately
       Alert.alert('Thông báo', 'Đang xác nhận kết quả giao dịch...');

@@ -21,12 +21,25 @@ const getErrorMessage = (error, fallbackMessage = 'Đã có lỗi xảy ra.') =>
 
 const isUnauthorizedError = (error) => {
   const status = error?.response?.status;
-  if (status === 401) {
+  if (status === 401 || status === 403 || status === 498) {
     return true;
   }
 
   const message = getErrorMessage(error, '').toLowerCase();
-  return message.includes('token expired') || message.includes('please login') || message.includes('unauthorized');
+  const unauthorizedKeywords = [
+    'token expired',
+    'please login',
+    'unauthorized',
+    'invalid token',
+    'jwt expired',
+    'jwt malformed',
+    'đăng nhập',
+    'dang nhap',
+    'hết hạn',
+    'het han',
+  ];
+
+  return unauthorizedKeywords.some(keyword => message.includes(keyword));
 };
 
 const clearStoredAuthState = async (setUser, setUserToken) => {
@@ -92,12 +105,13 @@ export const UserProvider = ({ children }) => {
       }
       return null;
     } catch (error) {
-      console.error('Lỗi khi lấy profile sau khi đăng nhập:', error);
       if (isUnauthorizedError(error)) {
         await clearStoredAuthState(setUser, setUserToken);
+        console.warn('Token không hợp lệ hoặc đã hết hạn sau khi đăng nhập:', error);
         throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
       }
 
+      console.error('Lỗi khi lấy profile sau khi đăng nhập:', error);
       throw new Error(getErrorMessage(error, 'Không thể tải thông tin cá nhân.'));
     } finally {
       setIsLoading(false);
@@ -142,7 +156,12 @@ export const UserProvider = ({ children }) => {
           return;
         }
       } catch (error) {
-        console.error('Lỗi khi kiểm tra trạng thái đăng nhập:', error);
+        if (isUnauthorizedError(error)) {
+          await clearStoredAuthState(setUser, setUserToken);
+          console.warn('Token không hợp lệ hoặc đã hết hạn, tự động đăng xuất.');
+        } else {
+          console.error('Lỗi khi kiểm tra trạng thái đăng nhập:', error);
+        }
       } finally {
         setIsLoading(false);
       }
