@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useEffect, useMemo, useState, useContext } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,10 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { createVnpayPaymentUrl, checkVnpayPaymentStatus } from '../../api/paymentApi';
 import { UserContext } from '@context/UserContext';
+import { createVnpayTokenInitUrl, createVnpayTokenPayUrl, checkVnpayPaymentStatus } from '../../api/paymentApi';
 
-// Reusing MD3 design tokens for consistency
+// MD3 tokens reuse
 const MD3_COLORS = {
   primary: '#1F8E4A',
   onPrimary: '#FFFFFF',
@@ -32,35 +32,21 @@ const MD3_TYPE = {
 };
 
 const resolveUserId = (user) => {
-  if (!user) {
-    return null;
-  }
-
-  return (
-    user.id ||
-    user._id ||
-    user.userId ||
-    user.user_id ||
-    user.customerId ||
-    user.customer_id ||
-    null
-  );
+  if (!user) return null;
+  return user.id || user._id || user.userId || user.user_id || user.customerId || user.customer_id || null;
 };
 
-const PaymentScreen = ({ route, navigation }) => {
-  const { plan } = route.params;
+const PaymentTokenScreen = ({ route, navigation }) => {
+  const { plan, token } = route.params || {};
   const { user, isLoading: isUserLoading } = useContext(UserContext);
   const [isLoading, setIsLoading] = useState(true);
   const [paymentUrl, setPaymentUrl] = useState('');
   const [returnUrl, setReturnUrl] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const defaultApiBaseUrl = React.useMemo(() => {
-    const base =
-      process.env.EXPO_PUBLIC_API_BASE_URL ||
-      process.env.API_BASE_URL ||
-      'https://be.vnchack.com/';
-
+  const defaultApiBaseUrl = useMemo(() => {
+    const base = process.env.EXPO_PUBLIC_API_BASE_URL || process.env.API_BASE_URL || 'https://be.vnchack.com/';
     return base.replace(/\/+$/, '');
   }, []);
 
@@ -68,28 +54,23 @@ const PaymentScreen = ({ route, navigation }) => {
     if (!fullPaymentUrl) {
       return `${defaultApiBaseUrl}/api/v1/payment/vnpay-return`;
     }
-
     try {
       const parsed = new URL(fullPaymentUrl);
-      const encodedReturn = parsed.searchParams.get('vnp_ReturnUrl');
+      const encodedReturn = parsed.searchParams.get('vnp_return_url');
       if (encodedReturn) {
         return decodeURIComponent(encodedReturn);
       }
     } catch (error) {
       console.log('Không thể trích xuất returnUrl từ paymentUrl', error);
     }
-
     return `${defaultApiBaseUrl}/api/v1/payment/vnpay-return`;
   };
 
   useEffect(() => {
     let isMounted = true;
 
-    const getPaymentUrl = async () => {
-      if (isUserLoading) {
-        return;
-      }
-
+    const initPayment = async () => {
+      if (isUserLoading) return;
       setIsLoading(true);
 
       try {
@@ -102,27 +83,40 @@ const PaymentScreen = ({ route, navigation }) => {
         }
 
         const priceNumber = parseInt(plan.price.replace(/[^0-9]/g, ''), 10) || 0;
-        const paymentDetails = {
+        const basePayload = {
           amount: priceNumber,
-          userId: userId,
+          userId,
           packageId: plan.id,
           orderInfo: `Thanh toan goi ${plan.name}`,
         };
 
-        const response = await createVnpayPaymentUrl(paymentDetails);
+        const apiCall = token ? createVnpayTokenPayUrl : createVnpayTokenInitUrl;
+        const response = await apiCall(
+          token
+            ? { ...basePayload, token }
+            : { ...basePayload, mode: 'pay_and_create' }
+        );
+
         if (response && response.vnpUrl) {
           if (isMounted) {
             setPaymentUrl(response.vnpUrl);
             setReturnUrl(extractReturnUrl(response.vnpUrl));
           }
         } else {
-          Alert.alert('Lỗi', 'Không thể tạo URL thanh toán.', [
+          Alert.alert('Lỗi', 'Không thể tạo URL thanh toán thẻ VNPAY.', [
             { text: 'OK', onPress: () => navigation.goBack() }
           ]);
         }
       } catch (error) {
-        console.error('Lỗi khi tạo URL thanh toán:', error);
-        Alert.alert('Lỗi', 'Đã có lỗi xảy ra khi chuẩn bị thanh toán.', [
+        const respMessage = error?.response?.data?.message;
+        const message =
+          respMessage ||
+          error?.message ||
+          'Đã có lỗi xảy ra khi chuẩn bị thanh toán.';
+        setErrorMessage(message);
+        // console.warn để tránh RedBox khi dev
+        console.warn('Lỗi khi tạo URL thanh toán thẻ VNPAY:', message);
+        Alert.alert('Lỗi', message, [
           { text: 'OK', onPress: () => navigation.goBack() }
         ]);
       } finally {
@@ -132,28 +126,18 @@ const PaymentScreen = ({ route, navigation }) => {
       }
     };
 
-    getPaymentUrl();
-    return () => {
-      isMounted = false;
-    };
-  }, [plan, navigation, user, isUserLoading]);
-  
+    initPayment();
+    return () => { isMounted = false; };
+  }, [plan, navigation, user, isUserLoading, token]);
+
   const handleNavigationStateChange = async (navState) => {
-    if (!returnUrl) {
-      return;
-    }
+    if (!returnUrl) return;
 
     const normalizedReturnUrl = returnUrl.replace(/\/+$/, '');
     const normalizedNavUrl = navState.url?.replace(/\/+$/, '');
+    if (!normalizedNavUrl || !normalizedNavUrl.startsWith(normalizedReturnUrl)) return;
 
-    if (!normalizedNavUrl || !normalizedNavUrl.startsWith(normalizedReturnUrl)) {
-      return;
-    }
-
-    // Đảm bảo để VNPAY redirect tới backend hoàn tất (navState.loading === false) rồi mới xác thực
-    if (navState.loading || isVerifying) {
-      return;
-    }
+    if (navState.loading || isVerifying) return;
 
     setIsVerifying(true);
     Alert.alert('Thông báo', 'Đang xác nhận kết quả giao dịch...');
@@ -161,15 +145,12 @@ const PaymentScreen = ({ route, navigation }) => {
     try {
       const url = new URL(navState.url);
       const queryParams = Object.fromEntries(url.searchParams.entries());
-
       const result = await checkVnpayPaymentStatus(queryParams);
 
       if (result.code === '00') {
         Alert.alert('Thành công', 'Thanh toán VNPAY thành công!');
-        // navigation.navigate('PaymentSuccessScreen', { plan });
       } else {
         Alert.alert('Thất bại', `Thanh toán không thành công: ${result.message || 'Vui lòng thử lại.'}`);
-        // navigation.navigate('PaymentFailureScreen', { plan, message: result.message });
       }
     } catch (error) {
       console.error('Lỗi khi xác nhận thanh toán VNPAY:', error);
@@ -180,27 +161,27 @@ const PaymentScreen = ({ route, navigation }) => {
     }
   };
 
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={MD3_COLORS.surface} />
-      {/* App Bar */}
       <View style={styles.topAppBar}>
         <TouchableOpacity style={styles.appBarButton} onPress={() => navigation.goBack()}>
           <MaterialIcons name="close" size={24} color={MD3_COLORS.onSurface} />
         </TouchableOpacity>
-        <Text style={styles.appBarTitle}>Thanh toán an toàn</Text>
+        <Text style={styles.appBarTitle}>Thanh toán thẻ VNPAY</Text>
         <View style={styles.appBarButton} />
       </View>
 
-      {/* Order Summary */}
       <View style={styles.summaryContainer}>
         <Text style={styles.summaryText}>Gói dịch vụ: <Text style={styles.summaryValue}>{plan.name}</Text></Text>
         <Text style={styles.summaryText}>Số tiền: <Text style={styles.summaryValue}>{plan.price}</Text></Text>
       </View>
-      
-      {/* WebView or Loader */}
-      {paymentUrl ? (
+
+      {errorMessage ? (
+        <View style={styles.loaderContainer}>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        </View>
+      ) : paymentUrl ? (
         <WebView
           source={{ uri: paymentUrl }}
           style={{ flex: 1 }}
@@ -227,7 +208,6 @@ const PaymentScreen = ({ route, navigation }) => {
           <ActivityIndicator size="large" color={MD3_COLORS.onPrimary} />
         </View>
       )}
-
     </SafeAreaView>
   );
 };
@@ -285,6 +265,12 @@ const styles = StyleSheet.create({
     ...MD3_TYPE.bodyLarge,
     color: MD3_COLORS.textSecondary
   },
+  errorText: {
+    ...MD3_TYPE.bodyLarge,
+    color: '#BA1A1A',
+    textAlign: 'center',
+    paddingHorizontal: 16,
+  },
   fullScreenLoader: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.4)',
@@ -293,4 +279,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default PaymentScreen;
+export default PaymentTokenScreen;
