@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useContext } from 'react';
+import React, { useEffect, useMemo, useState, useContext, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  StatusBar
+  StatusBar,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { UserContext } from '@context/UserContext';
-import { createVnpayTokenInitUrl, createVnpayTokenPayUrl, checkVnpayPaymentStatus } from '../../api/paymentApi';
+import { createVnpayTokenInitUrl, createVnpayTokenPayUrl, checkVnpayPaymentStatus, getVnpayTransactionStatus } from '../../api/paymentApi';
+import { isVnpaySdkAvailable, launchVnpaySdk } from '../../utils/vnpaySdk';
 
 // MD3 tokens reuse
 const MD3_COLORS = {
@@ -44,6 +45,9 @@ const PaymentTokenScreen = ({ route, navigation }) => {
   const [returnUrl, setReturnUrl] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [txnRef, setTxnRef] = useState('');
+  const [usingSdk, setUsingSdk] = useState(false);
+  const pollTimer = useRef(null);
 
   const defaultApiBaseUrl = useMemo(() => {
     const base = process.env.EXPO_PUBLIC_API_BASE_URL || process.env.API_BASE_URL || 'https://be.vnchack.com/';
@@ -64,6 +68,17 @@ const PaymentTokenScreen = ({ route, navigation }) => {
       console.log('Không thể trích xuất returnUrl từ paymentUrl', error);
     }
     return `${defaultApiBaseUrl}/api/v1/payment/vnpay-return`;
+  };
+
+  const extractTmnCode = (fullPaymentUrl) => {
+    if (!fullPaymentUrl) return null;
+    try {
+      const parsed = new URL(fullPaymentUrl);
+      return parsed.searchParams.get('vnp_tmn_code') || parsed.searchParams.get('vnp_TmnCode');
+    } catch (err) {
+      console.warn('Không đọc được vnp_tmn_code từ paymentUrl:', err?.message);
+      return null;
+    }
   };
 
   useEffect(() => {
@@ -98,9 +113,37 @@ const PaymentTokenScreen = ({ route, navigation }) => {
         );
 
         if (response && response.vnpUrl) {
+          console.log('VNPAY SDK - vnpUrl:', response.vnpUrl);
           if (isMounted) {
             setPaymentUrl(response.vnpUrl);
             setReturnUrl(extractReturnUrl(response.vnpUrl));
+            if (response.txnRef) {
+              setTxnRef(response.txnRef);
+            }
+
+            // Ưu tiên SDK nếu khả dụng, fallback WebView
+            if (isVnpaySdkAvailable) {
+              try {
+                setUsingSdk(true);
+                const tmnFromEnv = process.env.EXPO_PUBLIC_VNP_TMNCODE || process.env.VNP_TMNCODE;
+                const tmnFromUrl = extractTmnCode(response.vnpUrl);
+                const tmnCode = tmnFromEnv || tmnFromUrl || '';
+                console.log('VNPAY SDK - tmnCode:', tmnCode);
+                launchVnpaySdk({
+                  scheme: 'com.gymxfit',
+                  paymentUrl: response.vnpUrl,
+                  tmnCode,
+                  isSandbox: true,
+                  title: 'Thanh toán VNPAY',
+                });
+                if (response.txnRef) {
+                  pollStatus(response.txnRef, 0);
+                }
+              } catch (sdkError) {
+                console.warn('Không mở được VNPAY SDK, sẽ fallback WebView:', sdkError?.message);
+                setUsingSdk(false);
+              }
+            }
           }
         } else {
           Alert.alert('Lỗi', 'Không thể tạo URL thanh toán thẻ VNPAY.', [
@@ -129,6 +172,38 @@ const PaymentTokenScreen = ({ route, navigation }) => {
     initPayment();
     return () => { isMounted = false; };
   }, [plan, navigation, user, isUserLoading, token]);
+
+  const pollStatus = async (ref, attempt = 0) => {
+    if (!ref) return;
+    if (pollTimer.current) {
+      clearTimeout(pollTimer.current);
+    }
+    try {
+      const result = await getVnpayTransactionStatus(ref);
+      if (result?.status === 'paid') {
+        Alert.alert('Thành công', 'Thanh toán VNPAY thành công!');
+        navigation.goBack();
+        return;
+      }
+      if (result?.status === 'failed') {
+        Alert.alert('Thất bại', 'Thanh toán không thành công, vui lòng thử lại.');
+        navigation.goBack();
+        return;
+      }
+    } catch (err) {
+      console.warn('Poll trạng thái giao dịch VNPAY lỗi:', err?.message);
+    }
+
+    if (attempt < 8) {
+      pollTimer.current = setTimeout(() => pollStatus(ref, attempt + 1), 2000);
+    }
+  };
+
+  useEffect(() => () => {
+    if (pollTimer.current) {
+      clearTimeout(pollTimer.current);
+    }
+  }, []);
 
   const handleNavigationStateChange = async (navState) => {
     if (!returnUrl) return;
@@ -180,6 +255,11 @@ const PaymentTokenScreen = ({ route, navigation }) => {
       {errorMessage ? (
         <View style={styles.loaderContainer}>
           <Text style={styles.errorText}>{errorMessage}</Text>
+        </View>
+      ) : usingSdk ? (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color={MD3_COLORS.primary} />
+          <Text style={styles.loaderText}>Đang mở SDK VNPAY, vui lòng thực hiện thanh toán...</Text>
         </View>
       ) : paymentUrl ? (
         <WebView

@@ -36,7 +36,8 @@
     "react-native-vector-icons": "^10.3.0",
     "react-native-video": "^6.17.0",
     "react-native-webview": "^13.16.0",
-    "react-native-youtube-iframe": "^2.4.1"
+    "react-native-youtube-iframe": "^2.4.1",
+    "react-native-vnpay-merchant": "file:../Sample_ReactNative_Mobile_SDK_Up04052022/sample/react-native-vnpay-merchant"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

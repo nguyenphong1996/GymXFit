@@ -44,3 +44,14 @@ export const createVnpayTokenPayUrl = async (payload) => {
     throw error;
   }
 };
+
+export const getVnpayTransactionStatus = async (txnRef) => {
+  try {
+    const axiosInstance = createAxiosInstance();
+    const response = await axiosInstance.get(`/api/v1/payment/transaction/${txnRef}`);
+    return response;
+  } catch (error) {
+    console.error('Error getting VNPAY transaction status:', error);
+    throw error;
+  }
+};

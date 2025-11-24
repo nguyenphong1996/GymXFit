@@ -118,3 +118,9 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+repositories {
+    flatDir {
+        dirs "$rootDir/../node_modules/react-native-vnpay-merchant/android/repo/com/vnpay/merchant/1.20.0"
+    }
+}
