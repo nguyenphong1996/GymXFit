@@ -50,14 +50,6 @@ const PaymentMethodScreen = ({ navigation, route }) => {
       iconLib: 'MaterialCommunityIcons',
     },
     {
-      id: 'ewallet',
-      icon: 'credit-card-outline',
-      title: 'Thanh toán VNPAY (thẻ/QR)',
-      description: 'Thẻ ATM, Visa, MasterCard, QR Code',
-      color: MD3_COLORS.success,
-      iconLib: 'MaterialCommunityIcons',
-    },
-    {
       id: 'vnpay_token',
       icon: 'credit-card-check',
       title: 'Lưu thẻ & thanh toán VNPAY',
@@ -76,11 +68,6 @@ const PaymentMethodScreen = ({ navigation, route }) => {
   ];
 
   const handlePaymentMethodSelect = (method) => {
-    if (method.id === 'ewallet') {
-      navigation.navigate('PaymentScreen', { plan });
-      return;
-    }
-
     if (method.id === 'vnpay_token') {
       navigation.navigate('PaymentTokenScreen', { plan });
       return;
