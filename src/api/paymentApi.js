@@ -22,3 +22,25 @@ export const checkVnpayPaymentStatus = async (queryParams) => {
       throw error;
     }
   };
+
+export const createVnpayTokenInitUrl = async (payload) => {
+  try {
+    const axiosInstance = createAxiosInstance();
+    const response = await axiosInstance.post('/api/v1/payment/token/init', payload);
+    return response;
+  } catch (error) {
+    console.error('Error creating VNPAY token init URL:', error);
+    throw error;
+  }
+};
+
+export const createVnpayTokenPayUrl = async (payload) => {
+  try {
+    const axiosInstance = createAxiosInstance();
+    const response = await axiosInstance.post('/api/v1/payment/token/pay', payload);
+    return response;
+  } catch (error) {
+    console.error('Error creating VNPAY token pay URL:', error);
+    throw error;
+  }
+};

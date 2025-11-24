@@ -14,6 +14,8 @@ import SearchCalendarScreen from '@screens/booking/SearchCalendarScreen';
 import BookScreen from '@screens/booking/BookScreen';
 import NewsScreen from '@screens/home/NewsScreen';
 import PaymentScreen from '@screens/payment/PaymentScreen';
+import PaymentTokenScreen from '@screens/payment/PaymentTokenScreen';
+import BankTransferScreen from '@screens/payment/BankTransferScreen';
 import CalendarScreen from '@screens/booking/CalendarScreen';
 import CardMembershipScreen from '@screens/membership/CardMembershipScreen';
 import CardMembershipDetailScreen from '@screens/membership/CardMembershipDetailScreen';
@@ -311,6 +313,8 @@ const HomeStack = () => {
             <Stack.Screen name='CardMembershipScreen' component={CardMembershipScreen} />
             <Stack.Screen name='CardMembershipDetail' component={CardMembershipDetailScreen} />
             <Stack.Screen name='PaymentScreen' component={PaymentScreen} />
+            <Stack.Screen name='PaymentTokenScreen' component={PaymentTokenScreen} />
+            <Stack.Screen name='BankTransferScreen' component={BankTransferScreen} />
             <Stack.Screen name='MembershipFAQ' component={MembershipFAQScreen} />
             <Stack.Screen name='PaymentMethod' component={PaymentMethodScreen} />
             <Stack.Screen name='WorkoutScreen' component={WorkoutScreen} />

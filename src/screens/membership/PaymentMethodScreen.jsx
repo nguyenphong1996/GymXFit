@@ -51,10 +51,18 @@ const PaymentMethodScreen = ({ navigation, route }) => {
     },
     {
       id: 'ewallet',
-      icon: 'wallet',
-      title: 'Ví điện tử',
-      description: 'Thanh toán qua Zalo Pay, MoMo, v.v.',
+      icon: 'credit-card-outline',
+      title: 'Thanh toán VNPAY (thẻ/QR)',
+      description: 'Thẻ ATM, Visa, MasterCard, QR Code',
       color: MD3_COLORS.success,
+      iconLib: 'MaterialCommunityIcons',
+    },
+    {
+      id: 'vnpay_token',
+      icon: 'credit-card-check',
+      title: 'Lưu thẻ & thanh toán VNPAY',
+      description: 'Lưu thẻ để thanh toán nhanh lần sau',
+      color: MD3_COLORS.primary,
       iconLib: 'MaterialCommunityIcons',
     },
     {
@@ -68,9 +76,22 @@ const PaymentMethodScreen = ({ navigation, route }) => {
   ];
 
   const handlePaymentMethodSelect = (method) => {
+    if (method.id === 'ewallet') {
+      navigation.navigate('PaymentScreen', { plan });
+      return;
+    }
+
+    if (method.id === 'vnpay_token') {
+      navigation.navigate('PaymentTokenScreen', { plan });
+      return;
+    }
+
+    if (method.id === 'banking') {
+      navigation.navigate('BankTransferScreen', { plan });
+      return;
+    }
+
     const messages = {
-      banking: 'Chuyển khoản ngân hàng sẽ được xử lý sớm nhất. Vui lòng kiểm tra email để nhận chi tiết tài khoản.',
-      ewallet: 'Bạn sẽ được chuyển hướng đến cổng thanh toán. Vui lòng hoàn tất thanh toán.',
       counter: 'Vui lòng mang CMND/CCCD đến chi nhánh gần nhất. Nhân viên sẽ hỗ trợ hoàn tất thủ tục trong 10 phút.',
     };
 

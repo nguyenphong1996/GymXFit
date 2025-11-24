@@ -157,8 +157,8 @@ const CardMembershipScreen = ({ navigation }) => {
   const handleShowDetails = plan => navigation.navigate('CardMembershipDetail', { planId: plan?.id });
 
   const handleRegister = (plan) => {
-    // Navigate to the new dedicated PaymentScreen
-    navigation.navigate('PaymentScreen', { plan });
+    // Navigate to PaymentMethod screen to let user choose method
+    navigation.navigate('PaymentMethod', { plan });
   };
 
   const handleStatPress = (statType) => {
