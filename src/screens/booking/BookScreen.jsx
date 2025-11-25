@@ -1,776 +1,927 @@
-// 📁 src/screens/booking/BookScreen.jsx
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+// BookScreen.js — FULL VERSION with YEAR PICKER
+import React, {
+  useState,
+  useRef,
+  useMemo,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+} from 'react';
+
 import {
-  Dimensions,
-  Modal,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
+  View,
   Text,
   TouchableOpacity,
-  View,
+  FlatList,
+  ScrollView,
+  StyleSheet,
+  Dimensions,
+  Alert,
+  Platform,
+  UIManager,
+  Modal,
+  TouchableWithoutFeedback,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useFocusEffect } from '@react-navigation/native';
 
-const { width } = Dimensions.get('window');
-const H_PADDING = 20;
-const CELL_GAP = 8;
-const CELL_SIZE = (width - H_PADDING * 2 - CELL_GAP * 6) / 7;
+import Icon from 'react-native-vector-icons/MaterialIcons';
+
+if (
+  Platform.OS === 'android' &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const ITEM_WIDTH = 64;
+const COLORS = {
+  primary: '#1F8E4A',
+  onPrimary: '#FFFFFF',
+  surface: '#FFFFFF',
+  surfaceVariant: '#E7EFE8',
+  outline: '#D7E5DB',
+  background: '#F5F7F6',
+  textPrimary: '#10241A',
+  textSecondary: '#47614F',
+  tabInactiveBg: '#FFFFFF',
+  tabInactiveBorder: '#FFFFFF',
+  tabActiveBg: '#145D33',
+  tabActiveText: '#FFFFFF',
+};
+
+const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+const fullDayNames = [
+  'Chủ Nhật',
+  'Thứ Hai',
+  'Thứ Ba',
+  'Thứ Tư',
+  'Thứ Năm',
+  'Thứ Sáu',
+  'Thứ Bảy',
+];
+
+const isSameDay = (d1, d2) =>
+  d1.getFullYear() === d2.getFullYear() &&
+  d1.getMonth() === d2.getMonth() &&
+  d1.getDate() === d2.getDate();
+
+const formatDateKey = date => {
+  if (!date) return '';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    '0',
+  )}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+const DayItem = ({ item, isSelected, isToday, onPress }) => (
+  <TouchableOpacity
+    activeOpacity={0.85}
+    onPress={() => onPress(item)}
+    style={[
+      styles.dayContainer,
+      isSelected && styles.selectedDayContainer,
+      isToday && !isSelected && styles.todayContainer,
+    ]}
+  >
+    <Text
+      style={[
+        styles.dayName,
+        isSelected && styles.selectedDayName,
+        isToday && !isSelected && styles.todayText,
+      ]}
+    >
+      {item.label}
+    </Text>
+    <Text
+      style={[
+        styles.dayDate,
+        isSelected && styles.selectedDayDate,
+        isToday && !isSelected && styles.todayText,
+      ]}
+    >
+      {item.dayNumber}
+    </Text>
+    {isToday && !isSelected && <View style={styles.todayDot} />}
+  </TouchableOpacity>
+);
 
 const BookScreen = ({ navigation }) => {
-  const [mode, setMode] = useState('month'); // 'month' | 'week'
-  const [displayedDate, setDisplayedDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [modalVisible, setModalVisible] = useState(false);
-  const [shiftData, setShiftData] = useState([]);
-  const [selectedTrainer, setSelectedTrainer] = useState('');
-  const [selectedShift, setSelectedShift] = useState(null);
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
 
-  useFocusEffect(
-    useCallback(() => {
-      StatusBar.setHidden(true, 'fade');
-      return () => {
-        StatusBar.setHidden(false, 'fade');
-      };
-    }, []),
-  );
+  const todayRef = useRef(new Date());
+  todayRef.current.setHours(0, 0, 0, 0);
 
-  useEffect(() => {
-    // Demo dữ liệu ca tập - cần thay bằng API thật ở môi trường production
-    setShiftData([
-      { id: 1, date: '2025-11-01', shift: 'Ca sáng (06:00 - 09:00)' },
-      { id: 2, date: '2025-11-02', shift: 'Ca chiều (14:00 - 17:00)' },
-      { id: 3, date: '2025-11-03', shift: 'Ca tối (18:00 - 21:00)' },
-    ]);
+  const flatListRef = useRef(null);
+  const scrollRef = useRef(null);
+  const PTListRef = useRef(null);
+
+  const [tab, setTab] = useState('book');
+  const [trainer, setTrainer] = useState(null);
+  const [trainerModalVisible, setTrainerModalVisible] = useState(false);
+  const [yearPickerVisible, setYearPickerVisible] = useState(false);
+
+  const trainerList = [
+    { id: 1, name: 'PT Nguyên' },
+    { id: 2, name: 'PT Khánh' },
+    { id: 3, name: 'PT Minh' },
+  ];
+
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const t = new Date();
+    return new Date(t.getFullYear(), t.getMonth(), 1);
+  });
+
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+
+  const [selectedDateIndex, setSelectedDateIndex] = useState(0);
+  const [selectedSlots, setSelectedSlots] = useState({});
+
+  const slots = [
+    { label: 'Ca 1 (06:00 - 10:00)', key: 'Ca 1' },
+    { label: 'Ca 2 (10:00 - 12:00)', key: 'Ca 2' },
+    { label: 'Ca 3 (14:00 - 17:00)', key: 'Ca 3' },
+    { label: 'Ca 4 (17:00 - 21:00)', key: 'Ca 4' },
+  ];
+
+  const daysInMonthCount = useCallback((year, month) => {
+    return new Date(year, month + 1, 0).getDate();
   }, []);
 
-  const formatDateKey = date => {
-    if (!date) return '';
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  };
+  const daysForMonth = useMemo(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const total = daysInMonthCount(year, month);
 
-  const monthDays = useMemo(() => {
-    const year = displayedDate.getFullYear();
-    const month = displayedDate.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const days = [];
+    const arr = [];
+    for (let i = 1; i <= total; i++) {
+      const d = new Date(year, month, i);
+      d.setHours(0, 0, 0, 0);
 
-    for (let i = 0; i < firstDay.getDay(); i += 1) {
-      days.push(null);
+      arr.push({
+        id: `${d.getTime()}`,
+        index: i - 1,
+        dateObj: d,
+        dayNumber: d.getDate(),
+        label: dayNames[d.getDay()],
+        isToday: isSameDay(d, todayRef.current),
+      });
     }
-    for (let d = 1; d <= lastDay.getDate(); d += 1) {
-      days.push(new Date(year, month, d));
-    }
-    const remainder = days.length % 7;
-    if (remainder !== 0) {
-      const need = 7 - remainder;
-      for (let i = 0; i < need; i += 1) {
-        days.push(null);
-      }
-    }
-    return days;
-  }, [displayedDate]);
+    return arr;
+  }, [currentMonth, daysInMonthCount]);
 
-  const weekDays = useMemo(() => {
-    const tmp = new Date(displayedDate);
-    const start = new Date(tmp);
-    start.setDate(tmp.getDate() - tmp.getDay());
-    return Array.from({ length: 7 }, (_, index) => {
-      const d = new Date(start);
-      d.setDate(start.getDate() + index);
-      return d;
+  useEffect(() => {
+    const idx = daysForMonth.findIndex(d => isSameDay(d.dateObj, selectedDate));
+    if (idx >= 0) {
+      setSelectedDateIndex(idx);
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({
+          index: idx,
+          animated: true,
+          viewPosition: 0.5,
+        });
+      }, 50);
+      return;
+    }
+
+    const dayNum = selectedDate.getDate();
+    const clamped = Math.min(Math.max(1, dayNum), daysForMonth.length);
+    const newDate = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth(),
+      clamped,
+    );
+    newDate.setHours(0, 0, 0, 0);
+    const newIdx = clamped - 1;
+    setSelectedDate(newDate);
+    setSelectedDateIndex(newIdx);
+    setTimeout(() => {
+      flatListRef.current?.scrollToIndex({
+        index: newIdx,
+        animated: true,
+        viewPosition: 0.5,
+      });
+    }, 50);
+  }, [daysForMonth, selectedDate, currentMonth]);
+
+  const toggleSlot = useCallback((dateKey, slotKey) => {
+    setSelectedSlots(prev => {
+      const current = prev[dateKey] || [];
+      const updated = current.includes(slotKey)
+        ? current.filter(s => s !== slotKey)
+        : [...current, slotKey];
+      return { ...prev, [dateKey]: updated };
     });
-  }, [displayedDate]);
+  }, []);
 
-  const handlePrev = () => {
-    const next = new Date(displayedDate);
-    if (mode === 'month') {
-      next.setMonth(displayedDate.getMonth() - 1);
-    } else {
-      next.setDate(displayedDate.getDate() - 7);
+  const handleBook = () => {
+    if (!trainer) {
+      Alert.alert('Thông báo', 'Hãy chọn Huấn luyện viên trước khi book.');
+      return;
     }
-    setDisplayedDate(next);
-  };
-
-  const handleNext = () => {
-    const next = new Date(displayedDate);
-    if (mode === 'month') {
-      next.setMonth(displayedDate.getMonth() + 1);
-    } else {
-      next.setDate(displayedDate.getDate() + 7);
+    const key = formatDateKey(selectedDate);
+    const chosen = selectedSlots[key] || [];
+    if (chosen.length === 0) {
+      Alert.alert('Thông báo', 'Vui lòng chọn ít nhất 1 ca để book PT.');
+      return;
     }
-    setDisplayedDate(next);
+
+    Alert.alert(
+      'Đã book PT',
+      `Ngày ${key}\nCác ca: ${chosen.join(', ')}\nHuấn luyện viên: ${
+        trainer.name
+      }`,
+    );
   };
 
-  const openDayModal = date => {
-    if (!date) return;
-    setSelectedDate(date);
-    setSelectedShift(null);
-    setModalVisible(true);
+  // ----------------------------------------------
+  // YEAR PICKER LOGIC
+  // ----------------------------------------------
+  const yearList = Array.from({ length: 2100 - 2015 + 1 }, (_, i) => 2015 + i);
+
+  const handleSelectYear = year => {
+    const month = selectedDate.getMonth();
+    const day = selectedDate.getDate();
+    const maxDay = daysInMonthCount(year, month);
+
+    const clamped = Math.min(day, maxDay);
+
+    const newDate = new Date(year, month, clamped);
+    newDate.setHours(0, 0, 0, 0);
+
+    setSelectedDate(newDate);
+    setCurrentMonth(new Date(year, month, 1));
+
+    setYearPickerVisible(false);
   };
 
-  const today = new Date();
-  const selectedKey = formatDateKey(selectedDate);
-  const shiftsForSelected = shiftData.filter(item => item.date === selectedKey);
+  // ----------------------------------------------
+  // MONTH NAVIGATION
+  // ----------------------------------------------
+  const goToPreviousMonth = () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const newMonthDate = new Date(year, month - 1, 1);
+    setCurrentMonth(newMonthDate);
 
-  const monthLabel = () => {
-    const m = displayedDate.getMonth() + 1;
-    const y = displayedDate.getFullYear();
-    return `Tháng ${m < 10 ? `0${m}` : m} - ${y}`;
+    const desiredDay = selectedDate.getDate();
+    const maxDays = daysInMonthCount(
+      newMonthDate.getFullYear(),
+      newMonthDate.getMonth(),
+    );
+    const clampedDay = Math.min(desiredDay, maxDays);
+    const newSelected = new Date(
+      newMonthDate.getFullYear(),
+      newMonthDate.getMonth(),
+      clampedDay,
+    );
+    newSelected.setHours(0, 0, 0, 0);
+    setSelectedDate(newSelected);
+  };
+
+  const goToNextMonth = () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const newMonthDate = new Date(year, month + 1, 1);
+    setCurrentMonth(newMonthDate);
+
+    const desiredDay = selectedDate.getDate();
+    const maxDays = daysInMonthCount(
+      newMonthDate.getFullYear(),
+      newMonthDate.getMonth(),
+    );
+    const clampedDay = Math.min(desiredDay, maxDays);
+    const newSelected = new Date(
+      newMonthDate.getFullYear(),
+      newMonthDate.getMonth(),
+      clampedDay,
+    );
+    newSelected.setHours(0, 0, 0, 0);
+    setSelectedDate(newSelected);
+  };
+
+  const handlePressDay = dayItem => {
+    if (dayItem.dateObj.getTime() < todayRef.current.getTime()) {
+      Alert.alert('Thông báo', 'Không thể chọn ngày trong quá khứ.');
+      return;
+    }
+    setSelectedDate(dayItem.dateObj);
+    setSelectedDateIndex(dayItem.index);
+    flatListRef.current?.scrollToIndex({
+      index: dayItem.index,
+      animated: true,
+      viewPosition: 0.5,
+    });
+  };
+
+  const renderDay = ({ item }) => (
+    <DayItem
+      item={item}
+      isSelected={item.index === selectedDateIndex}
+      isToday={item.isToday}
+      onPress={handlePressDay}
+    />
+  );
+
+  const dateKey = formatDateKey(selectedDate);
+  const selectedForDay = selectedSlots[dateKey] || [];
+
+  const scrollToPTSection = () => {
+    setTimeout(() => {
+      PTListRef.current?.measureLayout(scrollRef.current, (x, y) => {
+        scrollRef.current?.scrollTo({ y: y - 40, animated: true });
+      });
+    }, 80);
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
-
+    <View style={styles.container}>
+      {/* HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerIcon} onPress={() => navigation?.goBack?.()}>
-          <Icon name="arrow-back" size={24} color="#fff" />
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Icon name="arrow-back" size={26} color={COLORS.onPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Đặt lịch huấn luyện viên</Text>
-        <View style={styles.headerPlaceholder} />
-      </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.banner}>
-          <View style={styles.bannerBadge}>
-            <Icon name="fitness-center" size={18} color="#30C451" />
-            <Text style={styles.bannerBadgeText}>GymXFit</Text>
-          </View>
-          <Text style={styles.bannerTitle}>Chọn ngày &amp; HLV đồng hành</Text>
-          <Text style={styles.bannerSubtitle}>
-            Lên lịch tập cá nhân hóa, duy trì phong độ và tinh thần luyện tập mỗi ngày.
-          </Text>
-        </View>
+        <Text style={styles.greeting}>Book PT</Text>
+        <Text style={styles.headerSub}>Chọn ngày, huấn luyện viên & ca</Text>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Huấn luyện viên</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => setSelectedTrainer(selectedTrainer)}>
-            <Text style={styles.dropdownText}>
-              {selectedTrainer || 'Chọn huấn luyện viên phù hợp'}
+        {/* TABS */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[
+              styles.tabButton,
+              tab === 'book' ? styles.tabActive : styles.tabInactive,
+            ]}
+            onPress={() => setTab('book')}
+          >
+            <Text
+              style={[styles.tabText, tab === 'book' && styles.tabTextActive]}
+            >
+              Lịch Book PT
             </Text>
-            <Icon name="keyboard-arrow-down" size={24} color="#102615" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.tabButton,
+              tab === 'history' ? styles.tabActive : styles.tabInactive,
+            ]}
+            onPress={() => setTab('history')}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                tab === 'history' && styles.tabTextActive,
+              ]}
+            >
+              Lịch đã đặt
+            </Text>
           </TouchableOpacity>
         </View>
+      </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Câu lạc bộ</Text>
-          <View style={styles.clubCard}>
-            <Icon name="location-on" size={20} color="#30C451" />
-            <Text style={styles.clubText}>GymXFit Center</Text>
-          </View>
+      {/* TRAINER SELECTOR */}
+      {tab === 'book' && (
+        <View style={styles.trainerSelector}>
+          <Text style={styles.trainerLabel}>Huấn luyện viên</Text>
+          <TouchableOpacity
+            style={styles.trainerDropdown}
+            onPress={() => setTrainerModalVisible(true)}
+          >
+            <Text
+              style={[
+                styles.trainerDropdownText,
+                !trainer && styles.trainerPlaceholder,
+              ]}
+            >
+              {trainer ? trainer.name : 'Chọn huấn luyện viên phù hợp'}
+            </Text>
+            <Icon name="keyboard-arrow-down" size={26} color="#8AAE98" />
+          </TouchableOpacity>
         </View>
+      )}
 
-        <View style={styles.section}>
-          <View style={styles.calendarCard}>
-            <View style={styles.calendarHeaderRow}>
-              <TouchableOpacity style={styles.calendarControl} onPress={handlePrev}>
-                <Icon name="chevron-left" size={24} color="#102615" />
-              </TouchableOpacity>
-              <View style={styles.calendarHeaderText}>
-                <Text style={styles.calendarTitle}>
-                  {mode === 'month'
-                    ? monthLabel()
-                    : `${weekDays[0].toLocaleDateString('vi-VN', {
-                        day: '2-digit',
-                        month: '2-digit',
-                      })} - ${weekDays[6].toLocaleDateString('vi-VN', {
-                        day: '2-digit',
-                        month: '2-digit',
-                      })}`}
-                </Text>
-                <Text style={styles.calendarSubtitle}>
-                  {selectedDate.toLocaleDateString('vi-VN', {
-                    weekday: 'long',
-                    day: '2-digit',
-                    month: '2-digit',
-                  })}
-                </Text>
-              </View>
-              <TouchableOpacity style={styles.calendarControl} onPress={handleNext}>
-                <Icon name="chevron-right" size={24} color="#102615" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modeSwitcher}>
-              {['month', 'week'].map(value => (
-                <TouchableOpacity
-                  key={value}
-                  style={[styles.modeChip, mode === value && styles.modeChipActive]}
-                  onPress={() => setMode(value)}
-                >
-                  <Text style={[styles.modeChipText, mode === value && styles.modeChipTextActive]}>
-                    {value === 'month' ? 'Tháng' : 'Tuần'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.weekdayRow}>
-              {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map(label => (
-                <Text key={label} style={styles.weekdayLabel}>
-                  {label}
-                </Text>
-              ))}
-            </View>
-
-            {mode === 'month' ? (
-              <View style={styles.monthGrid}>
-                {monthDays.map((date, index) => {
-                  const isToday =
-                    date &&
-                    date.getDate() === today.getDate() &&
-                    date.getMonth() === today.getMonth() &&
-                    date.getFullYear() === today.getFullYear();
-                  const isSelected =
-                    date &&
-                    date.getDate() === selectedDate.getDate() &&
-                    date.getMonth() === selectedDate.getMonth() &&
-                    date.getFullYear() === selectedDate.getFullYear();
-                  return (
-                    <TouchableOpacity
-                      key={`${date?.toISOString?.() || index}`}
-                      activeOpacity={date ? 0.9 : 1}
-                      style={[
-                        styles.dayCell,
-                        !date && styles.dayCellEmpty,
-                        isToday && styles.dayCellToday,
-                        isSelected && styles.dayCellSelected,
-                      ]}
-                      onPress={() => openDayModal(date)}
-                      disabled={!date}
-                    >
-                      <Text
-                        style={[
-                          styles.dayCellText,
-                          !date && styles.dayCellTextEmpty,
-                          isToday && styles.dayCellTextToday,
-                          isSelected && styles.dayCellTextSelected,
-                        ]}
-                      >
-                        {date ? date.getDate() : ''}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ) : (
-              <View style={styles.weekRow}>
-                {weekDays.map(date => {
-                  const isToday = date.toDateString() === today.toDateString();
-                  const isSelected = date.toDateString() === selectedDate.toDateString();
-                  return (
-                    <TouchableOpacity
-                      key={date.toISOString()}
-                      activeOpacity={0.9}
-                      style={[
-                        styles.weekCell,
-                        isToday && styles.dayCellToday,
-                        isSelected && styles.dayCellSelected,
-                      ]}
-                      onPress={() => openDayModal(date)}
-                    >
-                      <Text
-                        style={[
-                          styles.weekCellDay,
-                          isSelected && styles.dayCellTextSelected,
-                        ]}
-                      >
-                        {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][date.getDay()]}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.weekCellDate,
-                          isSelected && styles.dayCellTextSelected,
-                        ]}
-                      >
-                        {date.getDate()}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.noticeCard}>
-            <View style={styles.noticeHeader}>
-              <Icon name="event-note" size={20} color="#30C451" />
-              <Text style={styles.noticeTitle}>
-                Ca tập ngày {selectedDate.toLocaleDateString('vi-VN')}
-              </Text>
-            </View>
-
-            <View style={styles.noticeContent}>
-              {shiftsForSelected.length > 0 ? (
-                shiftsForSelected.map(shift => (
-                  <TouchableOpacity
-                    key={shift.id}
-                    activeOpacity={0.9}
-                    style={[
-                      styles.shiftChip,
-                      selectedShift?.id === shift.id && styles.shiftChipActive,
-                    ]}
-                    onPress={() => setSelectedShift(shift)}
-                  >
-                    <Icon
-                      name="access-time"
-                      size={18}
-                      color={selectedShift?.id === shift.id ? '#fff' : '#30C451'}
-                    />
-                    <Text
-                      style={[
-                        styles.shiftText,
-                        selectedShift?.id === shift.id && styles.shiftTextActive,
-                      ]}
-                    >
-                      {shift.shift}
-                    </Text>
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <Text style={styles.noticeEmpty}>
-                  Chưa có ca mở cho ngày này, vui lòng chọn ngày khác hoặc liên hệ HLV để được hỗ trợ.
-                </Text>
-              )}
-            </View>
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.primaryButton}>
-          <Icon name="event-available" size={20} color="#fff" />
-          <Text style={styles.primaryButtonText}>
-            Xác nhận đặt lịch {selectedShift ? 'với ca đã chọn' : ''}
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-
+      {/* TRAINER MODAL */}
       <Modal
-        visible={modalVisible}
+        visible={trainerModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => setTrainerModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>
-              Ca tập {selectedDate.toLocaleDateString('vi-VN')}
-            </Text>
-            {shiftsForSelected.length > 0 ? (
-              shiftsForSelected.map(shift => (
-                <View key={shift.id} style={styles.modalShiftRow}>
-                  <Icon name="schedule" size={18} color="#30C451" />
-                  <Text style={styles.modalShiftText}>{shift.shift}</Text>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.modalEmpty}>Chưa có ca nào cho ngày này.</Text>
-            )}
+        <TouchableWithoutFeedback onPress={() => setTrainerModalVisible(false)}>
+          <View style={styles.modalOverlay} />
+        </TouchableWithoutFeedback>
 
-            <TouchableOpacity style={styles.modalButton} onPress={() => setModalVisible(false)}>
-              <Text style={styles.modalButtonText}>Đóng</Text>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Chọn huấn luyện viên</Text>
+
+            {trainerList.map(t => (
+              <TouchableOpacity
+                key={t.id}
+                style={styles.modalItem}
+                onPress={() => {
+                  setTrainer(t);
+                  setTrainerModalVisible(false);
+                }}
+              >
+                <Text style={styles.modalItemText}>{t.name}</Text>
+                {trainer?.id === t.id && (
+                  <Icon name="check" size={20} color={COLORS.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setTrainerModalVisible(false)}
+            >
+              <Text style={styles.modalCloseText}>Hủy</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+
+      {/* YEAR PICKER MODAL */}
+      <Modal
+        visible={yearPickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setYearPickerVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setYearPickerVisible(false)}>
+          <View style={styles.modalOverlay} />
+        </TouchableWithoutFeedback>
+
+        <View style={styles.yearModalContainer}>
+          <View style={styles.yearModalContent}>
+            <Text style={styles.modalTitle}>Chọn năm</Text>
+
+            <FlatList
+              data={yearList}
+              keyExtractor={item => item.toString()}
+              style={{ maxHeight: 300 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.modalItem}
+                  onPress={() => handleSelectYear(item)}
+                >
+                  <Text style={styles.modalItemText}>{item}</Text>
+                  {selectedDate.getFullYear() === item && (
+                    <Icon name="check" size={20} color={COLORS.primary} />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setYearPickerVisible(false)}
+            >
+              <Text style={styles.modalCloseText}>Hủy</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* TAB BOOK */}
+      {tab === 'book' && (
+        <>
+          {/* CALENDAR */}
+          <View style={styles.calendarSection}>
+            <View style={styles.calendarHeader}>
+              <TouchableOpacity
+                style={styles.calendarNavButton}
+                onPress={goToPreviousMonth}
+              >
+                <Icon name="chevron-left" size={22} color={COLORS.primary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.monthYearButton}
+                onPress={() => setYearPickerVisible(true)}
+              >
+                <Text style={styles.monthYearText}>
+                  {`${
+                    fullDayNames[selectedDate.getDay()]
+                  }, ${selectedDate.getDate()}/${
+                    selectedDate.getMonth() + 1
+                  }/${selectedDate.getFullYear()}`}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.calendarNavButton}
+                onPress={goToNextMonth}
+              >
+                <Icon name="chevron-right" size={22} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              ref={flatListRef}
+              horizontal
+              data={daysForMonth}
+              keyExtractor={i => i.id}
+              renderItem={renderDay}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.daysScrollContainer}
+              initialScrollIndex={selectedDateIndex}
+              getItemLayout={(data, index) => ({
+                length: ITEM_WIDTH + 12,
+                offset: (ITEM_WIDTH + 12) * index,
+                index,
+              })}
+            />
+          </View>
+
+          <ScrollView
+            ref={scrollRef}
+            style={styles.body}
+            contentContainerStyle={{ paddingBottom: 120 }}
+          >
+            <View style={styles.daySummary}>
+              <Text style={styles.daySummaryTitle}>Thông báo quan trọng</Text>
+              <Text style={styles.daySummarySubtitle}>
+                Hãy chọn giờ book PT phù hợp với bạn.
+              </Text>
+            </View>
+
+            <View ref={PTListRef} style={styles.slotSection}>
+              {slots.map((slot, i) => {
+                const active = selectedForDay.includes(slot.key);
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    style={[styles.slotCard, active && styles.slotCardSelected]}
+                    onPress={() => toggleSlot(dateKey, slot.key)}
+                  >
+                    <View style={styles.slotCardContent}>
+                      <Icon
+                        name="schedule"
+                        size={18}
+                        color={active ? COLORS.onPrimary : COLORS.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.slotLabel,
+                          active && { color: COLORS.onPrimary },
+                        ]}
+                      >
+                        {slot.label}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={{ paddingHorizontal: 20, marginTop: 12 }}>
+              <TouchableOpacity style={styles.saveButton} onPress={handleBook}>
+                <Text style={styles.saveButtonText}>Book PT</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </>
+      )}
+
+      {/* TAB HISTORY */}
+      {tab === 'history' && (
+        <View style={{ padding: 20 }}>
+          <Text style={{ fontSize: 16, fontWeight: '700' }}>
+            Lịch PT đã đặt
+          </Text>
+          <Text style={{ marginTop: 10, color: '#555' }}>
+            (Hiện chưa có lịch nào được lưu)
+          </Text>
+        </View>
+      )}
+    </View>
   );
 };
 
 export default BookScreen;
 
+// -----------------------------------------
+// STYLES
+// -----------------------------------------
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F3F9F5',
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
+
   header: {
-    backgroundColor: '#30C451',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 40 : 60,
+    paddingBottom: 30,
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
+    position: 'relative',
   },
-  headerIcon: {
+
+  backButton: {
+    position: 'absolute',
+    top: Platform.OS === 'android' ? 42 : 62,
+    left: 16,
     padding: 6,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.18)',
   },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
+
+  greeting: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: COLORS.onPrimary,
+    textAlign: 'center',
   },
-  headerPlaceholder: {
-    width: 32,
+  headerSub: {
+    marginTop: 6,
+    fontSize: 14,
+    color: '#C2F0D4',
+    textAlign: 'center',
   },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  banner: {
-    marginHorizontal: 16,
+
+  tabContainer: {
+    flexDirection: 'row',
     marginTop: 20,
-    borderRadius: 22,
-    backgroundColor: '#102615',
-    padding: 22,
+    gap: 12,
   },
-  bannerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#E6F9ED',
-  },
-  bannerBadgeText: {
-    marginLeft: 6,
-    color: '#30C451',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  bannerTitle: {
-    marginTop: 16,
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#fff',
-  },
-  bannerSubtitle: {
-    marginTop: 10,
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#cfe9d6',
-  },
-  section: {
-    marginTop: 24,
-    paddingHorizontal: H_PADDING,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#102615',
-    marginBottom: 12,
-  },
-  dropdown: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#102615',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(48,196,81,0.25)',
-  },
-  dropdownText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#102615',
-  },
-  clubCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    shadowColor: '#102615',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-  },
-  clubText: {
-    marginLeft: 10,
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#102615',
-  },
-  calendarCard: {
-    backgroundColor: '#fff',
-    borderRadius: 22,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    shadowColor: '#102615',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-  },
-  calendarHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  calendarControl: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#ECF7EF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calendarHeaderText: {
-    alignItems: 'center',
-  },
-  calendarTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#102615',
-  },
-  calendarSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#5C6F66',
-  },
-  modeSwitcher: {
-    flexDirection: 'row',
-    backgroundColor: '#ECF7EF',
-    borderRadius: 18,
-    padding: 4,
-    marginTop: 16,
-    marginBottom: 12,
-  },
-  modeChip: {
+  tabButton: {
     flex: 1,
-    borderRadius: 14,
-    alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
   },
-  modeChipActive: {
-    backgroundColor: '#30C451',
-    shadowColor: '#30C451',
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+  tabInactive: {
+    backgroundColor: COLORS.tabInactiveBg,
+    borderColor: COLORS.tabInactiveBorder,
   },
-  modeChipText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#102615',
+  tabActive: {
+    backgroundColor: COLORS.tabActiveBg,
+    borderColor: COLORS.tabActiveBg,
   },
-  modeChipTextActive: {
-    color: '#fff',
-  },
-  weekdayRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 4,
-  },
-  weekdayLabel: {
-    width: CELL_SIZE,
+  tabText: {
     textAlign: 'center',
     fontWeight: '700',
-    color: '#6F8579',
+    color: COLORS.textPrimary,
   },
-  monthGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 12,
+  tabTextActive: {
+    color: COLORS.tabActiveText,
   },
-  dayCell: {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: CELL_GAP,
-    backgroundColor: '#F5FBF7',
-  },
-  dayCellEmpty: {
-    backgroundColor: 'transparent',
-  },
-  dayCellToday: {
-    borderWidth: 2,
-    borderColor: '#30C451',
-  },
-  dayCellSelected: {
-    backgroundColor: '#30C451',
-    shadowColor: '#30C451',
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 5,
-  },
-  dayCellText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#102615',
-  },
-  dayCellTextToday: {
-    color: '#30C451',
-  },
-  dayCellTextSelected: {
-    color: '#fff',
-  },
-  dayCellTextEmpty: {
-    color: 'transparent',
-  },
-  weekRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 12,
-  },
-  weekCell: {
-    width: CELL_SIZE,
-    borderRadius: 16,
+
+  trainerSelector: {
+    backgroundColor: COLORS.surface,
     paddingVertical: 12,
-    backgroundColor: '#F5FBF7',
-    alignItems: 'center',
-  },
-  weekCellDay: {
-    fontSize: 12,
-    color: '#6F8579',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  weekCellDate: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#102615',
-  },
-  noticeCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    paddingVertical: 20,
-    paddingHorizontal: 18,
-    shadowColor: '#102615',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-  },
-  noticeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  noticeTitle: {
-    marginLeft: 10,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#102615',
-  },
-  noticeContent: {
-    gap: 10,
-  },
-  shiftChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#F5FBF7',
-    borderWidth: 1,
-    borderColor: 'rgba(48,196,81,0.3)',
-    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.outline,
   },
-  shiftChipActive: {
-    backgroundColor: '#30C451',
-    borderColor: '#30C451',
-    shadowColor: '#30C451',
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 5,
+  trainerLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 8,
+    color: COLORS.textPrimary,
   },
-  shiftText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#102615',
-  },
-  shiftTextActive: {
-    color: '#fff',
-  },
-  noticeEmpty: {
-    fontSize: 14,
-    color: '#6F8579',
-    fontStyle: 'italic',
-    lineHeight: 20,
-  },
-  primaryButton: {
-    marginTop: 30,
-    marginHorizontal: H_PADDING,
-    backgroundColor: '#30C451',
-    borderRadius: 18,
-    paddingVertical: 16,
+  trainerDropdown: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#30C451',
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E6F0EA',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  primaryButtonText: {
-    marginLeft: 10,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#fff',
+  trainerDropdownText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
   },
+  trainerPlaceholder: { color: '#9AAE9E' },
+
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
+
   modalContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    paddingHorizontal: 20,
-    paddingVertical: 22,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#102615',
-    marginBottom: 14,
-  },
-  modalShiftRow: {
-    flexDirection: 'row',
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    top: '25%',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 8,
-    gap: 10,
   },
-  modalShiftText: {
+
+  yearModalContainer: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    top: '18%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalContent: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+
+  yearModalContent: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 8,
+    color: COLORS.textPrimary,
+    alignSelf: 'center',
+  },
+  modalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EFEFEF',
+  },
+  modalItemText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#102615',
+    color: COLORS.textPrimary,
   },
-  modalEmpty: {
-    fontSize: 14,
-    color: '#6F8579',
-    fontStyle: 'italic',
-  },
-  modalButton: {
-    marginTop: 20,
-    backgroundColor: '#30C451',
-    borderRadius: 14,
+  modalCloseButton: {
+    marginTop: 8,
     paddingVertical: 12,
     alignItems: 'center',
   },
-  modalButtonText: {
-    color: '#fff',
-    fontWeight: '700',
+  modalCloseText: {
     fontSize: 15,
+    color: '#777',
+    fontWeight: '700',
+  },
+
+  calendarSection: {
+    backgroundColor: COLORS.surface,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.outline,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  calendarNavButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.outline,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  monthYearButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.surfaceVariant,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.outline,
+  },
+  monthYearText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  daysScrollContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+
+  dayContainer: {
+    width: ITEM_WIDTH,
+    height: 72,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.outline,
+    marginRight: 12,
+  },
+  selectedDayContainer: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  todayContainer: {
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+  },
+
+  dayName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  dayDate: {
+    marginTop: 6,
+    fontSize: 20,
+    fontWeight: '900',
+    color: COLORS.textPrimary,
+  },
+  selectedDayName: { color: '#C2F0D4' },
+  selectedDayDate: { color: COLORS.onPrimary },
+  todayText: { color: COLORS.primary },
+
+  todayDot: {
+    position: 'absolute',
+    bottom: 8,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.primary,
+  },
+
+  body: { flex: 1 },
+
+  daySummary: {
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.outline,
+    backgroundColor: COLORS.surface,
+  },
+  daySummaryTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+  },
+  daySummarySubtitle: {
+    marginTop: 6,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+
+  slotSection: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  slotCard: {
+    backgroundColor: '#F2FBF6',
+    borderWidth: 1,
+    borderColor: '#CFF1D9',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  slotCardSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  slotCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  slotLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+
+  saveButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: COLORS.onPrimary,
+    fontWeight: '800',
+    fontSize: 16,
   },
 });
