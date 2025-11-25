@@ -55,3 +55,34 @@ export const getVnpayTransactionStatus = async (txnRef) => {
     throw error;
   }
 };
+
+export const getVnpayTokens = async (userId) => {
+  try {
+    const axiosInstance = createAxiosInstance();
+    const response = await axiosInstance.get('/api/v1/payment/tokens', { params: { userId } });
+    return response;
+  } catch (error) {
+    if (error?.response?.status === 404) {
+      // Backend chưa triển khai route này (prod cũ) -> trả về danh sách rỗng để không lỗi app
+      console.warn('VNPAY tokens endpoint not available (404) - returning empty list');
+      return [];
+    }
+    console.error('Error fetching VNPAY tokens:', error);
+    throw error;
+  }
+};
+
+export const deleteVnpayToken = async (id) => {
+  try {
+    const axiosInstance = createAxiosInstance();
+    const response = await axiosInstance.delete(`/api/v1/payment/tokens/${id}`);
+    return response;
+  } catch (error) {
+    if (error?.response?.status === 404) {
+      console.warn('VNPAY token delete endpoint not available (404)');
+      return { ok: false };
+    }
+    console.error('Error deleting VNPAY token:', error);
+    throw error;
+  }
+};

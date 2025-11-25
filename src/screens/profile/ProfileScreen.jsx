@@ -95,6 +95,11 @@ const ProfileScreen = () => {
           text="Chỉnh sửa hồ sơ"
           onPress={() => navigation.navigate('UpdateProfile')}
         />
+        <OptionItem
+          icon="credit-card-outline"
+          text="Thông tin thẻ"
+          onPress={() => navigation.navigate('PaymentCards')}
+        />
         <OptionItem icon="book-open-page-variant" text="Hướng dẫn sử dụng" />
         <OptionItem icon="headset" text="Liên hệ hỗ trợ" />
         <OptionItem icon="file-document" text="Hợp đồng của tôi" />

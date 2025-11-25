@@ -38,7 +38,7 @@ const resolveUserId = (user) => {
 };
 
 const PaymentTokenScreen = ({ route, navigation }) => {
-  const { plan, token } = route.params || {};
+  const { plan, token, fromProfile } = route.params || {};
   const { user, isLoading: isUserLoading } = useContext(UserContext);
   const [isLoading, setIsLoading] = useState(true);
   const [paymentUrl, setPaymentUrl] = useState('');
@@ -48,6 +48,7 @@ const PaymentTokenScreen = ({ route, navigation }) => {
   const [txnRef, setTxnRef] = useState('');
   const [usingSdk, setUsingSdk] = useState(false);
   const pollTimer = useRef(null);
+  const [cardType, setCardType] = useState('01'); // 01: nội địa, 02: quốc tế
 
   const defaultApiBaseUrl = useMemo(() => {
     const base = process.env.EXPO_PUBLIC_API_BASE_URL || process.env.API_BASE_URL || 'https://be.vnchack.com/';
@@ -97,19 +98,20 @@ const PaymentTokenScreen = ({ route, navigation }) => {
           return;
         }
 
-        const priceNumber = parseInt(plan.price.replace(/[^0-9]/g, ''), 10) || 0;
+        const priceNumber = plan?.price ? (parseInt(plan.price.replace(/[^0-9]/g, ''), 10) || 0) : 0;
         const basePayload = {
           amount: priceNumber,
           userId,
-          packageId: plan.id,
-          orderInfo: `Thanh toan goi ${plan.name}`,
+          packageId: plan?.id,
+          orderInfo: plan ? `Thanh toan goi ${plan.name}` : 'Luu the VNPAY',
+          cardType,
         };
 
         const apiCall = token ? createVnpayTokenPayUrl : createVnpayTokenInitUrl;
         const response = await apiCall(
           token
             ? { ...basePayload, token }
-            : { ...basePayload, mode: 'pay_and_create' }
+            : { ...basePayload, mode: fromProfile ? 'token_create' : 'pay_and_create' }
         );
 
         if (response && response.vnpUrl) {
@@ -214,11 +216,16 @@ const PaymentTokenScreen = ({ route, navigation }) => {
 
     if (navState.loading || isVerifying) return;
 
+    await verifyPaymentFromUrl(navState.url);
+  };
+
+  const verifyPaymentFromUrl = async (urlString) => {
+    if (isVerifying) return;
     setIsVerifying(true);
     Alert.alert('Thông báo', 'Đang xác nhận kết quả giao dịch...');
 
     try {
-      const url = new URL(navState.url);
+      const url = new URL(urlString);
       const queryParams = Object.fromEntries(url.searchParams.entries());
       const result = await checkVnpayPaymentStatus(queryParams);
 
@@ -243,13 +250,34 @@ const PaymentTokenScreen = ({ route, navigation }) => {
         <TouchableOpacity style={styles.appBarButton} onPress={() => navigation.goBack()}>
           <MaterialIcons name="close" size={24} color={MD3_COLORS.onSurface} />
         </TouchableOpacity>
-        <Text style={styles.appBarTitle}>Thanh toán thẻ VNPAY</Text>
+        <Text style={styles.appBarTitle}>{fromProfile ? 'Lưu thẻ VNPAY' : 'Thanh toán thẻ VNPAY'}</Text>
         <View style={styles.appBarButton} />
       </View>
 
       <View style={styles.summaryContainer}>
-        <Text style={styles.summaryText}>Gói dịch vụ: <Text style={styles.summaryValue}>{plan.name}</Text></Text>
-        <Text style={styles.summaryText}>Số tiền: <Text style={styles.summaryValue}>{plan.price}</Text></Text>
+        <Text style={styles.summaryText}>
+          Gói dịch vụ: <Text style={styles.summaryValue}>{plan?.name || '—'}</Text>
+        </Text>
+        <Text style={styles.summaryText}>
+          Số tiền: <Text style={styles.summaryValue}>{plan?.price || '—'}</Text>
+        </Text>
+        <View style={styles.cardTypeRow}>
+          <Text style={styles.summaryText}>Loại thẻ:</Text>
+          <View style={styles.cardTypeChips}>
+            <TouchableOpacity
+              style={[styles.chip, cardType === '01' && styles.chipActive]}
+              onPress={() => setCardType('01')}
+            >
+              <Text style={[styles.chipText, cardType === '01' && styles.chipTextActive]}>Nội địa</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.chip, cardType === '02' && styles.chipActive]}
+              onPress={() => setCardType('02')}
+            >
+              <Text style={[styles.chipText, cardType === '02' && styles.chipTextActive]}>Quốc tế</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
       {errorMessage ? (
@@ -268,6 +296,16 @@ const PaymentTokenScreen = ({ route, navigation }) => {
           onLoadStart={() => setIsLoading(true)}
           onLoadEnd={() => setIsLoading(false)}
           onNavigationStateChange={handleNavigationStateChange}
+          onShouldStartLoadWithRequest={request => {
+            if (!returnUrl) return true;
+            const normalizedReturnUrl = returnUrl.replace(/\/+$/, '');
+            const normalizedReqUrl = request.url?.replace(/\/+$/, '');
+            if (normalizedReqUrl && normalizedReqUrl.startsWith(normalizedReturnUrl)) {
+              verifyPaymentFromUrl(request.url);
+              return false; // chặn load trang kết quả (JSON/HTML)
+            }
+            return true;
+          }}
           startInLoadingState={true}
           renderLoading={() => (
             <View style={styles.loaderContainer}>
@@ -324,6 +362,34 @@ const styles = StyleSheet.create({
     backgroundColor: MD3_COLORS.surface,
     borderBottomWidth: 1,
     borderBottomColor: '#eee'
+  },
+  cardTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  cardTypeChips: {
+    flexDirection: 'row',
+    marginLeft: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#C1C9BF',
+    marginLeft: 8,
+  },
+  chipActive: {
+    backgroundColor: MD3_COLORS.primary + '15',
+    borderColor: MD3_COLORS.primary,
+  },
+  chipText: {
+    ...MD3_TYPE.labelLarge,
+    color: MD3_COLORS.textSecondary,
+  },
+  chipTextActive: {
+    color: MD3_COLORS.primary,
   },
   summaryText: {
     ...MD3_TYPE.bodyLarge,

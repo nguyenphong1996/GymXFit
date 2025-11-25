@@ -52,8 +52,8 @@ const PaymentMethodScreen = ({ navigation, route }) => {
     {
       id: 'vnpay_token',
       icon: 'credit-card-check',
-      title: 'Lưu thẻ & thanh toán VNPAY',
-      description: 'Lưu thẻ để thanh toán nhanh lần sau',
+      title: 'Thanh toán thẻ VNPAY',
+      description: 'Lưu thẻ, chọn thẻ và thanh toán OTP',
       color: MD3_COLORS.primary,
       iconLib: 'MaterialCommunityIcons',
     },
@@ -69,7 +69,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
 
   const handlePaymentMethodSelect = (method) => {
     if (method.id === 'vnpay_token') {
-      navigation.navigate('PaymentTokenScreen', { plan });
+      navigation.navigate('PaymentCardSelect', { plan });
       return;
     }
 
