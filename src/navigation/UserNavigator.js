@@ -22,14 +22,17 @@ const Stack = createNativeStackNavigator();
 const UserNavigator = () => {
   return (
     <Stack.Navigator
-      initialRouteName="RegisterScreen"
+      initialRouteName="WorkoutScreen"
       screenOptions={{
         headerShown: false,
       }}
     >
       <Stack.Screen name="LoginScreen" component={LoginScreen} />
       <Stack.Screen name="RegisterScreen" component={RegisterScreen} />
-      <Stack.Screen name="VerifyRegisterScreen" component={VerifyRegisterScreen} />
+      <Stack.Screen
+        name="VerifyRegisterScreen"
+        component={VerifyRegisterScreen}
+      />
       <Stack.Screen name="VerifyLoginScreen" component={VerifyLoginScreen} />
       <Stack.Screen name="SurveyScreen" component={SurveyScreen} />
       <Stack.Screen name="CustomerService" component={CustomerServiceScreen} />

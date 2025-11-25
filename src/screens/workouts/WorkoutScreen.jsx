@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Alert,
   View,
@@ -11,10 +11,12 @@ import {
   ActivityIndicator,
   SafeAreaView,
   Keyboard,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+
 import {
   addVideoToFavorites,
   getAllVideos,
@@ -22,37 +24,93 @@ import {
   removeVideoFromFavorites,
 } from '@api/userApi';
 
-const formatDuration = (seconds) => {
-  if (!seconds && seconds !== 0) {
-    return '--:--';
-  }
+/* ============================================================
+   FORMAT THỜI LƯỢNG
+============================================================ */
+const formatDuration = seconds => {
+  if (!seconds && seconds !== 0) return '--:--';
   const totalSeconds = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(totalSeconds / 60);
   const remainSeconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(remainSeconds).padStart(2, '0')} phút`;
+  return `${String(minutes).padStart(2, '0')}:${String(remainSeconds).padStart(
+    2,
+    '0',
+  )} phút`;
 };
 
-const LEVEL_OPTIONS = [
-  { key: 'beginner', label: 'Người mới' },
-  { key: 'intermediate', label: 'Trung cấp' },
-  { key: 'advanced', label: 'Nâng cao' },
-];
+/* ============================================================
+   HELPER: PHÂN LOẠI VIDEO THEO 3 NHÓM (yoga, tap co, dinh duong)
+   Logic: kiểm tra cả video.category và video.subcategory (nếu có)
+   Nếu không khớp, video sẽ rơi vào "Khác" (không hiển thị trong 3 mục)
+============================================================ */
+const classifyVideo = video => {
+  const cat = (
+    (video.category || '') +
+    ' ' +
+    (video.subcategory || '')
+  ).toLowerCase();
 
+  if (cat.includes('yoga')) return 'yoga';
+  if (
+    cat.includes('tập cơ') ||
+    cat.includes('tap co') ||
+    cat.includes('strength') ||
+    cat.includes('muscle') ||
+    cat.includes('gym') ||
+    cat.includes('cardio') ||
+    cat.includes('fitness')
+  )
+    return 'tapco';
+  if (
+    cat.includes('dinh') ||
+    cat.includes('nutrition') ||
+    cat.includes('food') ||
+    cat.includes('ăn') ||
+    cat.includes('vitamin')
+  )
+    return 'dinhduong';
+
+  // Fallback: try keywords in title
+  const title = (video.title || '').toLowerCase();
+  if (title.includes('yoga')) return 'yoga';
+  if (
+    title.includes('tập cơ') ||
+    title.includes('tap co') ||
+    title.includes('strength') ||
+    title.includes('muscle')
+  )
+    return 'tapco';
+  if (
+    title.includes('dinh') ||
+    title.includes('nutrition') ||
+    title.includes('ăn')
+  )
+    return 'dinhduong';
+
+  return 'other';
+};
+
+/* ============================================================
+   COMPONENT CHÍNH - LAYOUT: OPTION B (3 SECTION, cuộn dọc)
+   Yêu cầu: giữ nguyên featured banner như trước, sau đó chia 3 mục
+============================================================ */
 const WorkoutScreen = ({ navigation, route }) => {
   const incomingKeyword =
     typeof route?.params?.keyword === 'string' ? route.params.keyword : '';
   const keywordRef = useRef(incomingKeyword);
 
   const [searchText, setSearchText] = useState(incomingKeyword);
-  const [debouncedSearch, setDebouncedSearch] = useState(incomingKeyword.trim());
+  const [debouncedSearch, setDebouncedSearch] = useState(
+    incomingKeyword.trim(),
+  );
   const [favoriteMap, setFavoriteMap] = useState({});
   const [updatingFavoriteId, setUpdatingFavoriteId] = useState(null);
-  const [activeLevel, setActiveLevel] = useState(LEVEL_OPTIONS[0].key);
 
-  const [videos, setVideos] = useState([]);
+  const [allVideos, setAllVideos] = useState([]); // store everything fetched
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  /* Đồng bộ keyword */
   useEffect(() => {
     if (incomingKeyword !== keywordRef.current) {
       keywordRef.current = incomingKeyword;
@@ -61,81 +119,64 @@ const WorkoutScreen = ({ navigation, route }) => {
     }
   }, [incomingKeyword]);
 
+  /* Fetch videos */
   const fetchVideos = useCallback(async (query = '') => {
     setIsLoading(true);
     setError(null);
+
     const trimmedQuery = query.trim();
     try {
       const response = await getAllVideos({
-        limit: 30,
+        limit: 100,
         ...(trimmedQuery ? { search: trimmedQuery } : {}),
       });
+
       if (response?.success) {
         const rawVideos = response.videos || [];
-        if (!trimmedQuery) {
-          setVideos(rawVideos);
-        } else {
-          const normalizedQuery = trimmedQuery.toLowerCase();
-          const rankedVideos = rawVideos
-            .map((video, index) => {
-              const title = (video.title || '').toLowerCase();
-              const category = (video.subcategory || video.category || '').toLowerCase();
-              const score =
-                (title === normalizedQuery ? 5 : 0) +
-                (title.includes(normalizedQuery) ? 3 : 0) +
-                (category.includes(normalizedQuery) ? 2 : 0);
-              return { video, score, index };
-            })
-            .sort((a, b) => {
-              if (b.score === a.score) {
-                return a.index - b.index;
-              }
-              return b.score - a.score;
-            })
-            .map((entry) => entry.video);
-          setVideos(rankedVideos);
-        }
+        setAllVideos(rawVideos);
       } else {
-        setVideos([]);
+        setAllVideos([]);
         setError(response?.message || 'Không thể tải danh sách bài tập.');
       }
     } catch (err) {
-      setVideos([]);
-      setError(err.message);
+      setAllVideos([]);
+      setError(err.message || 'Lỗi không xác định');
     } finally {
       setIsLoading(false);
     }
   }, []);
 
+  /* Debounce search */
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(searchText.trim());
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchText]);
+
+  /* Fetch khi search */
+  useEffect(() => {
+    fetchVideos(debouncedSearch);
+  }, [debouncedSearch, fetchVideos]);
+
+  /* Favorite */
   const fetchFavorites = useCallback(async () => {
     try {
       const response = await getFavoriteVideos();
       const list = Array.isArray(response?.data)
         ? response.data
         : response?.favorites || [];
+
       const mapped = {};
       list.forEach(item => {
         const videoId = item.videoId || item.id;
-        if (videoId) {
-          mapped[videoId] = item;
-        }
+        if (videoId) mapped[videoId] = item;
       });
       setFavoriteMap(mapped);
     } catch (err) {
-      console.warn('Không thể tải danh sách yêu thích:', err?.message || err);
+      console.warn('Lỗi lấy danh sách yêu thích:', err?.message || err);
     }
   }, []);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(searchText.trim());
-    }, 400);
-    return () => clearTimeout(handler);
-  }, [searchText]);
-
-  useEffect(() => {
-    fetchVideos(debouncedSearch);
-  }, [debouncedSearch, fetchVideos]);
 
   useFocusEffect(
     useCallback(() => {
@@ -143,126 +184,177 @@ const WorkoutScreen = ({ navigation, route }) => {
     }, [fetchFavorites]),
   );
 
-  const handleSearchChange = useCallback((text) => {
-    setSearchText(text);
-  }, []);
+  /* Toggle Favorite */
+  const toggleFavorite = async video => {
+    const videoId = video?.id;
+    if (!videoId) return;
 
-  const handleSearchSubmit = useCallback(() => {
-    setDebouncedSearch(searchText.trim());
-    Keyboard.dismiss();
-  }, [searchText]);
+    const isFavorite = Boolean(favoriteMap[videoId]);
+    setUpdatingFavoriteId(videoId);
 
-  const handleClearSearch = useCallback(() => {
-    setSearchText('');
-    setDebouncedSearch('');
-    Keyboard.dismiss();
-  }, []);
-
-  const toggleFavorite = useCallback(
-    async video => {
-      const videoId = video?.id;
-      if (!videoId) {
-        return;
+    try {
+      if (isFavorite) {
+        await removeVideoFromFavorites(videoId);
+        setFavoriteMap(prev => {
+          const n = { ...prev };
+          delete n[videoId];
+          return n;
+        });
+      } else {
+        const response = await addVideoToFavorites(videoId);
+        const payload =
+          response?.data || response?.favorite || response?.data?.data || {};
+        setFavoriteMap(prev => ({
+          ...prev,
+          [videoId]: { ...payload, videoId },
+        }));
       }
+    } catch (error) {
+      Alert.alert('Không thể cập nhật yêu thích', error.message || 'Thử lại.');
+    } finally {
+      setUpdatingFavoriteId(null);
+    }
+  };
 
-      const currentlyFavorite = Boolean(favoriteMap[videoId]);
-      setUpdatingFavoriteId(videoId);
-
-      try {
-        if (currentlyFavorite) {
-          await removeVideoFromFavorites(videoId);
-          setFavoriteMap(prev => {
-            const next = { ...prev };
-            delete next[videoId];
-            return next;
-          });
-        } else {
-          const response = await addVideoToFavorites(videoId);
-          const payload =
-            response?.data || response?.favorite || response?.data?.data || {};
-          setFavoriteMap(prev => ({
-            ...prev,
-            [videoId]: { ...payload, videoId },
-          }));
-        }
-      } catch (error) {
-        Alert.alert(
-          'Không thể cập nhật yêu thích',
-          error.message || 'Vui lòng thử lại.',
-        );
-      } finally {
-        setUpdatingFavoriteId(null);
-      }
-    },
-    [favoriteMap],
-  );
-
-  const handleNavigateToVideo = (videoId) => {
+  const handleNavigateToVideo = id => {
     navigation.navigate('WorkoutVideo', {
-      videoId,
-      initialFavorite: Boolean(favoriteMap[videoId]),
+      videoId: id,
+      initialFavorite: Boolean(favoriteMap[id]),
     });
   };
 
-  const renderWorkoutItem = ({ item, index }) => {
-    const isTopResult = Boolean(searchText.trim().length) && index === 0;
+  /* Phân nhóm videos theo phân loại */
+  const groups = React.useMemo(() => {
+    const yoga = [];
+    const tapco = [];
+    const dinhduong = [];
+
+    // If there is a debouncedSearch, we already fetched with search param
+    // but to be safe, still filter client-side by title/category
+    const normalizedSearch = debouncedSearch.toLowerCase();
+
+    allVideos.forEach(v => {
+      // If search is present, filter out videos that don't match
+      if (normalizedSearch) {
+        const haystack = (
+          (v.title || '') +
+          ' ' +
+          (v.category || '') +
+          ' ' +
+          (v.subcategory || '')
+        ).toLowerCase();
+        if (!haystack.includes(normalizedSearch)) return;
+      }
+
+      const cls = classifyVideo(v);
+      if (cls === 'yoga') yoga.push(v);
+      else if (cls === 'tapco') tapco.push(v);
+      else if (cls === 'dinhduong') dinhduong.push(v);
+    });
+
+    // Optional: sort each group by relevance (title match first)
+    const sorter = list => {
+      const q = normalizedSearch;
+      if (!q) return list;
+      return list
+        .map((video, idx) => {
+          const title = (video.title || '').toLowerCase();
+          const category = (
+            video.subcategory ||
+            '' ||
+            video.category ||
+            ''
+          ).toLowerCase();
+          const score =
+            (title === q ? 5 : 0) +
+            (title.includes(q) ? 3 : 0) +
+            (category.includes(q) ? 2 : 0);
+          return { video, score, idx };
+        })
+        .sort((a, b) =>
+          b.score === a.score ? a.idx - b.idx : b.score - a.score,
+        )
+        .map(x => x.video);
+    };
+
+    return {
+      yoga: sorter(yoga),
+      tapco: sorter(tapco),
+      dinhduong: sorter(dinhduong),
+    };
+  }, [allVideos, debouncedSearch]);
+
+  const featuredVideo = allVideos.length ? allVideos[0] : null; // giữ logic ban đầu: featured là video đầu
+
+  /* Render mỗi item (tái sử dụng) */
+  const renderWorkoutItem = ({ item }) => {
     const isFavorite = Boolean(favoriteMap[item.id]);
     const isUpdating = updatingFavoriteId === item.id;
+
     const caloriesLabel = Number.isFinite(Number(item.estimated_calories))
       ? `${Math.round(Number(item.estimated_calories))} Kcal`
       : '--';
 
     return (
       <TouchableOpacity
-        style={[styles.resultCard, isTopResult && styles.topResultCard]}
+        style={styles.resultCard}
         activeOpacity={0.88}
         onPress={() => handleNavigateToVideo(item.id)}
       >
         <View style={styles.resultInfo}>
-          <View style={styles.resultTitleRow}>
-            {isTopResult ? (
-              <View style={styles.topResultBadge}>
-                <MaterialIcons name="push-pin" size={14} color="#2f6f4f" />
-                <Text style={styles.topResultBadgeText}>Kết quả ưu tiên</Text>
-              </View>
-            ) : null}
-            <Text style={styles.resultTitle} numberOfLines={2}>
-              {item.title}
-            </Text>
-          </View>
+          <Text style={styles.resultTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
 
           <View style={styles.resultMetaRow}>
             <View style={styles.resultMetaItem}>
               <MaterialIcons name="schedule" size={16} color="#4d6654" />
-              <Text style={styles.resultMetaText}>{formatDuration(item.duration)}</Text>
+              <Text style={styles.resultMetaText}>
+                {formatDuration(item.duration)}
+              </Text>
             </View>
+
             <View style={styles.resultMetaItem}>
-              <MaterialIcons name="local-fire-department" size={16} color="#d85b28" />
+              <MaterialIcons
+                name="local-fire-department"
+                size={16}
+                color="#d85b28"
+              />
               <Text style={styles.resultMetaText}>{caloriesLabel}</Text>
             </View>
+
             <View style={styles.resultMetaItem}>
               <MaterialIcons name="category" size={16} color="#3a6043" />
-              <Text style={styles.resultMetaText}>{item.subcategory || item.category}</Text>
+              <Text style={styles.resultMetaText}>
+                {item.subcategory || item.category}
+              </Text>
             </View>
           </View>
         </View>
 
         <View style={styles.resultThumbnailWrapper}>
-          {item.thumbnail ? (
-            <Image source={{ uri: item.thumbnail }} style={styles.resultThumbnail} />
-          ) : (
-            <Image source={require('@assets/images/workout1.jpg')} style={styles.resultThumbnail} />
-          )}
+          <Image
+            source={
+              item.thumbnail
+                ? { uri: item.thumbnail }
+                : require('@assets/images/workout1.jpg')
+            }
+            style={styles.resultThumbnail}
+          />
+
           <TouchableOpacity
-            style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive, isUpdating && { opacity: 0.6 }]}
+            style={[
+              styles.favoriteButton,
+              isFavorite && styles.favoriteButtonActive,
+              isUpdating && { opacity: 0.6 },
+            ]}
             onPress={() => toggleFavorite(item)}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             disabled={isUpdating}
           >
             <MaterialIcons
-              name={isFavorite ? 'favorite' : 'favorite-border'}
+              name={isFavorite ? 'star' : 'star-border'}
               size={20}
-              color={isFavorite ? '#f05454' : '#ffffff'}
+              color={isFavorite ? '#FFD700' : '#fff'}
             />
           </TouchableOpacity>
         </View>
@@ -270,163 +362,185 @@ const WorkoutScreen = ({ navigation, route }) => {
     );
   };
 
-  const featuredVideo = useMemo(() => (videos.length ? videos[0] : null), [videos]);
-  const remainingVideos = useMemo(
-    () => (featuredVideo ? videos.slice(1) : videos),
-    [videos, featuredVideo],
-  );
-
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.headerArea}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <MaterialIcons name="arrow-back" size={24} color="#145724" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Bài tập</Text>
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.iconButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <MaterialIcons name="notifications-none" size={24} color="#145724" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <MaterialIcons name="person-outline" size={24} color="#145724" />
-            </TouchableOpacity>
-          </View>
+      {/* HEADER */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.headerIcon}
+          onPress={() => navigation.goBack()}
+        >
+          <MaterialIcons name="arrow-back" size={28} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        <View style={styles.headerTextWrap}>
+          <Text style={styles.greeting}>Bài tập</Text>
+          <Text style={styles.headerSub}>Khám phá và luyện tập mỗi ngày</Text>
         </View>
 
-        <View style={styles.searchBar}>
-          <MaterialIcons name="search" size={20} color="#4d6654" />
-          <TextInput
-            style={styles.searchField}
-            placeholder="Tìm kiếm bài tập, chủ đề..."
-            placeholderTextColor="#7a8c7f"
-            value={searchText}
-            onChangeText={handleSearchChange}
-            returnKeyType="search"
-            autoCorrect={false}
-            onSubmitEditing={handleSearchSubmit}
-          />
-          {searchText.length ? (
-            <TouchableOpacity
-              style={styles.clearButton}
-              onPress={handleClearSearch}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            >
-              <MaterialIcons name="close" size={18} color="#7a8c7f" />
-            </TouchableOpacity>
-          ) : null}
-          <TouchableOpacity
-            style={styles.searchAction}
-            onPress={handleSearchSubmit}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-          >
-            <MaterialIcons name="arrow-forward" size={20} color="#1f7a3a" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.levelContainer}>
-          {LEVEL_OPTIONS.map((option) => {
-            const isActive = option.key === activeLevel;
-            return (
-              <TouchableOpacity
-                key={option.key}
-                style={[styles.levelChip, isActive && styles.levelChipActive]}
-                onPress={() => setActiveLevel(option.key)}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.levelChipText, isActive && styles.levelChipTextActive]}>
-                  {option.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <View style={{ width: 40 }} />
       </View>
 
-      {isLoading ? (
+      {/* SEARCH */}
+      <View style={styles.searchBar}>
+        <MaterialIcons name="search" size={20} color="#4d6654" />
+        <TextInput
+          style={styles.searchField}
+          placeholder="Tìm kiếm bài tập, chủ đề..."
+          placeholderTextColor="#7a8c7f"
+          value={searchText}
+          onChangeText={setSearchText}
+          returnKeyType="search"
+          onSubmitEditing={() =>
+            setDebouncedSearch(searchText.trim()) || Keyboard.dismiss()
+          }
+        />
+        {searchText.length > 0 && (
+          <TouchableOpacity
+            onPress={() => setSearchText('')}
+            style={styles.clearButton}
+          >
+            <MaterialIcons name="close" size={18} color="#7a8c7f" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <ScrollView contentContainerStyle={{ paddingBottom: 80 }}>
+        {/* FEATURED BANNER (giữ nguyên) */}
+        {featuredVideo && (
+          <TouchableOpacity
+            style={styles.dailyCard}
+            onPress={() => handleNavigateToVideo(featuredVideo.id)}
+          >
+            <Image
+              source={
+                featuredVideo.thumbnail
+                  ? { uri: featuredVideo.thumbnail }
+                  : require('@assets/images/workout1.jpg')
+              }
+              style={styles.dailyImage}
+            />
+
+            <View style={styles.dailyOverlay}>
+              <View style={styles.dailyTag}>
+                <Text style={styles.dailyTagText}>⚡ Bài tập trong ngày</Text>
+              </View>
+
+              <Text style={styles.dailyTitle} numberOfLines={2}>
+                {featuredVideo.title}
+              </Text>
+
+              <View style={styles.dailyMetaRow}>
+                <Text style={styles.dailyMeta}>
+                  ⏱ {formatDuration(featuredVideo.duration)}
+                </Text>
+                <Text style={styles.dailyMeta}>
+                  🔥 {Math.round(featuredVideo.estimated_calories || 0)} Kcal
+                </Text>
+                <Text style={styles.dailyMeta}>
+                  💪 {featuredVideo.subcategory || featuredVideo.category}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* 3 SECTION: YOGA */}
+        <View style={styles.sectionWrap}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Yoga</Text>
+            <TouchableOpacity
+              onPress={() => {
+                /* optional: navigate to full list */
+              }}
+            >
+              <Text style={styles.sectionMore}>Xem tất cả</Text>
+            </TouchableOpacity>
+          </View>
+
+          {isLoading ? (
+            <ActivityIndicator size="small" />
+          ) : groups.yoga.length ? (
+            <FlatList
+              data={groups.yoga}
+              renderItem={renderWorkoutItem}
+              keyExtractor={i => i.id}
+              contentContainerStyle={{ paddingHorizontal: 20 }}
+              scrollEnabled={false}
+            />
+          ) : (
+            <View style={styles.emptyRow}>
+              <Text style={styles.emptyText}>Không có video Yoga.</Text>
+            </View>
+          )}
+        </View>
+
+        {/* TẬP CƠ */}
+        <View style={styles.sectionWrap}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Tập cơ</Text>
+            <TouchableOpacity onPress={() => {}}>
+              <Text style={styles.sectionMore}>Xem tất cả</Text>
+            </TouchableOpacity>
+          </View>
+
+          {isLoading ? (
+            <ActivityIndicator size="small" />
+          ) : groups.tapco.length ? (
+            <FlatList
+              data={groups.tapco}
+              renderItem={renderWorkoutItem}
+              keyExtractor={i => i.id}
+              contentContainerStyle={{ paddingHorizontal: 20 }}
+              scrollEnabled={false}
+            />
+          ) : (
+            <View style={styles.emptyRow}>
+              <Text style={styles.emptyText}>Không có video Tập cơ.</Text>
+            </View>
+          )}
+        </View>
+
+        {/* DINH DƯỠNG */}
+        <View style={styles.sectionWrap}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Dinh dưỡng</Text>
+            <TouchableOpacity onPress={() => {}}>
+              <Text style={styles.sectionMore}>Xem tất cả</Text>
+            </TouchableOpacity>
+          </View>
+
+          {isLoading ? (
+            <ActivityIndicator size="small" />
+          ) : groups.dinhduong.length ? (
+            <FlatList
+              data={groups.dinhduong}
+              renderItem={renderWorkoutItem}
+              keyExtractor={i => i.id}
+              contentContainerStyle={{ paddingHorizontal: 20 }}
+              scrollEnabled={false}
+            />
+          ) : (
+            <View style={styles.emptyRow}>
+              <Text style={styles.emptyText}>Không có video Dinh dưỡng.</Text>
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Loading / Error full screen fallback (nếu muốn hiện khi danh sách trống) */}
+      {!allVideos.length && isLoading && (
         <View style={styles.feedbackContainer}>
           <ActivityIndicator size="large" color="#30C451" />
           <Text style={styles.feedbackText}>Đang tải bài tập...</Text>
         </View>
-      ) : error ? (
+      )}
+
+      {!allVideos.length && error && (
         <View style={styles.feedbackContainer}>
           <MaterialIcons name="error-outline" size={28} color="#d85b28" />
           <Text style={styles.feedbackText}>{error}</Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={() => fetchVideos(debouncedSearch)}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.retryText}>Thử lại</Text>
-          </TouchableOpacity>
         </View>
-      ) : (
-        <FlatList
-          data={remainingVideos}
-          keyExtractor={(item) => item.id}
-          renderItem={renderWorkoutItem}
-          contentContainerStyle={styles.listContent}
-          ListHeaderComponent={
-            featuredVideo ? (
-              <TouchableOpacity
-                style={styles.featuredCardWrapper}
-                activeOpacity={0.9}
-                onPress={() => handleNavigateToVideo(featuredVideo.id)}
-              >
-                <Image
-                  source={
-                    featuredVideo.thumbnail
-                      ? { uri: featuredVideo.thumbnail }
-                      : require('@assets/images/workout1.jpg')
-                  }
-                  style={styles.featuredImage}
-                />
-                <View style={styles.featuredOverlay}>
-                  <View style={styles.featuredBadge}>
-                    <MaterialIcons name="bolt" size={16} color="#fff" />
-                    <Text style={styles.featuredBadgeText}>Bài tập trong ngày</Text>
-                  </View>
-                  <Text style={styles.featuredTitle} numberOfLines={2}>
-                    {featuredVideo.title}
-                  </Text>
-                  <View style={styles.featuredMetaRow}>
-                    <View style={styles.featuredMetaItem}>
-                      <MaterialIcons name="schedule" size={16} color="#fff" />
-                      <Text style={styles.featuredMetaText}>{formatDuration(featuredVideo.duration)}</Text>
-                    </View>
-                    <View style={styles.featuredMetaItem}>
-                      <MaterialIcons name="local-fire-department" size={16} color="#fff" />
-                      <Text style={styles.featuredMetaText}>
-                        {Number.isFinite(Number(featuredVideo.estimated_calories))
-                          ? `${Math.round(Number(featuredVideo.estimated_calories))} Kcal`
-                          : '--'}
-                      </Text>
-                    </View>
-                    <View style={styles.featuredMetaItem}>
-                      <MaterialIcons name="category" size={16} color="#fff" />
-                      <Text style={styles.featuredMetaText}>
-                        {featuredVideo.subcategory || featuredVideo.category}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.featuredPlaceholder} />
-            )
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <MaterialIcons name="sentiment-dissatisfied" size={32} color="#7a8c7f" />
-              <Text style={styles.feedbackText}>Không tìm thấy bài tập phù hợp.</Text>
-            </View>
-          }
-          showsVerticalScrollIndicator={false}
-        />
       )}
     </SafeAreaView>
   );
@@ -434,44 +548,57 @@ const WorkoutScreen = ({ navigation, route }) => {
 
 export default WorkoutScreen;
 
+/* ============================================================
+   STYLES (tham khảo giữ nguyên phần lớn style cũ, thêm vài style section)
+============================================================ */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f3f6f4',
   },
-  headerArea: {
+
+  header: {
+    backgroundColor: '#2FAE66',
     paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 18,
-    backgroundColor: '#ffffff',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    paddingTop: Platform.OS === 'android' ? 28 : 60,
+    paddingBottom: 28,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    shadowColor: '#2FAE66',
     shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
-  headerRow: {
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 10,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  iconButton: {
-    padding: 8,
-    borderRadius: 14,
-    backgroundColor: '#e6f3ec',
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#10381d',
-  },
-  headerActions: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
   },
+
+  headerIcon: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+  },
+
+  headerTextWrap: {
+    flex: 1,
+    alignItems: 'center',
+  },
+
+  greeting: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  headerSub: {
+    marginTop: 4,
+    fontSize: 15,
+    color: '#CFF7E6',
+    fontWeight: '500',
+  },
+
+  /* SEARCH */
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -479,204 +606,121 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    marginTop: 18,
-    gap: 10,
+    marginTop: 16,
+    marginHorizontal: 20,
   },
   searchField: {
     flex: 1,
     fontSize: 16,
     color: '#1f2f24',
-    paddingVertical: 0,
   },
   clearButton: {
     padding: 4,
-    borderRadius: 12,
     backgroundColor: '#e2ebe5',
-  },
-  searchAction: {
-    padding: 6,
-    borderRadius: 12,
-    backgroundColor: '#d4f0df',
-  },
-  levelContainer: {
-    flexDirection: 'row',
-    marginTop: 16,
-    justifyContent: 'space-between',
-  },
-  levelChip: {
-    flex: 1,
-    paddingVertical: 10,
-    marginHorizontal: 4,
-    borderRadius: 14,
-    backgroundColor: '#e6f3ec',
-    alignItems: 'center',
-  },
-  levelChipActive: {
-    backgroundColor: '#1f7a3a',
-  },
-  levelChipText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1f7a3a',
-  },
-  levelChipTextActive: {
-    color: '#ffffff',
-  },
-  feedbackContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    gap: 14,
-  },
-  feedbackText: {
-    textAlign: 'center',
-    fontSize: 15,
-    color: '#4d6654',
-  },
-  retryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    backgroundColor: '#30C451',
     borderRadius: 12,
   },
-  retryText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-    paddingTop: 16,
-  },
-  featuredCardWrapper: {
-    borderRadius: 22,
+
+  /* DAILY FEATURED (BANNER) */
+  dailyCard: {
+    marginTop: 20,
+    marginHorizontal: 20,
+    borderRadius: 20,
     overflow: 'hidden',
-    marginBottom: 20,
     backgroundColor: '#000',
   },
-  featuredImage: {
+  dailyImage: {
     width: '100%',
-    height: 210,
+    height: 180,
+    opacity: 0.9,
   },
-  featuredOverlay: {
+  dailyOverlay: {
     position: 'absolute',
-    inset: 0,
-    padding: 20,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    gap: 12,
+    bottom: 12,
+    left: 14,
+    right: 14,
   },
-  featuredBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  dailyTag: {
+    backgroundColor: '#2FAE66',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8,
     alignSelf: 'flex-start',
-    gap: 6,
-    backgroundColor: 'rgba(48,196,81,0.9)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
   },
-  featuredBadgeText: {
+  dailyTagText: {
     color: '#fff',
-    fontWeight: '700',
-    fontSize: 12,
-    letterSpacing: 0.3,
-  },
-  featuredTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  featuredMetaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  featuredMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  featuredMetaText: {
-    color: '#fff',
-    fontSize: 13,
     fontWeight: '600',
   },
-  featuredPlaceholder: {
-    height: 12,
+  dailyTitle: {
+    color: '#fff',
+    fontSize: 20,
+    marginTop: 6,
+    fontWeight: '700',
   },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
+  dailyMetaRow: {
+    flexDirection: 'row',
     gap: 12,
+    marginTop: 6,
+    flexWrap: 'wrap',
   },
+  dailyMeta: {
+    color: '#fff',
+    fontSize: 13,
+  },
+
+  /* SECTION */
+  sectionWrap: {
+    marginTop: 18,
+    marginBottom: 6,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1b2d1f',
+  },
+  sectionMore: {
+    color: '#3a6043',
+    fontWeight: '600',
+  },
+
+  listContent: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
+  },
+
+  /* ITEM CARD */
   resultCard: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fff',
     borderRadius: 18,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 18,
     shadowColor: '#000',
     shadowOpacity: 0.06,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
-    gap: 16,
+    gap: 14,
   },
-  topResultCard: {
-    borderWidth: 1.5,
-    borderColor: '#30C451',
-  },
-  resultInfo: {
-    flex: 1,
-    gap: 12,
-  },
-  resultTitleRow: {
-    gap: 8,
-  },
-  topResultBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 4,
-    backgroundColor: '#d8f2e0',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  topResultBadgeText: {
-    color: '#2f6f4f',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  resultTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1b2d1f',
-  },
-  resultMetaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  resultMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  resultMetaText: {
-    fontSize: 13,
-    color: '#566c5f',
-  },
+  resultInfo: { flex: 1, gap: 10 },
+  resultTitle: { fontSize: 16, fontWeight: '700', color: '#1b2d1f' },
+
+  resultMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  resultMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  resultMetaText: { color: '#566c5f', fontSize: 13 },
+
   resultThumbnailWrapper: {
-    width: 96,
-    height: 96,
+    width: 90,
+    height: 90,
     borderRadius: 14,
     overflow: 'hidden',
-    position: 'relative',
   },
   resultThumbnail: {
     width: '100%',
@@ -684,16 +728,30 @@ const styles = StyleSheet.create({
   },
   favoriteButton: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 6,
+    right: 6,
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   favoriteButtonActive: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fff',
   },
+
+  feedbackContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  feedbackText: {
+    color: '#4d6654',
+    textAlign: 'center',
+  },
+
+  emptyRow: { paddingHorizontal: 20, paddingVertical: 12 },
+  emptyText: { color: '#7a8c7f' },
 });
