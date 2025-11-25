@@ -1,3 +1,4 @@
+// Updated FavoriteVideosScreen with unified header matching WorkoutVideoScreen
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -13,10 +14,7 @@ import {
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useFocusEffect } from '@react-navigation/native';
 
-import {
-  getFavoriteVideos,
-  removeVideoFromFavorites,
-} from '@api/userApi';
+import { getFavoriteVideos, removeVideoFromFavorites } from '@api/userApi';
 
 const formatDuration = seconds => {
   const value = Number(seconds);
@@ -25,7 +23,10 @@ const formatDuration = seconds => {
   }
   const mins = Math.floor(value / 60);
   const secs = Math.floor(value % 60);
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')} phút`;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(
+    2,
+    '0',
+  )} phút`;
 };
 
 const formatDate = isoString => {
@@ -43,34 +44,31 @@ const FavoriteVideosScreen = ({ navigation }) => {
   const [error, setError] = useState(null);
   const [updatingFavoriteId, setUpdatingFavoriteId] = useState(null);
 
-  const syncFavorites = useCallback(
-    async (showSkeleton = true) => {
-      if (showSkeleton) {
-        setLoading(true);
-      } else {
-        setRefreshing(true);
-      }
-      setError(null);
+  const syncFavorites = useCallback(async (showSkeleton = true) => {
+    if (showSkeleton) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+    setError(null);
 
-      try {
-        const response = await getFavoriteVideos();
-        const list = Array.isArray(response?.data)
-          ? response.data
-          : response?.favorites || [];
-        setFavorites(list);
-      } catch (err) {
-        setFavorites([]);
-        setError(err.message || 'Không thể tải danh sách video yêu thích.');
-      } finally {
-        if (showSkeleton) {
-          setLoading(false);
-        } else {
-          setRefreshing(false);
-        }
+    try {
+      const response = await getFavoriteVideos();
+      const list = Array.isArray(response?.data)
+        ? response.data
+        : response?.favorites || [];
+      setFavorites(list);
+    } catch (err) {
+      setFavorites([]);
+      setError(err.message || 'Không thể tải danh sách video yêu thích.');
+    } finally {
+      if (showSkeleton) {
+        setLoading(false);
+      } else {
+        setRefreshing(false);
       }
-    },
-    [],
-  );
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -102,7 +100,9 @@ const FavoriteVideosScreen = ({ navigation }) => {
         ? `${Math.round(Number(caloriesSource))} Kcal`
         : null;
       const categoryLabel = item.subcategory || item.category || null;
-      const metaParts = [durationLabel, caloriesLabel, categoryLabel].filter(Boolean);
+      const metaParts = [durationLabel, caloriesLabel, categoryLabel].filter(
+        Boolean,
+      );
       const favoritedLabel = formatDate(item.favoritedAt);
 
       const isUpdating = updatingFavoriteId === item.videoId;
@@ -159,7 +159,7 @@ const FavoriteVideosScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.feedbackContainer}>
-        <ActivityIndicator size="large" color="#30C451" />
+        <ActivityIndicator size="large" color="#2FAE66" />
         <Text style={styles.feedbackText}>Đang tải video yêu thích...</Text>
       </View>
     );
@@ -170,7 +170,10 @@ const FavoriteVideosScreen = ({ navigation }) => {
       <View style={styles.feedbackContainer}>
         <MaterialIcons name="error-outline" size={28} color="#d85b28" />
         <Text style={styles.feedbackText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => syncFavorites(true)}>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={() => syncFavorites(true)}
+        >
           <Text style={styles.retryText}>Thử lại</Text>
         </TouchableOpacity>
       </View>
@@ -179,10 +182,21 @@ const FavoriteVideosScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      {/* Unified Header */}
       <View style={styles.header}>
-        <MaterialIcons name="star" size={22} color="#fff" />
-        <Text style={styles.headerTitle}>Bài tập yêu thích</Text>
-        <View style={{ width: 22 }} />
+        <TouchableOpacity
+          style={styles.headerIcon}
+          onPress={() => navigation.goBack()}
+        >
+          <MaterialIcons name="arrow-back" size={26} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        <View style={styles.headerTextWrap}>
+          <Text style={styles.headerTitle}>Bài tập yêu thích</Text>
+          <Text style={styles.headerSub}>Danh sách bài tập đã lưu</Text>
+        </View>
+
+        <View style={{ width: 40 }} />
       </View>
 
       <FlatList
@@ -196,19 +210,25 @@ const FavoriteVideosScreen = ({ navigation }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#30C451"
+            tintColor="#2FAE66"
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <MaterialIcons name="collections-bookmark" size={36} color="#9ab3a2" />
+            <MaterialIcons
+              name="collections-bookmark"
+              size={36}
+              color="#9ab3a2"
+            />
             <Text style={styles.emptyTitle}>Chưa có video yêu thích</Text>
             <Text style={styles.emptySubtitle}>
               Hãy đánh dấu các bài tập bạn muốn xem lại để xuất hiện tại đây.
             </Text>
             <TouchableOpacity
               style={styles.goWorkoutButton}
-              onPress={() => navigation.navigate('HomeStack', { screen: 'WorkoutScreen' })}
+              onPress={() =>
+                navigation.navigate('HomeStack', { screen: 'WorkoutScreen' })
+              }
             >
               <Text style={styles.goWorkoutText}>Khám phá bài tập</Text>
             </TouchableOpacity>
@@ -226,25 +246,52 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f7f6',
   },
+
   header: {
-    height: 88,
+    backgroundColor: '#2FAE66',
     paddingHorizontal: 20,
-    paddingBottom: 12,
-    backgroundColor: '#30C451',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    paddingTop: 28,
+    paddingBottom: 28,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    shadowColor: '#2FAE66',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 10,
     flexDirection: 'row',
-    alignItems: 'flex-end',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
+
+  headerIcon: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+  },
+
+  headerTextWrap: {
+    flex: 1,
+    alignItems: 'center',
+  },
+
   headerTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#fff',
+    color: '#FFFFFF',
   },
+
+  headerSub: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#CFF7E6',
+    fontWeight: '500',
+  },
+
   listContent: {
     padding: 16,
   },
+
   card: {
     flexDirection: 'row',
     backgroundColor: '#fff',
