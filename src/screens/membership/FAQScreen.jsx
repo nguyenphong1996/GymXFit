@@ -220,7 +220,7 @@ const CategorySection = ({ category, icon, questions }) => {
   );
 };
 
-const MembershipFAQScreen = ({ navigation }) => {
+const FAQScreen = ({ navigation }) => {
   const handleContactPress = () => {
     Linking.openURL(`tel:${MEMBERSHIP_CONTACT}`).catch(() => {});
   };
@@ -308,7 +308,7 @@ const MembershipFAQScreen = ({ navigation }) => {
   );
 };
 
-export default MembershipFAQScreen;
+export default FAQScreen;
 
 const styles = StyleSheet.create({
   container: {

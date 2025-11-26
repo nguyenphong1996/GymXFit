@@ -31,6 +31,18 @@ const PaymentCardSelectScreen = ({ navigation, route }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [tokens, setTokens] = useState([]);
 
+  const buildExpiry = (token) => {
+    const monthRaw = token.expMonth || token.expiryMonth || token.cardExpMonth || token.expireMonth;
+    const yearRaw = token.expYear || token.expiryYear || token.cardExpYear || token.expireYear;
+    const month = monthRaw ? String(monthRaw).padStart(2, '0') : null;
+    let year = yearRaw ? String(yearRaw) : null;
+    if (year && year.length === 4) {
+      year = year.slice(2);
+    }
+    if (month && year) return `${month}/${year}`;
+    return token.cardExpiry || token.cardExpiration || token.expiry || token.expireDate || token.expDate || token.expiration || token.expirationDate;
+  };
+
   const fetchTokens = async () => {
     try {
       if (!user?.id && !user?._id) {
@@ -40,6 +52,7 @@ const PaymentCardSelectScreen = ({ navigation, route }) => {
       setIsLoading(true);
       const userId = user.id || user._id || user.userId;
       const res = await getVnpayTokens(userId);
+      console.log('VNPAY tokens response:', res);
       setTokens(res || []);
     } catch (error) {
       console.warn('Không lấy được danh sách thẻ:', error?.message);
@@ -53,7 +66,18 @@ const PaymentCardSelectScreen = ({ navigation, route }) => {
   }, []);
 
   const handleUseToken = (token) => {
-    navigation.navigate('PaymentTokenScreen', { plan, token: token.token });
+    navigation.navigate('PaymentTokenScreen', {
+      plan,
+      token: token.token,
+      tokenMeta: {
+        bankCode: token.bankCode || token.bankShortName || token.bank || token.bankName,
+        bankName: token.bankName || token.bank || token.bankShortName || token.bankCode,
+        cardMask: token.cardMask || token.mask || token.number,
+        cardType: token.cardType,
+        cardHolderName: token.cardHolderName || token.cardHolder || token.holderName || token.ownerName || token.nameOnCard,
+        cardExpiry: buildExpiry(token),
+      },
+    });
   };
 
   const handleDelete = (id) => {
