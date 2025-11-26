@@ -242,6 +242,7 @@ const PaymentTokenScreen = ({ route, navigation }) => {
     if (isVerifying) return;
   };
 
+
   const verifyPaymentFromUrl = async (urlString) => {
     if (isVerifying) return;
     setIsVerifying(true);
@@ -402,34 +403,36 @@ const PaymentTokenScreen = ({ route, navigation }) => {
         {/* Card Preview */}
         <View style={styles.cardPreviewContainer}>
           <LinearGradient
-            colors={[MD3_COLORS.primary, '#15723A']}
+            colors={['rgba(122, 46, 42, 0.95)', 'rgba(255, 102, 51, 0.95)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.cardGradient}
+            style={styles.cardBackground}
           >
-            <View style={styles.cardTopRow}>
-              <MaterialIcons name="memory" size={40} color="#E0E0E0" />
-              <Text style={styles.cardBrand}>
-                {tokenMeta?.bankName || tokenMeta?.bankCode || 'VNPAY'}
-              </Text>
-            </View>
-            
-            <View style={styles.cardNumberContainer}>
-              <Text style={styles.cardNumber}>
-                {tokenMeta?.cardMask || token?.cardMask || '•••• •••• •••• ••••'}
-              </Text>
-            </View>
-
-            <View style={styles.cardBottomRow}>
-              <View>
-                <Text style={styles.cardLabel}>CHỦ THẺ</Text>
-                <Text style={styles.cardHolderName}>
-                  {(tokenMeta?.cardHolderName || user?.name || 'NGUYEN VAN A').toUpperCase()}
+            <View style={styles.cardContent}>
+              <View style={styles.cardTopRow}>
+                <MaterialIcons name="memory" size={40} color="#E0E0E0" />
+                <Text style={styles.cardBrand}>
+                  {tokenMeta?.bankName || tokenMeta?.bankCode || 'VNPAY'}
                 </Text>
               </View>
-              <View>
-                <Text style={styles.cardLabel}>NGÀY HẾT HẠN</Text>
-                <Text style={styles.cardExpiry}>{tokenMeta?.cardExpiry || 'MM/YY'}</Text>
+              
+              <View style={styles.cardNumberContainer}>
+                <Text style={styles.cardNumber}>
+                  {tokenMeta?.cardMask || token?.cardMask || '•••• •••• •••• ••••'}
+                </Text>
+              </View>
+
+              <View style={styles.cardBottomRow}>
+                <View>
+                  <Text style={styles.cardLabel}>CHỦ THẺ</Text>
+                  <Text style={styles.cardHolderName}>
+                    {(tokenMeta?.cardHolderName || 'NGUYEN VAN A').toUpperCase()}
+                  </Text>
+                </View>
+                <View>
+                  <Text style={styles.cardLabel}>NGÀY HẾT HẠN</Text>
+                  <Text style={styles.cardExpiry}>{tokenMeta?.cardExpiry || '07/15'}</Text>
+                </View>
               </View>
             </View>
           </LinearGradient>
@@ -450,16 +453,31 @@ const PaymentTokenScreen = ({ route, navigation }) => {
           </View>
         )}
 
-        {/* Debug token meta (only in dev) */}
-        {__DEV__ && (
-          <View style={styles.debugBox}>
-            <Text style={styles.debugTitle}>tokenMeta</Text>
-            <Text style={styles.debugLine}>bankCode: {tokenMeta?.bankCode || '—'}</Text>
-            <Text style={styles.debugLine}>bankName: {tokenMeta?.bankName || '—'}</Text>
-            <Text style={styles.debugLine}>cardMask: {tokenMeta?.cardMask || '—'}</Text>
-            <Text style={styles.debugLine}>cardHolderName: {tokenMeta?.cardHolderName || '—'}</Text>
-            <Text style={styles.debugLine}>cardExpiry: {tokenMeta?.cardExpiry || '—'}</Text>
-            <Text style={styles.debugLine}>cardType: {tokenMeta?.cardType || '—'}</Text>
+        {/* Token Details */}
+        {tokenMeta && (
+          <View style={styles.infoContainer}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Ngân hàng</Text>
+              <Text style={styles.infoValue}>{tokenMeta.bankName || tokenMeta.bankCode}</Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Loại thẻ</Text>
+              <Text style={styles.infoValue}>
+                {tokenMeta.cardType === '01' ? 'Thẻ nội địa (ATM)' : 
+                 tokenMeta.cardType === '02' ? 'Thẻ quốc tế' : 
+                 tokenMeta.cardType || '—'}
+              </Text>
+            </View>
+            {tokenMeta.cardHolderName ? (
+              <>
+                <View style={styles.divider} />
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Chủ thẻ</Text>
+                  <Text style={styles.infoValue}>{tokenMeta.cardHolderName}</Text>
+                </View>
+              </>
+            ) : null}
           </View>
         )}
 
@@ -565,18 +583,22 @@ const styles = StyleSheet.create({
   },
   cardPreviewContainer: {
     width: '100%',
-    aspectRatio: 1.586, // Standard credit card ratio
+    aspectRatio: 669 / 373, // Match NCB asset ratio to avoid letterboxing
     borderRadius: 16,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
-    marginBottom: 24,
+  marginBottom: 24,
+  overflow: 'hidden',
+  backgroundColor: '#dfe7e2',
   },
-  cardGradient: {
+  cardBackground: {
     flex: 1,
-    borderRadius: 16,
+  },
+  cardContent: {
+    flex: 1,
     padding: 24,
     justifyContent: 'space-between',
   },

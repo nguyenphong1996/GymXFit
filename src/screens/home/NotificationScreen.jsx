@@ -14,13 +14,13 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 const NEWS_DATA = [
   {
     id: '1',
-    image: require('@assets/images/lesmils1.jpg'),
+    image: null,
     title: 'Phòng gym Bình Thạnh tốt nhất bạn nên biết',
     date: '06/10/2025',
   },
   {
     id: '2',
-    image: require('@assets/images/lesmils2.jpg'),
+    image: null,
     title: 'Phòng tập tiên phong ứng dụng công nghệ Face ID',
     date: '07/10/2025',
   },
@@ -44,7 +44,13 @@ const NewsScreen = ({ navigation }) => {
 
   const renderNewsItem = ({ item }) => (
     <View style={styles.itemContent}>
-      <Image style={styles.imageContent} source={item.image} />
+      {item.image ? (
+        <Image style={styles.imageContent} source={item.image} />
+      ) : (
+        <View style={[styles.imageContent, styles.imagePlaceholder]}>
+          <Icon name="article" size={34} color="#30C451" />
+        </View>
+      )}
       <View style={styles.textContent}>
         <Text
           style={styles.textTitleContent}
@@ -143,6 +149,11 @@ const styles = StyleSheet.create({
   imageContent: {
     width: '100%',
     height: 150,
+  },
+  imagePlaceholder: {
+    backgroundColor: '#e5f7ec',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   textContent: {
     padding: 10,
