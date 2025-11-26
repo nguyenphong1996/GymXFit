@@ -17,7 +17,9 @@ import WorkoutVideoScreen from '@screens/video/WorkoutVideoScreen';
 import UpdateProfileScreen from '@screens/profile/UpdateProfileScreen';
 import BookScreen from '@screens/booking/BookScreen';
 import FavoriteVideosScreen from '@screens/video/FavoriteVideosScreen';
-import SearchCalendarScreen from '@screens/booking/SearchCalendarScreen'
+import SearchCalendarScreen from '@screens/booking/SearchCalendarScreen';
+import NotificationScreen from '@screens/home/NotificationScreen';
+import HomeScreen from '@screens/home/HomeScreen';
 
 
 const Stack = createNativeStackNavigator();
@@ -25,7 +27,7 @@ const Stack = createNativeStackNavigator();
 const UserNavigator = () => {
   return (
     <Stack.Navigator
-      initialRouteName="BookScreen"
+      initialRouteName="NewsScreen"
       screenOptions={{
         headerShown: false,
       }}
@@ -56,6 +58,8 @@ const UserNavigator = () => {
         name="SearchCalendarScreen"
         component={SearchCalendarScreen}
       />
+      <Stack.Screen name="NotificationScreen" component={NotificationScreen} />
+      <Stack.Screen name="HomeScreen" component={HomeScreen} />
     </Stack.Navigator>
   );
 };

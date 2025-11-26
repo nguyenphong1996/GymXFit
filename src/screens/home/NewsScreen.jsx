@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import {
   View,
@@ -10,64 +11,53 @@ import {
   FlatList,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const NEWS_DATA = [
   {
-    id: 1,
+    id: '1',
     image: require('@assets/images/lesmils1.jpg'),
     title: 'Phòng gym Bình Thạnh tốt nhất bạn nên biết',
     date: '06/10/2025',
   },
   {
-    id: 2,
+    id: '2',
     image: require('@assets/images/lesmils2.jpg'),
     title: 'Phòng tập tiên phong ứng dụng công nghệ Face ID',
     date: '07/10/2025',
   },
   {
-    id: 3,
+    id: '3',
     image: require('@assets/images/lesmils3.jpg'),
-    title: 'Carb là gì? Những loại thực phẩm giàu carb tốt cho sức khỏe',
+    title: 'Carb là gì? Những thực phẩm giàu carb tốt cho sức khỏe',
     date: '08/10/2025',
   },
   {
-    id: 4,
+    id: '4',
     image: require('@assets/images/lesmils4.jpg'),
-    title: 'Tất tần tật thực phẩm bổ sung hiệu quả cho người tập gym',
+    title: 'Thực phẩm bổ sung hiệu quả cho người tập gym',
     date: '09/10/2025',
   },
 ];
 
 const NewsScreen = ({ navigation }) => {
-  const isDarkMode = useColorScheme() === 'light';
+  const isDarkMode = useColorScheme() === 'dark';
   const [articles] = useState(NEWS_DATA);
 
-  const renderNewsItem = ({ item }) => {
-    const { image, title, date } = item;
-    return (
-      <TouchableOpacity
-        style={styles.itemContent}
-        activeOpacity={0.8}
-        onPress={() => console.log('Xem chi tiết:', title)}
-      >
-        <Image style={styles.imageContent} source={image} />
-        <View style={styles.textContent}>
-          <Text
-            style={styles.textTitleContent}
-            numberOfLines={2}
-            ellipsizeMode="tail"
-          >
-            {title}
-          </Text>
-          <View style={styles.dateContainer}>
-            <Ionicons name="calendar-outline" size={16} color="#888" />
-            <Text style={styles.textDate}>{date}</Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const renderNewsItem = ({ item }) => (
+    <View style={styles.itemContent}>
+      <Image style={styles.imageContent} source={item.image} />
+      <View style={styles.textContent}>
+        <Text
+          style={styles.textTitleContent}
+          numberOfLines={2}
+          ellipsizeMode="tail"
+        >
+          {item.title}
+        </Text>
+        <Text style={styles.textDate}>{item.date}</Text>
+      </View>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -79,7 +69,7 @@ const NewsScreen = ({ navigation }) => {
           style={styles.backHeader}
           onPress={() => navigation.goBack()}
         >
-          <Icon name="arrow-back-ios" size={20} color="#fff" />
+          <Icon name="arrow-back" size={22} color="#fff" />
           <Text style={styles.textBack}>Quay lại</Text>
         </TouchableOpacity>
 
@@ -90,15 +80,14 @@ const NewsScreen = ({ navigation }) => {
         <View style={{ flex: 1 }} />
       </View>
 
-      {/* Content */}
-      <View style={styles.contentContainer}>
-        <FlatList
-          data={articles}
-          renderItem={renderNewsItem}
-          keyExtractor={item => item.id.toString()}
-          showsVerticalScrollIndicator={false}
-        />
-      </View>
+      {/* List News */}
+      <FlatList
+        data={articles}
+        renderItem={renderNewsItem}
+        keyExtractor={item => item.id}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 };
@@ -107,8 +96,7 @@ export default NewsScreen;
 
 const styles = StyleSheet.create({
   container: {
-    width: '100%',
-    height: '100%',
+    flex: 1,
     backgroundColor: '#fff',
   },
   headerContainer: {
@@ -128,8 +116,8 @@ const styles = StyleSheet.create({
   },
   textBack: {
     color: '#fff',
-    marginStart: 5,
-    fontSize: 12,
+    marginStart: 7,
+    fontSize: 13,
   },
   titleHeader: {
     flex: 2,
@@ -141,16 +129,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   contentContainer: {
-    flex: 1,
-    paddingHorizontal: 25,
-    marginVertical: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 15,
   },
   itemContent: {
     backgroundColor: '#fff',
     marginBottom: 15,
     borderRadius: 10,
-    overflow: 'hidden',
     elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 3,
+    overflow: 'hidden',
   },
   imageContent: {
     width: '100%',
@@ -158,21 +149,14 @@ const styles = StyleSheet.create({
   },
   textContent: {
     padding: 10,
-    justifyContent: 'space-between',
   },
   textTitleContent: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#333',
-  },
-  dateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
   },
   textDate: {
     fontSize: 13,
-    color: '#888',
-    marginLeft: 5,
+    color: '#666',
+    marginTop: 5,
   },
 });
