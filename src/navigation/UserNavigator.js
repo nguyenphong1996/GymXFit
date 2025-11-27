@@ -28,7 +28,7 @@ const Stack = createNativeStackNavigator();
 const UserNavigator = () => {
   return (
     <Stack.Navigator
-      initialRouteName="SearchScreen"
+      initialRouteName="BookScreen"
       screenOptions={{
         headerShown: false,
       }}
@@ -61,7 +61,7 @@ const UserNavigator = () => {
       />
       <Stack.Screen name="NotificationScreen" component={NotificationScreen} />
       <Stack.Screen name="HomeScreen" component={HomeScreen} />
-      <Stack.Screen name='SearchScreen' component={SearchScreen}/>
+      <Stack.Screen name="SearchScreen" component={SearchScreen} />
     </Stack.Navigator>
   );
 };

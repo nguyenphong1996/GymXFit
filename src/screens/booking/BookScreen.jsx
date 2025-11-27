@@ -241,13 +241,22 @@ const BookScreen = ({ navigation }) => {
   // ----------------------------------------------
   // YEAR PICKER LOGIC
   // ----------------------------------------------
-  const yearList = Array.from({ length: 2100 - 2015 + 1 }, (_, i) => 2015 + i);
+  // YEAR PICKER — INFINITE RANGE
+  const MIN_YEAR = 1900;
+  const MAX_YEAR = 2300; // Có thể đặt 9999 nếu muốn vô hạn thực sự
+
+  const yearList = useMemo(() => {
+    return Array.from(
+      { length: MAX_YEAR - MIN_YEAR + 1 },
+      (_, i) => MIN_YEAR + i,
+    );
+  }, []);
 
   const handleSelectYear = year => {
     const month = selectedDate.getMonth();
     const day = selectedDate.getDate();
-    const maxDay = daysInMonthCount(year, month);
 
+    const maxDay = daysInMonthCount(year, month);
     const clamped = Math.min(day, maxDay);
 
     const newDate = new Date(year, month, clamped);
@@ -258,6 +267,7 @@ const BookScreen = ({ navigation }) => {
 
     setYearPickerVisible(false);
   };
+
 
   // ----------------------------------------------
   // MONTH NAVIGATION
@@ -467,7 +477,13 @@ const BookScreen = ({ navigation }) => {
             <FlatList
               data={yearList}
               keyExtractor={item => item.toString()}
-              style={{ maxHeight: 300 }}
+              style={{ maxHeight: 350 }}
+              initialScrollIndex={yearList.indexOf(selectedDate.getFullYear())}
+              getItemLayout={(data, index) => ({
+                length: 48,
+                offset: 48 * index,
+                index,
+              })}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.modalItem}
