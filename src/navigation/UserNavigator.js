@@ -20,6 +20,7 @@ import FavoriteVideosScreen from '@screens/video/FavoriteVideosScreen';
 import SearchCalendarScreen from '@screens/booking/SearchCalendarScreen';
 import NotificationScreen from '@screens/home/NotificationScreen';
 import HomeScreen from '@screens/home/HomeScreen';
+import SearchScreen from '@screens/home/SearchScreen';
 
 
 const Stack = createNativeStackNavigator();
@@ -27,7 +28,7 @@ const Stack = createNativeStackNavigator();
 const UserNavigator = () => {
   return (
     <Stack.Navigator
-      initialRouteName="NewsScreen"
+      initialRouteName="SearchScreen"
       screenOptions={{
         headerShown: false,
       }}
@@ -60,6 +61,7 @@ const UserNavigator = () => {
       />
       <Stack.Screen name="NotificationScreen" component={NotificationScreen} />
       <Stack.Screen name="HomeScreen" component={HomeScreen} />
+      <Stack.Screen name='SearchScreen' component={SearchScreen}/>
     </Stack.Navigator>
   );
 };
