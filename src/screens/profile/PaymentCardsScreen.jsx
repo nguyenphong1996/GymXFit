@@ -7,12 +7,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   FlatList,
-  Alert,
   StatusBar
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import LinearGradient from 'react-native-linear-gradient';
 import { UserContext } from '@context/UserContext';
-import { getVnpayTokens, deleteVnpayToken } from '../../api/paymentApi';
+import { getVnpayTokens } from '../../api/paymentApi';
 
 const MD3_COLORS = {
   primary: '#1F8E4A',
@@ -51,38 +51,78 @@ const PaymentCardsScreen = ({ navigation }) => {
     fetchTokens();
   }, []);
 
-  const handleDelete = (id) => {
-    Alert.alert('Xác nhận', 'Xóa thẻ này khỏi danh sách?', [
-      { text: 'Hủy', style: 'cancel' },
-      {
-        text: 'Xóa',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteVnpayToken(id);
-            fetchTokens();
-          } catch (err) {
-            Alert.alert('Lỗi', 'Không xóa được thẻ.');
-          }
-        }
-      }
-    ]);
+  const buildCardTypeLabel = (type) => {
+    if (type === '01') return 'Thẻ nội địa (ATM)';
+    if (type === '02') return 'Thẻ quốc tế';
+    return 'Thẻ khác';
   };
 
-  const renderItem = ({ item }) => (
-    <View style={styles.card}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <View>
-          <Text style={styles.cardTitle}>{item.bankCode || 'Thẻ đã lưu'}</Text>
-          <Text style={styles.cardMask}>{item.cardMask || '****'}</Text>
-          <Text style={styles.cardType}>Loại thẻ: {item.cardType === '01' ? 'Nội địa' : item.cardType === '02' ? 'Quốc tế' : 'Khác'}</Text>
-        </View>
-        <TouchableOpacity onPress={() => handleDelete(item._id)} style={styles.deleteButton}>
-          <MaterialIcons name="delete-outline" size={20} color="#BA1A1A" />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+  const buildExpiry = (token) => {
+    const monthRaw = token.expMonth || token.expiryMonth || token.cardExpMonth || token.expireMonth;
+    const yearRaw = token.expYear || token.expiryYear || token.cardExpYear || token.expireYear;
+    const month = monthRaw ? String(monthRaw).padStart(2, '0') : null;
+    let year = yearRaw ? String(yearRaw) : null;
+    if (year && year.length === 4) year = year.slice(2);
+    if (month && year) return `${month}/${year}`;
+    return token.cardExpiry || token.cardExpiration || token.expiry || token.expireDate || token.expDate || token.expiration || token.expirationDate;
+  };
+
+  const handleSelect = (item) => {
+    navigation.navigate('PaymentTokenScreen', {
+      fromProfile: true,
+      token: item.token,
+      tokenMeta: {
+        bankCode: item.bankCode || item.bankShortName || item.bank || item.bankName,
+        bankName: item.bankName || item.bank || item.bankShortName || item.bankCode,
+        cardMask: item.cardMask || item.mask || item.number,
+        cardType: item.cardType,
+        cardHolderName: item.cardHolderName || item.cardHolder || item.holderName || item.ownerName || item.nameOnCard,
+        cardExpiry: buildExpiry(item),
+      },
+    });
+  };
+
+  const renderItem = ({ item }) => {
+    const typeLabel = buildCardTypeLabel(item.cardType);
+    const expiryLabel = buildExpiry(item);
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.9}
+        onPress={() => handleSelect(item)}
+      >
+        <LinearGradient
+          colors={['rgba(122, 46, 42, 0.95)', 'rgba(255, 102, 51, 0.95)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.cardGradient}
+        >
+          <View style={styles.cardHeader}>
+            <View style={styles.bankBadge}>
+              <MaterialIcons name="account-balance" size={16} color="#fff" />
+              <Text style={styles.cardTitle}>{item.bankName || item.bankCode || 'Thẻ đã lưu'}</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color="#ffe8e0" />
+          </View>
+
+          <Text style={styles.cardMask}>{item.cardMask || '•••• •••• •••• ••••'}</Text>
+
+          <View style={styles.cardMetaRow}>
+            <View style={styles.metaItem}>
+              <MaterialIcons name="credit-card" size={16} color="#ffe8e0" />
+              <Text style={styles.cardMetaText}>{typeLabel}</Text>
+            </View>
+            {expiryLabel ? (
+              <View style={styles.metaItem}>
+                <MaterialIcons name="schedule" size={16} color="#ffe8e0" />
+                <Text style={styles.cardMetaText}>{expiryLabel}</Text>
+              </View>
+            ) : null}
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -143,17 +183,31 @@ const styles = StyleSheet.create({
   loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
   loaderText: { fontSize: 14, color: MD3_COLORS.textSecondary, textAlign: 'center' },
   card: {
-    backgroundColor: MD3_COLORS.surface,
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e5e5e5',
+    borderRadius: 14,
+    marginBottom: 14,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
-  cardTitle: { fontSize: 16, fontWeight: '600', color: MD3_COLORS.textPrimary },
-  cardMask: { marginTop: 4, fontSize: 14, color: MD3_COLORS.textSecondary },
-  cardType: { marginTop: 2, fontSize: 12, color: MD3_COLORS.textSecondary },
-  deleteButton: { padding: 8 },
+  cardGradient: { padding: 16 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  bankBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: '#fff', letterSpacing: 0.3 },
+  cardMask: { marginTop: 14, fontSize: 18, fontWeight: '700', color: '#fff', letterSpacing: 0.6 },
+  cardMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  cardMetaText: { fontSize: 13, color: '#ffe8e0', fontWeight: '600' },
   footer: { padding: 16, backgroundColor: MD3_COLORS.surface, borderTopWidth: 1, borderTopColor: '#e5e5e5' },
   addButton: { backgroundColor: MD3_COLORS.primary, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   addButtonText: { color: MD3_COLORS.onPrimary, fontSize: 16, fontWeight: '600' },

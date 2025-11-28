@@ -7,13 +7,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   FlatList,
-  Alert,
   StatusBar
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
 import { UserContext } from '@context/UserContext';
-import { getVnpayTokens, deleteVnpayToken } from '../../api/paymentApi';
+import { getVnpayTokens } from '../../api/paymentApi';
 
 const MD3_COLORS = {
   primary: '#1F8E4A',
@@ -87,24 +86,6 @@ const PaymentCardSelectScreen = ({ navigation, route }) => {
     });
   };
 
-  const handleDelete = (id) => {
-    Alert.alert('Xác nhận', 'Xóa thẻ này khỏi danh sách?', [
-      { text: 'Hủy', style: 'cancel' },
-      {
-        text: 'Xóa',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteVnpayToken(id);
-            fetchTokens();
-          } catch (err) {
-            Alert.alert('Lỗi', 'Không xóa được thẻ.');
-          }
-        }
-      }
-    ]);
-  };
-
   const renderItem = ({ item }) => {
     const typeLabel = buildCardTypeLabel(item.cardType);
     const expiryLabel = buildExpiry(item);
@@ -125,9 +106,6 @@ const PaymentCardSelectScreen = ({ navigation, route }) => {
               <MaterialIcons name="account-balance" size={16} color="#fff" />
               <Text style={styles.cardTitle}>{item.bankName || item.bankCode || 'Thẻ đã lưu'}</Text>
             </View>
-            <TouchableOpacity onPress={() => handleDelete(item._id)} style={styles.deleteButton}>
-              <MaterialIcons name="delete-outline" size={20} color="#ffd1d1" />
-            </TouchableOpacity>
           </View>
 
           <Text style={styles.cardMask}>{item.cardMask || '•••• •••• •••• ••••'}</Text>
@@ -156,7 +134,7 @@ const PaymentCardSelectScreen = ({ navigation, route }) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color={MD3_COLORS.onSurface} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chọn thẻ VNPAY</Text>
+        <Text style={styles.headerTitle}>Chọn thẻ</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -238,11 +216,6 @@ const styles = StyleSheet.create({
   cardMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   cardMetaText: { fontSize: 13, color: '#ffe8e0', fontWeight: '600' },
-  deleteButton: {
-    padding: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
   footer: { padding: 16, backgroundColor: MD3_COLORS.surface, borderTopWidth: 1, borderTopColor: '#e5e5e5' },
   addButton: { backgroundColor: MD3_COLORS.primary, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   addButtonText: { color: MD3_COLORS.onPrimary, fontSize: 16, fontWeight: '600' },
