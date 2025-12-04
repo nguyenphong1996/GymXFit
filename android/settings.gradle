@@ -1,6 +1,14 @@
 pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
 plugins { id("com.facebook.react.settings") }
 extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
+
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url("../node_modules/react-native-vnpay-merchant/android/repo") }
+    }
+}
 rootProject.name = 'GymXFit'
 include ':app'
 includeBuild('../node_modules/@react-native/gradle-plugin')

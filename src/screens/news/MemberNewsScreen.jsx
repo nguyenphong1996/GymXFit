@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 const newsData = [
   {
@@ -53,10 +54,7 @@ const MemberNewsScreen = ({ navigation }) => {
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Image
-            source={require('@assets/images/back.png')}
-            style={styles.backIcon}
-          />
+          <MaterialIcons name="arrow-back" size={24} color="#FFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Tin tức</Text>
       </View>
@@ -100,12 +98,6 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 5,
     marginRight: 10,
-  },
-  backIcon: {
-    width: 18,
-    height: 18,
-    resizeMode: 'contain',
-    tintColor: '#FFF',
   },
   headerTitle: {
     color: '#FFF',

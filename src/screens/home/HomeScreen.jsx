@@ -464,7 +464,10 @@ const VideoCard = ({ video, onPress }) => {
         {video.thumbnail ? (
           <Image style={styles.videoCardImage} source={{ uri: video.thumbnail }} />
         ) : (
-          <Image style={styles.videoCardImage} source={require('@assets/images/lesmils1.jpg')} />
+          <View style={[styles.videoCardImage, styles.videoPlaceholder]}>
+            <MaterialCommunityIcons name="movie-open-play-outline" size={40} color="#fff" />
+            <Text style={styles.videoPlaceholderText}>Chưa có ảnh</Text>
+          </View>
         )}
         <Animated.View style={[styles.videoBadge, { transform: [{ scale: badgeScale }] }]}>
           <View pointerEvents="none" style={styles.videoBadgeHighlight} />
@@ -1109,6 +1112,17 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: '#f4f6f5',
+  },
+  videoPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#2f9d69',
+  },
+  videoPlaceholderText: {
+    color: '#f2fff7',
+    fontSize: 13,
+    fontWeight: '600',
   },
   videoBadge: {
     position: 'absolute',
