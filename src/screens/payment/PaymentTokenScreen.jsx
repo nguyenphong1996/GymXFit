@@ -176,14 +176,64 @@ const PaymentTokenScreen = ({ route, navigation }) => {
 
   useEffect(() => {
     const handleDeepLink = (event) => {
-        if (event.url && (event.url.includes('vnpay-return') || event.url.includes('vnp_ResponseCode'))) {
-             if (pollTimer.current) clearTimeout(pollTimer.current);
-             verifyPaymentFromUrl(event.url);
+        if (event.url) {
+             if (event.url.includes('payment-result')) {
+                 if (pollTimer.current) clearTimeout(pollTimer.current);
+                 handleBackendRedirect(event.url);
+             } else if (event.url.includes('vnpay-return') || event.url.includes('vnp_ResponseCode')) {
+                 if (pollTimer.current) clearTimeout(pollTimer.current);
+                 verifyPaymentFromUrl(event.url);
+             }
         }
     };
     const sub = Linking.addEventListener('url', handleDeepLink);
     return () => sub.remove();
   }, []);
+
+  const handleBackendRedirect = (url) => {
+    try {
+      const urlObj = new URL(url);
+      const params = Object.fromEntries(urlObj.searchParams.entries());
+      
+      // gymxfit://payment-result?code=00&message=Success&orderId=...&amount=...
+      
+      if (params.code === '00') {
+        navigation.navigate('PaymentResult', {
+          status: '00',
+          message: decodeURIComponent(params.message || 'Giao dịch thành công'),
+          amount: params.amount || plan?.price,
+          txnRef: params.orderId,
+          method: 'token',
+          bankCode: tokenMeta?.bankCode,
+          bankName: tokenMeta?.bankName,
+          cardMask: tokenMeta?.cardMask,
+          cardType: cardType,
+          cardHolderName: tokenMeta?.cardHolderName,
+          cardExpiry: tokenMeta?.cardExpiry,
+          planName: plan?.name,
+          paidAt: new Date().toLocaleString('vi-VN')
+        });
+      } else {
+        navigation.navigate('PaymentResult', {
+          status: params.code || '99',
+          message: decodeURIComponent(params.message || 'Giao dịch thất bại'),
+          amount: params.amount || plan?.price,
+          txnRef: params.orderId,
+          method: 'token',
+          bankCode: tokenMeta?.bankCode,
+          bankName: tokenMeta?.bankName,
+          cardMask: tokenMeta?.cardMask,
+          cardType: cardType,
+          cardHolderName: tokenMeta?.cardHolderName,
+          cardExpiry: tokenMeta?.cardExpiry,
+          planName: plan?.name,
+          paidAt: new Date().toLocaleString('vi-VN')
+        });
+      }
+    } catch (e) {
+      console.error('Error parsing backend redirect:', e);
+    }
+  };
 
   useEffect(() => {
     return () => {

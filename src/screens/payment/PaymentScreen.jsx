@@ -89,7 +89,9 @@ const PaymentScreen = ({ route, navigation }) => {
     const handleDeepLink = (event) => {
         if (event.url) {
             console.log('Deep link received:', event.url);
-            if (event.url.includes('vnpay-return') || event.url.includes('vnp_ResponseCode')) {
+            if (event.url.includes('payment-result')) {
+                handleBackendRedirect(event.url);
+            } else if (event.url.includes('vnpay-return') || event.url.includes('vnp_ResponseCode')) {
                 verifyPaymentFromUrl(event.url);
             }
         }
@@ -101,6 +103,40 @@ const PaymentScreen = ({ route, navigation }) => {
         subscription.remove();
     };
   }, []);
+
+  const handleBackendRedirect = (url) => {
+    try {
+      const urlObj = new URL(url);
+      const params = Object.fromEntries(urlObj.searchParams.entries());
+      
+      // gymxfit://payment-result?code=00&message=Success&orderId=...&amount=...
+      console.log('Backend redirect params:', params);
+
+      if (params.code === '00') {
+        navigation.navigate('PaymentResult', {
+          status: '00',
+          message: decodeURIComponent(params.message || 'Giao dịch thành công'),
+          amount: params.amount || plan?.price,
+          txnRef: params.orderId,
+          method: 'vnpay',
+          planName: plan?.name,
+          paidAt: new Date().toLocaleString('vi-VN')
+        });
+      } else {
+        navigation.navigate('PaymentResult', {
+          status: params.code || '99',
+          message: decodeURIComponent(params.message || 'Giao dịch thất bại'),
+          amount: params.amount || plan?.price,
+          txnRef: params.orderId,
+          method: 'vnpay',
+          planName: plan?.name,
+          paidAt: new Date().toLocaleString('vi-VN')
+        });
+      }
+    } catch (e) {
+      console.error('Error parsing backend redirect:', e);
+    }
+  };
 
   const openVnpaySdk = (url) => {
       try {
