@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,28 +7,26 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  StatusBar
+  StatusBar,
+  ScrollView,
+  Linking,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { UserContext } from '@context/UserContext';
-import { createVnpayTokenInitUrl, createVnpayTokenPayUrl, checkVnpayPaymentStatus } from '../../api/paymentApi';
+import { createVnpayTokenInitUrl, createVnpayTokenPayUrl, checkVnpayPaymentStatus, getVnpayTransactionStatus } from '../../api/paymentApi';
+import { isVnpaySdkAvailable, launchVnpaySdk } from '../../utils/vnpaySdk';
+import PaymentTokenCard from './components/PaymentTokenCard';
 
-// MD3 tokens reuse
 const MD3_COLORS = {
-  primary: '#1F8E4A',
+  primary: '#1F8E4A', // GymXFit green
   onPrimary: '#FFFFFF',
   surface: '#FFFFFF',
   background: '#F5F7F6',
   onSurface: '#191C19',
   textPrimary: '#10241A',
   textSecondary: '#47614F',
-};
-
-const MD3_TYPE = {
-  titleLarge: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
-  bodyLarge: { fontSize: 16, lineHeight: 24, fontWeight: '400' },
-  labelLarge: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
+  outline: '#C1C9BF',
+  error: '#BA1A1A',
 };
 
 const resolveUserId = (user) => {
@@ -37,177 +35,513 @@ const resolveUserId = (user) => {
 };
 
 const PaymentTokenScreen = ({ route, navigation }) => {
-  const { plan, token } = route.params || {};
+  const { plan, token, fromProfile, tokenMeta } = route.params || {};
+  console.log('PaymentTokenScreen params:', { tokenMeta, token, plan });
   const { user, isLoading: isUserLoading } = useContext(UserContext);
-  const [isLoading, setIsLoading] = useState(true);
+  
+  const [isLoading, setIsLoading] = useState(false);
   const [paymentUrl, setPaymentUrl] = useState('');
-  const [returnUrl, setReturnUrl] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [txnRef, setTxnRef] = useState('');
+  const [usingSdk, setUsingSdk] = useState(false);
+  const [forceNewToken, setForceNewToken] = useState(false); // Cho phép chuyển sang luồng tạo token mới nếu token cũ lỗi
+  const initialCardType = (route.params && route.params.cardType) || tokenMeta?.cardType || (token && token.cardType) || '01';
+  const [cardType, setCardType] = useState(initialCardType); // 01: Nội địa, 02: Quốc tế
 
-  const defaultApiBaseUrl = useMemo(() => {
-    const base = process.env.EXPO_PUBLIC_API_BASE_URL || process.env.API_BASE_URL || 'https://be.vnchack.com/';
-    return base.replace(/\/+$/, '');
-  }, []);
+  const pollTimer = useRef(null);
 
-  const extractReturnUrl = (fullPaymentUrl) => {
-    if (!fullPaymentUrl) {
-      return `${defaultApiBaseUrl}/api/v1/payment/vnpay-return`;
-    }
+  const extractTmnCode = (fullPaymentUrl) => {
+    if (!fullPaymentUrl) return null;
     try {
       const parsed = new URL(fullPaymentUrl);
-      const encodedReturn = parsed.searchParams.get('vnp_return_url');
-      if (encodedReturn) {
-        return decodeURIComponent(encodedReturn);
+      return parsed.searchParams.get('vnp_tmn_code') || parsed.searchParams.get('vnp_TmnCode');
+    } catch (err) {
+      console.warn('Không đọc được vnp_tmn_code từ paymentUrl:', err?.message);
+      return null;
+    }
+  };
+
+  const handlePayment = async () => {
+    if (isUserLoading) return;
+    setIsLoading(true);
+    setErrorMessage('');
+
+    try {
+      const userId = resolveUserId(user);
+      if (!userId) {
+        Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.', [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+        return;
+      }
+
+      const priceNumber = plan?.price ? (parseInt(plan.price.replace(/[^0-9]/g, ''), 10) || 0) : 0;
+      const basePayload = {
+        amount: priceNumber,
+        userId,
+        packageId: plan?.id,
+        orderInfo: plan ? `Thanh toan goi ${plan.name}` : 'Luu the VNPAY',
+        cardType,
+      };
+      const isTokenPay = Boolean(token) && !forceNewToken;
+      console.log('VNPAY token payload:', {
+        ...basePayload,
+        mode: isTokenPay ? 'pay' : (fromProfile ? 'token_create' : 'pay_and_create'),
+        hasToken: !!token,
+        forceNewToken,
+      });
+
+      const apiCall = isTokenPay ? createVnpayTokenPayUrl : createVnpayTokenInitUrl;
+      const response = await apiCall(
+        isTokenPay
+          ? { ...basePayload, token }
+          : { ...basePayload, mode: fromProfile ? 'token_create' : 'pay_and_create' }
+      );
+      console.log('VNPAY token api response:', response);
+
+      if (response && response.vnpUrl) {
+        console.log('VNPAY SDK - vnpUrl:', response.vnpUrl);
+        setPaymentUrl(response.vnpUrl);
+        if (response.txnRef) {
+          setTxnRef(response.txnRef);
+        }
+
+        openVnpaySdkSession(response.vnpUrl, response.txnRef);
+      } else {
+        Alert.alert('Lỗi', 'Không thể tạo URL thanh toán thẻ VNPAY.');
       }
     } catch (error) {
-      console.log('Không thể trích xuất returnUrl từ paymentUrl', error);
+      console.error('handlePayment error:', error?.response?.data || error);
+      const respMessage = error?.response?.data?.message;
+      const message = respMessage || error?.message || 'Đã có lỗi xảy ra khi chuẩn bị thanh toán.';
+      setErrorMessage(message);
+      Alert.alert('Lỗi', message);
+    } finally {
+      setIsLoading(false);
     }
-    return `${defaultApiBaseUrl}/api/v1/payment/vnpay-return`;
+  };
+
+  const pollStatus = async (ref, attempt = 0) => {
+    if (!ref) return;
+    if (pollTimer.current) clearTimeout(pollTimer.current);
+    
+    try {
+      const result = await getVnpayTransactionStatus(ref);
+      console.log('pollStatus result:', { attempt, ref, result });
+      if (result?.status === 'paid') {
+        navigation.navigate('PaymentResult', {
+          status: '00',
+          message: 'Giao dịch thành công',
+          amount: plan?.price,
+          txnRef: ref,
+          method: 'token',
+          bankCode: tokenMeta?.bankCode,
+          bankName: tokenMeta?.bankName,
+          cardMask: tokenMeta?.cardMask,
+          cardType: cardType,
+          cardHolderName: tokenMeta?.cardHolderName,
+          cardExpiry: tokenMeta?.cardExpiry,
+          planName: plan?.name,
+          paidAt: new Date().toLocaleString('vi-VN')
+        });
+        return;
+      }
+      if (result?.status === 'failed') {
+        navigation.navigate('PaymentResult', {
+          status: '99',
+          message: 'Giao dịch thất bại',
+          amount: plan?.price,
+          txnRef: ref,
+          method: 'token',
+          bankCode: tokenMeta?.bankCode,
+          bankName: tokenMeta?.bankName,
+          cardMask: tokenMeta?.cardMask,
+          cardType: cardType,
+          cardHolderName: tokenMeta?.cardHolderName,
+          cardExpiry: tokenMeta?.cardExpiry,
+          planName: plan?.name,
+          paidAt: new Date().toLocaleString('vi-VN')
+        });
+        return;
+      }
+    } catch (err) {
+      console.warn('Poll trạng thái giao dịch VNPAY lỗi:', err?.message);
+    }
+
+    if (attempt < 8) {
+      pollTimer.current = setTimeout(() => pollStatus(ref, attempt + 1), 2000);
+    }
   };
 
   useEffect(() => {
-    let isMounted = true;
-
-    const initPayment = async () => {
-      if (isUserLoading) return;
-      setIsLoading(true);
-
-      try {
-        const userId = resolveUserId(user);
-        if (!userId) {
-          Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.', [
-            { text: 'OK', onPress: () => navigation.goBack() }
-          ]);
-          return;
+    const handleDeepLink = (event) => {
+        if (event.url) {
+             if (event.url.includes('payment-result')) {
+                 if (pollTimer.current) clearTimeout(pollTimer.current);
+                 handleBackendRedirect(event.url);
+             } else if (event.url.includes('vnpay-return') || event.url.includes('vnp_ResponseCode')) {
+                 if (pollTimer.current) clearTimeout(pollTimer.current);
+                 verifyPaymentFromUrl(event.url);
+             }
         }
-
-        const priceNumber = parseInt(plan.price.replace(/[^0-9]/g, ''), 10) || 0;
-        const basePayload = {
-          amount: priceNumber,
-          userId,
-          packageId: plan.id,
-          orderInfo: `Thanh toan goi ${plan.name}`,
-        };
-
-        const apiCall = token ? createVnpayTokenPayUrl : createVnpayTokenInitUrl;
-        const response = await apiCall(
-          token
-            ? { ...basePayload, token }
-            : { ...basePayload, mode: 'pay_and_create' }
-        );
-
-        if (response && response.vnpUrl) {
-          if (isMounted) {
-            setPaymentUrl(response.vnpUrl);
-            setReturnUrl(extractReturnUrl(response.vnpUrl));
-          }
-        } else {
-          Alert.alert('Lỗi', 'Không thể tạo URL thanh toán thẻ VNPAY.', [
-            { text: 'OK', onPress: () => navigation.goBack() }
-          ]);
-        }
-      } catch (error) {
-        const respMessage = error?.response?.data?.message;
-        const message =
-          respMessage ||
-          error?.message ||
-          'Đã có lỗi xảy ra khi chuẩn bị thanh toán.';
-        setErrorMessage(message);
-        // console.warn để tránh RedBox khi dev
-        console.warn('Lỗi khi tạo URL thanh toán thẻ VNPAY:', message);
-        Alert.alert('Lỗi', message, [
-          { text: 'OK', onPress: () => navigation.goBack() }
-        ]);
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
     };
+    const sub = Linking.addEventListener('url', handleDeepLink);
+    return () => sub.remove();
+  }, []);
 
-    initPayment();
-    return () => { isMounted = false; };
-  }, [plan, navigation, user, isUserLoading, token]);
+  const handleBackendRedirect = (url) => {
+    try {
+      const urlObj = new URL(url);
+      const params = Object.fromEntries(urlObj.searchParams.entries());
+      
+      // gymxfit://payment-result?code=00&message=Success&orderId=...&amount=...
+      
+      if (params.code === '00') {
+        navigation.navigate('PaymentResult', {
+          status: '00',
+          message: decodeURIComponent(params.message || 'Giao dịch thành công'),
+          amount: params.amount || plan?.price,
+          txnRef: params.orderId,
+          method: 'token',
+          bankCode: tokenMeta?.bankCode,
+          bankName: tokenMeta?.bankName,
+          cardMask: tokenMeta?.cardMask,
+          cardType: cardType,
+          cardHolderName: tokenMeta?.cardHolderName,
+          cardExpiry: tokenMeta?.cardExpiry,
+          planName: plan?.name,
+          paidAt: new Date().toLocaleString('vi-VN')
+        });
+      } else {
+        navigation.navigate('PaymentResult', {
+          status: params.code || '99',
+          message: decodeURIComponent(params.message || 'Giao dịch thất bại'),
+          amount: params.amount || plan?.price,
+          txnRef: params.orderId,
+          method: 'token',
+          bankCode: tokenMeta?.bankCode,
+          bankName: tokenMeta?.bankName,
+          cardMask: tokenMeta?.cardMask,
+          cardType: cardType,
+          cardHolderName: tokenMeta?.cardHolderName,
+          cardExpiry: tokenMeta?.cardExpiry,
+          planName: plan?.name,
+          paidAt: new Date().toLocaleString('vi-VN')
+        });
+      }
+    } catch (e) {
+      console.error('Error parsing backend redirect:', e);
+    }
+  };
 
-  const handleNavigationStateChange = async (navState) => {
-    if (!returnUrl) return;
+  useEffect(() => {
+    return () => {
+      if (pollTimer.current) clearTimeout(pollTimer.current);
+    };
+  }, []);
 
-    const normalizedReturnUrl = returnUrl.replace(/\/+$/, '');
-    const normalizedNavUrl = navState.url?.replace(/\/+$/, '');
-    if (!normalizedNavUrl || !normalizedNavUrl.startsWith(normalizedReturnUrl)) return;
+  const openVnpaySdkSession = (vnpUrl, refFromApi) => {
+    if (!vnpUrl) {
+      Alert.alert('Lỗi', 'Không tìm thấy đường dẫn thanh toán VNPAY.');
+      return;
+    }
 
-    if (navState.loading || isVerifying) return;
-
-    setIsVerifying(true);
-    Alert.alert('Thông báo', 'Đang xác nhận kết quả giao dịch...');
+    if (!isVnpaySdkAvailable) {
+      setErrorMessage('VNPAY SDK chưa sẵn sàng trên thiết bị.');
+      Alert.alert('Lỗi', 'Ứng dụng thanh toán VNPAY chưa sẵn sàng trên thiết bị.');
+      return;
+    }
 
     try {
-      const url = new URL(navState.url);
+      setUsingSdk(true);
+      setErrorMessage('');
+      const tmnFromEnv = process.env.EXPO_PUBLIC_VNP_TMNCODE || process.env.VNP_TMNCODE;
+      const tmnFromUrl = extractTmnCode(vnpUrl);
+      const tmnCode = tmnFromEnv || tmnFromUrl || '';
+      console.log('Launching VNPAY SDK with:', {
+        tmnCode,
+        isSandbox: true,
+        paymentUrl: vnpUrl,
+        txnRef: refFromApi,
+      });
+      launchVnpaySdk({
+        scheme: 'com.gymxfit',
+        paymentUrl: vnpUrl,
+        tmnCode,
+        isSandbox: true,
+        title: 'Thanh toán VNPAY',
+      });
+      if (refFromApi) {
+        pollStatus(refFromApi, 0);
+      }
+    } catch (sdkError) {
+      console.warn('Không mở được VNPAY SDK:', sdkError?.message);
+      setUsingSdk(false);
+      setErrorMessage('Không thể mở ứng dụng thanh toán, vui lòng thử lại.');
+      Alert.alert('Lỗi', 'Không thể mở ứng dụng thanh toán.');
+    }
+  };
+
+  const verifyPaymentFromUrl = async (urlString) => {
+    if (isVerifying) return;
+    setIsVerifying(true);
+
+    try {
+      const url = new URL(urlString);
       const queryParams = Object.fromEntries(url.searchParams.entries());
+      console.log('verifyPaymentFromUrl params:', queryParams);
+      
+      if (!queryParams.vnp_ResponseCode) {
+         setIsVerifying(false);
+         return;
+      }
+
       const result = await checkVnpayPaymentStatus(queryParams);
+      console.log('checkVnpayPaymentStatus result:', result);
+
+      const resolvedBankCode = queryParams.vnp_BankCode || tokenMeta?.bankCode;
+      const resolvedBankName = tokenMeta?.bankName || tokenMeta?.bankCode;
+      const resolvedCardType = queryParams.vnp_CardType || tokenMeta?.cardType || cardType;
+      const resolvedCardMask = tokenMeta?.cardMask;
+      const resolvedCardHolder = tokenMeta?.cardHolderName || user?.name;
+      const resolvedCardExpiry = tokenMeta?.cardExpiry;
 
       if (result.code === '00') {
-        Alert.alert('Thành công', 'Thanh toán VNPAY thành công!');
+        navigation.navigate('PaymentResult', {
+          status: '00',
+          message: 'Giao dịch thành công',
+          amount: plan?.price,
+          txnRef: queryParams.vnp_TxnRef || txnRef,
+          method: 'token',
+          bankCode: resolvedBankCode,
+          bankName: resolvedBankName,
+          cardMask: resolvedCardMask,
+          cardType: resolvedCardType,
+          cardHolderName: resolvedCardHolder,
+          cardExpiry: resolvedCardExpiry,
+          planName: plan?.name,
+          paidAt: new Date().toLocaleString('vi-VN')
+        });
       } else {
-        Alert.alert('Thất bại', `Thanh toán không thành công: ${result.message || 'Vui lòng thử lại.'}`);
+        navigation.navigate('PaymentResult', {
+          status: result.code || '99',
+          message: result.message || 'Giao dịch thất bại',
+          amount: plan?.price,
+          txnRef: queryParams.vnp_TxnRef || txnRef,
+          method: 'token',
+          bankCode: resolvedBankCode,
+          bankName: resolvedBankName,
+          cardMask: resolvedCardMask,
+          cardType: resolvedCardType,
+          cardHolderName: resolvedCardHolder,
+          cardExpiry: resolvedCardExpiry,
+          planName: plan?.name,
+          paidAt: new Date().toLocaleString('vi-VN')
+        });
       }
     } catch (error) {
       console.error('Lỗi khi xác nhận thanh toán VNPAY:', error);
       Alert.alert('Lỗi', 'Không thể xác nhận trạng thái thanh toán.');
-    } finally {
-      setIsVerifying(false);
       navigation.goBack();
+    } finally {
+      // Keep verifying state until navigation happens
     }
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={MD3_COLORS.surface} />
-      <View style={styles.topAppBar}>
-        <TouchableOpacity style={styles.appBarButton} onPress={() => navigation.goBack()}>
-          <MaterialIcons name="close" size={24} color={MD3_COLORS.onSurface} />
-        </TouchableOpacity>
-        <Text style={styles.appBarTitle}>Thanh toán thẻ VNPAY</Text>
-        <View style={styles.appBarButton} />
-      </View>
-
-      <View style={styles.summaryContainer}>
-        <Text style={styles.summaryText}>Gói dịch vụ: <Text style={styles.summaryValue}>{plan.name}</Text></Text>
-        <Text style={styles.summaryText}>Số tiền: <Text style={styles.summaryValue}>{plan.price}</Text></Text>
-      </View>
-
-      {errorMessage ? (
-        <View style={styles.loaderContainer}>
-          <Text style={styles.errorText}>{errorMessage}</Text>
+  // Render SDK flow (loading + re-open)
+  if (paymentUrl && (usingSdk || isVerifying)) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={MD3_COLORS.surface} />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <MaterialIcons name="close" size={24} color={MD3_COLORS.onSurface} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Cổng thanh toán VNPAY</Text>
+          <View style={{ width: 40 }} />
         </View>
-      ) : paymentUrl ? (
-        <WebView
-          source={{ uri: paymentUrl }}
-          style={{ flex: 1 }}
-          onLoadStart={() => setIsLoading(true)}
-          onLoadEnd={() => setIsLoading(false)}
-          onNavigationStateChange={handleNavigationStateChange}
-          startInLoadingState={true}
-          renderLoading={() => (
-            <View style={styles.loaderContainer}>
-              <ActivityIndicator size="large" color={MD3_COLORS.primary} />
-              <Text style={styles.loaderText}>Đang tải trang thanh toán...</Text>
-            </View>
-          )}
-        />
-      ) : (
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color={MD3_COLORS.primary} />
-          <Text style={styles.loaderText}>Đang tạo giao dịch, vui lòng chờ...</Text>
+          <Text style={styles.loaderText}>
+            {isVerifying ? 'Đang xác nhận kết quả...' : 'Đang mở ứng dụng thanh toán...'}
+          </Text>
+          {!isVerifying && (
+            <>
+              <TouchableOpacity
+                style={styles.reopenButton}
+                onPress={() => openVnpaySdkSession(paymentUrl, txnRef)}
+              >
+                <Text style={styles.reopenButtonText}>Mở lại ứng dụng thanh toán</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => navigation.goBack()}
+              >
+                <Text style={styles.cancelButtonText}>Hủy bỏ</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
-      )}
+      </SafeAreaView>
+    );
+  }
 
-      {isLoading && !paymentUrl && (
-        <View style={styles.fullScreenLoader}>
-          <ActivityIndicator size="large" color={MD3_COLORS.onPrimary} />
+  const showConfirmButton = Boolean(plan) || !token;
+  const confirmLabel = forceNewToken
+    ? 'Thanh toán & tạo token mới'
+    : fromProfile
+      ? 'Liên kết thẻ ngay'
+      : `Thanh toán ${plan?.price || ''}`;
+
+  // Render Card Design UI
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={MD3_COLORS.primary} />
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <MaterialIcons name="arrow-back" size={24} color={MD3_COLORS.onSurface} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{fromProfile ? 'Thêm thẻ mới' : 'Thanh toán'}</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.content}>
+        {/* Card Preview */}
+        <PaymentTokenCard
+          bankName={tokenMeta?.bankName}
+          bankCode={tokenMeta?.bankCode}
+          cardMask={tokenMeta?.cardMask || token?.cardMask}
+          cardHolderName={tokenMeta?.cardHolderName}
+          cardExpiry={tokenMeta?.cardExpiry}
+        />
+
+        {/* Transaction Info */}
+        {plan && (
+          <View style={styles.infoContainer}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Dịch vụ</Text>
+              <Text style={styles.infoValue}>{plan.name}</Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Số tiền</Text>
+              <Text style={styles.priceValue}>{plan.price}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Token Details */}
+        {tokenMeta && (
+          <View style={styles.infoContainer}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Ngân hàng</Text>
+              <Text style={styles.infoValue}>{tokenMeta.bankName || tokenMeta.bankCode}</Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Loại thẻ</Text>
+              <Text style={styles.infoValue}>
+                {tokenMeta.cardType === '01' ? 'Thẻ nội địa (ATM)' : 
+                 tokenMeta.cardType === '02' ? 'Thẻ quốc tế' : 
+                 tokenMeta.cardType || '—'}
+              </Text>
+            </View>
+            {tokenMeta.cardHolderName ? (
+              <>
+                <View style={styles.divider} />
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Chủ thẻ</Text>
+                  <Text style={styles.infoValue}>{tokenMeta.cardHolderName}</Text>
+                </View>
+              </>
+            ) : null}
+          </View>
+        )}
+
+        {/* Card Type Selection (Only if not using existing token) */}
+        {!token && (
+          <View style={styles.selectionContainer}>
+            <Text style={styles.sectionTitle}>Chọn loại thẻ</Text>
+            
+            <TouchableOpacity 
+              style={[styles.optionCard, cardType === '01' && styles.optionCardSelected]}
+              onPress={() => setCardType('01')}
+            >
+              <View style={styles.optionIconContainer}>
+                <MaterialIcons name="credit-card" size={24} color={cardType === '01' ? MD3_COLORS.primary : '#666'} />
+              </View>
+              <View style={styles.optionTextContainer}>
+                <Text style={[styles.optionTitle, cardType === '01' && styles.optionTitleSelected]}>
+                  Thẻ ATM / Tài khoản ngân hàng
+                </Text>
+                <Text style={styles.optionSubtitle}>Thẻ nội địa Napas</Text>
+              </View>
+              <View style={styles.radioButton}>
+                {cardType === '01' && <View style={styles.radioButtonInner} />}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.optionCard, cardType === '02' && styles.optionCardSelected]}
+              onPress={() => setCardType('02')}
+            >
+              <View style={styles.optionIconContainer}>
+                <MaterialIcons name="public" size={24} color={cardType === '02' ? MD3_COLORS.primary : '#666'} />
+              </View>
+              <View style={styles.optionTextContainer}>
+                <Text style={[styles.optionTitle, cardType === '02' && styles.optionTitleSelected]}>
+                  Thẻ thanh toán quốc tế
+                </Text>
+                <Text style={styles.optionSubtitle}>Visa, MasterCard, JCB</Text>
+              </View>
+              <View style={styles.radioButton}>
+                {cardType === '02' && <View style={styles.radioButtonInner} />}
+              </View>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Error Message */}
+        {errorMessage ? (
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        ) : null}
+
+      </ScrollView>
+
+      {token && !fromProfile ? (
+        <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+          <TouchableOpacity
+            style={[styles.outlineButton, forceNewToken && styles.outlineButtonActive]}
+            onPress={() => setForceNewToken((prev) => !prev)}
+          >
+            <Text style={styles.outlineButtonText}>
+              {forceNewToken ? 'Đang dùng luồng tạo token mới' : 'Gặp lỗi? Thử tạo token mới'}
+            </Text>
+          </TouchableOpacity>
         </View>
-      )}
+      ) : null}
+
+      {/* Bottom Button */}
+      {showConfirmButton ? (
+        <View style={styles.footer}>
+          <TouchableOpacity 
+            style={styles.confirmButton}
+            onPress={handlePayment}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.confirmButtonText}>
+                {confirmLabel}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 };
@@ -217,65 +551,223 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: MD3_COLORS.background,
   },
-  topAppBar: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    height: 56,
     backgroundColor: MD3_COLORS.surface,
-    paddingHorizontal: 4,
-    height: 64,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee'
+    borderBottomColor: '#E0E0E0',
   },
-  appBarButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  backButton: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  appBarTitle: {
-    ...MD3_TYPE.titleLarge,
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
     color: MD3_COLORS.onSurface,
-    textAlign: 'center',
   },
-  summaryContainer: {
+  content: {
     padding: 16,
-    backgroundColor: MD3_COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee'
+    paddingBottom: 100,
   },
-  summaryText: {
-    ...MD3_TYPE.bodyLarge,
+  infoContainer: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  infoLabel: {
+    fontSize: 14,
     color: MD3_COLORS.textSecondary,
-    marginBottom: 4,
   },
-  summaryValue: {
-    ...MD3_TYPE.labelLarge,
+  infoValue: {
+    fontSize: 16,
+    fontWeight: '600',
     color: MD3_COLORS.textPrimary,
+  },
+  priceValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: MD3_COLORS.primary,
+  },
+  debugBox: {
+    backgroundColor: '#F0F4F2',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  debugTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: MD3_COLORS.textSecondary,
+    marginBottom: 6,
+  },
+  debugLine: {
+    fontSize: 12,
+    color: MD3_COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E0E0E0',
+    marginVertical: 8,
+  },
+  selectionContainer: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: MD3_COLORS.textPrimary,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  optionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  optionCardSelected: {
+    borderColor: MD3_COLORS.primary,
+    backgroundColor: '#E7F4EC',
+  },
+  optionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  optionTextContainer: {
+    flex: 1,
+  },
+  optionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: MD3_COLORS.textPrimary,
+  },
+  optionTitleSelected: {
+    color: MD3_COLORS.primary,
+  },
+  optionSubtitle: {
+    fontSize: 13,
+    color: MD3_COLORS.textSecondary,
+    marginTop: 2,
+  },
+  radioButton: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#C1C9BF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioButtonInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: MD3_COLORS.primary,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFF',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  confirmButton: {
+    backgroundColor: MD3_COLORS.primary,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+  },
+  confirmButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
   loaderContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: MD3_COLORS.background
+    backgroundColor: MD3_COLORS.background,
   },
   loaderText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: MD3_COLORS.textSecondary,
+  },
+  reopenButton: {
+    marginTop: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: MD3_COLORS.primary,
+    borderRadius: 12,
+  },
+  reopenButtonText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  cancelButton: {
     marginTop: 10,
-    ...MD3_TYPE.bodyLarge,
-    color: MD3_COLORS.textSecondary
+    paddingVertical: 10,
+  },
+  cancelButtonText: {
+    color: MD3_COLORS.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  outlineButton: {
+    borderWidth: 1,
+    borderColor: MD3_COLORS.primary,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  outlineButtonActive: {
+    backgroundColor: '#E7F4EC',
+  },
+  outlineButtonText: {
+    color: MD3_COLORS.primary,
+    fontSize: 14,
+    fontWeight: '700',
   },
   errorText: {
-    ...MD3_TYPE.bodyLarge,
-    color: '#BA1A1A',
+    color: MD3_COLORS.error,
     textAlign: 'center',
+    marginTop: 16,
     paddingHorizontal: 16,
-  },
-  fullScreenLoader: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 });
 

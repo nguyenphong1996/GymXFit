@@ -1,8 +1,11 @@
 // 📁 src/screens/booking/BookScreen.jsx
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+// Giao diện đặt lịch PT kiểu MUI: chọn mục tiêu, PT, ngày, và ca 2 giờ.
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Dimensions,
-  Modal,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -10,120 +13,732 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useFocusEffect } from '@react-navigation/native';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { UserContext } from '@context/UserContext';
+import {
+  getPtAvailability,
+  createPtBooking,
+  listPtBookings,
+  cancelPtBooking,
+} from '@api/ptBookingApi';
+import { listStaff } from '@api/staffApi';
 
-const { width } = Dimensions.get('window');
-const H_PADDING = 20;
-const CELL_GAP = 8;
-const CELL_SIZE = (width - H_PADDING * 2 - CELL_GAP * 6) / 7;
+const SKILL_LABEL_MAP = {
+  strength: 'Strength',
+  cardio: 'Cardio',
+  mobility: 'Mobility',
+  yoga: 'Yoga',
+  rehab: 'Rehab',
+  nutrition: 'Nutrition',
+  boxing: 'Boxing',
+  kickboxing: 'Kickboxing',
+  hiit: 'HIIT',
+  pilates: 'Pilates',
+  dance: 'Dance',
+  zumba: 'Zumba',
+};
 
-const BookScreen = ({ navigation }) => {
-  const [mode, setMode] = useState('month'); // 'month' | 'week'
-  const [displayedDate, setDisplayedDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [modalVisible, setModalVisible] = useState(false);
-  const [shiftData, setShiftData] = useState([]);
-  const [selectedTrainer, setSelectedTrainer] = useState('');
-  const [selectedShift, setSelectedShift] = useState(null);
+// Demo PT list – cần thay bằng API list PT khi có
+const PT_LIST = [
+  {
+    id: '671234567890123456789012',
+    name: 'PT Minh',
+    specialty: 'Strength',
+    skills: ['strength', 'cardio'],
+    years: 6,
+    avatar: null,
+  },
+  {
+    id: '671234567890123456789013',
+    name: 'PT Hoa',
+    specialty: 'Yoga',
+    skills: ['yoga', 'mobility'],
+    years: 4,
+    avatar: null,
+  },
+  {
+    id: '671234567890123456789014',
+    name: 'PT Quân',
+    specialty: 'Mobility',
+    skills: ['mobility', 'rehab'],
+    years: 5,
+    avatar: null,
+  },
+];
 
-  useFocusEffect(
-    useCallback(() => {
-      StatusBar.setHidden(true, 'fade');
-      return () => {
-        StatusBar.setHidden(false, 'fade');
-      };
-    }, []),
+const DAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+const MONTH_NAMES = [
+  'Tháng 1',
+  'Tháng 2',
+  'Tháng 3',
+  'Tháng 4',
+  'Tháng 5',
+  'Tháng 6',
+  'Tháng 7',
+  'Tháng 8',
+  'Tháng 9',
+  'Tháng 10',
+  'Tháng 11',
+  'Tháng 12',
+];
+const CALENDAR_COLORS = {
+  primary: '#1F8E4A',
+  onPrimary: '#FFFFFF',
+  primaryContainer: '#C2F0D4',
+  surface: '#FFFFFF',
+  outline: '#D7E5DB',
+  textPrimary: '#10241A',
+  textSecondary: '#47614F',
+  secondary: '#3A5B4C',
+};
+const ITEM_WIDTH = 56;
+const BOOKING_STATUS_LABEL = {
+  pending: 'Chờ xác nhận',
+  confirmed: 'Đã xác nhận',
+  completed: 'Hoàn thành',
+  cancelled: 'Đã hủy',
+};
+const BOOKING_STATUS_COLORS = {
+  pending: '#F59E0B',
+  confirmed: '#22C55E',
+  completed: '#1D4ED8',
+  cancelled: '#9CA3AF',
+};
+
+const SLOT_LABELS = {
+  available: 'Trống',
+  booked: 'Đã đặt',
+  booked_by_you: 'Bạn đã đặt',
+  blocked: 'Bận (lớp)',
+  pending_staff: 'Chờ PT',
+};
+
+const FIXED_SHIFTS = [
+  { id: 1, label: 'Ca 1', time: '08:00 - 10:00', key: '08:00' },
+  { id: 2, label: 'Ca 2', time: '10:00 - 12:00', key: '10:00' },
+  { id: 3, label: 'Ca 3', time: '12:00 - 14:00', key: '12:00' },
+  { id: 4, label: 'Ca 4', time: '14:00 - 16:00', key: '14:00' },
+  { id: 5, label: 'Ca 5', time: '16:00 - 18:00', key: '16:00' },
+  { id: 6, label: 'Ca 6', time: '18:00 - 20:00', key: '18:00' },
+];
+
+const pad2 = n => String(n).padStart(2, '0');
+const formatDateKey = date => {
+  if (!date) return '';
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+};
+
+const formatMonthYear = date => {
+  if (!date) return '';
+  return `${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`;
+};
+
+const formatDateLabel = date => {
+  if (!date) return '--/--';
+  try {
+    const d = new Date(date);
+    return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+  } catch {
+    return '--/--';
+  }
+};
+
+const formatTimeRange = (start, end) => {
+  try {
+    const startDate = new Date(start);
+    const endDate = end ? new Date(end) : null;
+    const formatter = value =>
+      value.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    return endDate ? `${formatter(startDate)} - ${formatter(endDate)}` : formatter(startDate);
+  } catch {
+    return '--:--';
+  }
+};
+
+const isSameDay = (dateA, dateB) => {
+  if (!dateA || !dateB) return false;
+  return (
+    dateA.getDate() === dateB.getDate() &&
+    dateA.getMonth() === dateB.getMonth() &&
+    dateA.getFullYear() === dateB.getFullYear()
   );
+};
 
-  useEffect(() => {
-    // Demo dữ liệu ca tập - cần thay bằng API thật ở môi trường production
-    setShiftData([
-      { id: 1, date: '2025-11-01', shift: 'Ca sáng (06:00 - 09:00)' },
-      { id: 2, date: '2025-11-02', shift: 'Ca chiều (14:00 - 17:00)' },
-      { id: 3, date: '2025-11-03', shift: 'Ca tối (18:00 - 21:00)' },
-    ]);
+const buildSlotsForUI = slots =>
+  (slots || []).map(slot => ({
+    key: slot.key || slot.slotKey,
+    status: slot.status,
+    bookingId: slot.bookingId,
+  }));
+
+const normalizeBookingItem = item => {
+  if (!item) return null;
+  const startTime =
+    item.startTime || item.start_at || item.start || item.start_date || item.date;
+  const endTime = item.endTime || item.end_at || item.end;
+  const staffName =
+    item.staffName ||
+    item.trainerName ||
+    item.ptName ||
+    item.staff?.name ||
+    item.pt?.name ||
+    'Huấn luyện viên';
+  const status = item.status || item.bookingStatus || 'pending';
+  return {
+    bookingId: item.bookingId || item.id || item._id,
+    staffName,
+    startTime,
+    endTime,
+    status,
+    slotKey: item.slotKey || item.slot || item.slot_key,
+  };
+};
+
+function BookScreen({ navigation }) {
+  const { user } = useContext(UserContext);
+  const userName = user?.name || user?.phone || 'Bạn';
+  const [selectedTab, setSelectedTab] = useState('Booking');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [trainers, setTrainers] = useState(PT_LIST);
+  const [ptLoading, setPtLoading] = useState(false);
+  const [ptError, setPtError] = useState(null);
+  const [selectedTrainer, setSelectedTrainer] = useState(PT_LIST[0]);
+  const flatListRef = useRef(null);
+  const anchorIndex = 5000;
+  const anchorDate = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  }, []);
+  const [selectedDate, setSelectedDate] = useState(anchorDate);
+  const [selectedDateIndex, setSelectedDateIndex] = useState(anchorIndex);
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    return new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
+  });
+  const [slots, setSlots] = useState([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookings, setBookings] = useState([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [bookingsError, setBookingsError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const infiniteDays = useMemo(() => {
+    const arr = [];
+    for (let i = 0; i < 10001; i += 1) {
+      const offset = i - anchorIndex;
+      const date = new Date(anchorDate);
+      date.setDate(anchorDate.getDate() + offset);
+      arr.push({
+        id: `${date.getTime()}-${i}`,
+        index: i,
+        dateObj: date,
+        dayNumber: date.getDate(),
+        label: DAY_LABELS[date.getDay()],
+        isToday: isSameDay(date, anchorDate),
+      });
+    }
+    return arr;
+  }, [anchorDate, anchorIndex]);
+
+  const currentSelectedDate = useMemo(() => {
+    const value =
+      selectedDate instanceof Date && !Number.isNaN(selectedDate.getTime())
+        ? selectedDate
+        : new Date(selectedDate || Date.now());
+    if (Number.isNaN(value.getTime())) return new Date();
+    const clone = new Date(value);
+    clone.setHours(0, 0, 0, 0);
+    return clone;
+  }, [selectedDate]);
+
+  const skillLabel = useCallback(key => {
+    if (!key) return 'Other';
+    const normalized = key.toString().toLowerCase();
+    if (SKILL_LABEL_MAP[normalized]) return SKILL_LABEL_MAP[normalized];
+    const humanized = normalized
+      .replace(/[_\-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, c => c.toUpperCase());
+    return humanized || 'Other';
   }, []);
 
-  const formatDateKey = date => {
-    if (!date) return '';
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  };
-
-  const monthDays = useMemo(() => {
-    const year = displayedDate.getFullYear();
-    const month = displayedDate.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const days = [];
-
-    for (let i = 0; i < firstDay.getDay(); i += 1) {
-      days.push(null);
-    }
-    for (let d = 1; d <= lastDay.getDate(); d += 1) {
-      days.push(new Date(year, month, d));
-    }
-    const remainder = days.length % 7;
-    if (remainder !== 0) {
-      const need = 7 - remainder;
-      for (let i = 0; i < need; i += 1) {
-        days.push(null);
-      }
-    }
-    return days;
-  }, [displayedDate]);
-
-  const weekDays = useMemo(() => {
-    const tmp = new Date(displayedDate);
-    const start = new Date(tmp);
-    start.setDate(tmp.getDate() - tmp.getDay());
-    return Array.from({ length: 7 }, (_, index) => {
-      const d = new Date(start);
-      d.setDate(start.getDate() + index);
-      return d;
+  const skillOptions = useMemo(() => {
+    const dataSource = trainers?.length ? trainers : PT_LIST;
+    const skillMap = new Map();
+    dataSource.forEach(pt => {
+      (pt.skills || []).forEach(skillKey => {
+        const label = skillLabel(skillKey);
+        if (skillKey && !skillMap.has(skillKey)) {
+          skillMap.set(skillKey, label);
+        }
+      });
     });
-  }, [displayedDate]);
+    const options = Array.from(skillMap.entries()).map(([key, label]) => ({ key, label }));
+    options.sort((a, b) => a.label.localeCompare(b.label, 'en'));
+    return [{ key: 'all', label: 'All' }, ...options];
+  }, [skillLabel, trainers]);
 
-  const handlePrev = () => {
-    const next = new Date(displayedDate);
-    if (mode === 'month') {
-      next.setMonth(displayedDate.getMonth() - 1);
-    } else {
-      next.setDate(displayedDate.getDate() - 7);
+  const filteredTrainers = useMemo(() => {
+    const dataSource = trainers?.length ? trainers : PT_LIST;
+    return dataSource.filter(pt => {
+      const matchCategory = selectedCategory === 'all' || pt.skills?.includes(selectedCategory);
+      return matchCategory;
+    });
+  }, [trainers, selectedCategory]);
+
+  useEffect(() => {
+    if (!filteredTrainers.length) {
+      setSelectedTrainer(null);
+      return;
     }
-    setDisplayedDate(next);
-  };
-
-  const handleNext = () => {
-    const next = new Date(displayedDate);
-    if (mode === 'month') {
-      next.setMonth(displayedDate.getMonth() + 1);
-    } else {
-      next.setDate(displayedDate.getDate() + 7);
+    if (!selectedTrainer || !filteredTrainers.some(pt => pt.id === selectedTrainer.id)) {
+      setSelectedTrainer(filteredTrainers[0]);
     }
-    setDisplayedDate(next);
+  }, [filteredTrainers, selectedTrainer]);
+
+  useEffect(() => {
+    const hasSelected = skillOptions.some(opt => opt.key === selectedCategory);
+    if (!hasSelected) {
+      setSelectedCategory('all');
+    }
+  }, [selectedCategory, skillOptions]);
+
+  const staffIdToUse = useMemo(() => selectedTrainer?.id || '', [selectedTrainer]);
+
+  const normalizeSkillKey = useCallback(value => {
+    if (!value) return null;
+    const lower = value.toString().trim().toLowerCase();
+    if (!lower) return null;
+    if (lower.includes('yoga')) return 'yoga';
+    if (lower.includes('linh') || lower.includes('mobility')) return 'mobility';
+    if (lower.includes('phục') || lower.includes('phuc') || lower.includes('rehab')) return 'rehab';
+    if (lower.includes('giảm') || lower.includes('giam') || lower.includes('cardio') || lower.includes('fat')) {
+      return 'cardio';
+    }
+    if (lower.includes('tăng') || lower.includes('tang') || lower.includes('strength') || lower.includes('muscle')) {
+      return 'strength';
+    }
+    return lower.replace(/\s+/g, '_');
+  }, []);
+
+  const mapStaffToTrainer = useCallback(
+    staff => {
+      if (!staff) return null;
+
+      // Try to find user object if nested (common in populated responses)
+      const userObj =
+        staff.userId && typeof staff.userId === 'object'
+          ? staff.userId
+          : staff.user && typeof staff.user === 'object'
+            ? staff.user
+            : {};
+
+      const rawSkills =
+        staff.skills ||
+        staff.skill ||
+        staff.skillName ||
+        staff.skillList ||
+        staff.skill_list ||
+        staff.specialties ||
+        staff.specializations ||
+        staff.category ||
+        staff.tags ||
+        staff.categories;
+      const skillArray = Array.isArray(rawSkills)
+        ? rawSkills
+        : typeof rawSkills === 'string'
+          ? rawSkills.split(',').map(s => s.trim()).filter(Boolean)
+          : [];
+
+      const normalizedSkills = skillArray.map(normalizeSkillKey).filter(Boolean);
+      const primarySkill =
+        normalizedSkills[0] ||
+        normalizeSkillKey(staff.specialty) ||
+        normalizeSkillKey(staff.title) ||
+        null;
+
+      const years =
+        staff.yearsOfExperience ||
+        staff.experienceYears ||
+        staff.experience ||
+        staff.experience_years ||
+        staff.yoe ||
+        0;
+
+      // Resolve avatar from staff root or nested user object
+      let avatar =
+        staff.avatar ||
+        staff.photo ||
+        staff.profileImage ||
+        staff.avatarUrl ||
+        staff.photoUrl ||
+        staff.image;
+      if (!avatar) {
+        avatar =
+          userObj.avatar ||
+          userObj.photo ||
+          userObj.profileImage ||
+          userObj.avatarUrl ||
+          userObj.image;
+      }
+
+      // Resolve name
+      const name =
+        staff.name ||
+        staff.fullName ||
+        staff.displayName ||
+        staff.username ||
+        userObj.name ||
+        userObj.fullName ||
+        userObj.displayName ||
+        'PT';
+
+      // Resolve ID
+      const id =
+        staff.id ||
+        staff._id ||
+        staff.staffId ||
+        (typeof staff.userId === 'string' ? staff.userId : userObj._id || userObj.id) ||
+        staff.staff_id ||
+        staff.objectId;
+
+      const trainer = {
+        id,
+        name,
+        specialty:
+          staff.specialty ||
+          staff.title ||
+          staff.position ||
+          skillLabel(primarySkill) ||
+          'Huấn luyện viên cá nhân',
+        skills: normalizedSkills.length
+          ? normalizedSkills
+          : primarySkill
+            ? [primarySkill]
+            : ['strength'],
+        years: Number(years) || 0,
+        avatar,
+      };
+
+      return trainer.id ? trainer : null;
+    },
+    [normalizeSkillKey, skillLabel],
+  );
+
+  const fetchStaffList = useCallback(async () => {
+    setPtLoading(true);
+    setPtError(null);
+    try {
+      const response = await listStaff({ page: 1, limit: 50 });
+      const normalized = (response || []).map(mapStaffToTrainer).filter(Boolean);
+      if (normalized.length) {
+        setTrainers(normalized);
+      } else {
+        setPtError('Không tìm thấy PT từ API, hiển thị danh sách mặc định.');
+        setTrainers(PT_LIST);
+      }
+    } catch (error) {
+      const message = error?.response?.data?.message || error?.message || 'Không tải được danh sách PT.';
+      setPtError(message);
+      setTrainers(prev => (prev && prev.length ? prev : PT_LIST));
+    } finally {
+      setPtLoading(false);
+    }
+  }, [mapStaffToTrainer]);
+
+  useEffect(() => {
+    fetchStaffList();
+  }, [fetchStaffList]);
+
+  const handleSelectTrainer = trainer => {
+    setSelectedTrainer(trainer);
   };
 
-  const openDayModal = date => {
-    if (!date) return;
-    setSelectedDate(date);
-    setSelectedShift(null);
-    setModalVisible(true);
+  useEffect(() => {
+    StatusBar.setHidden(true, 'fade');
+    return () => StatusBar.setHidden(false, 'fade');
+  }, []);
+
+  const fetchBookings = useCallback(
+    async (isPullToRefresh = false) => {
+      if (isPullToRefresh) {
+        setRefreshing(true);
+      } else {
+        setBookingsLoading(true);
+      }
+      setBookingsError(null);
+      try {
+        const response = await listPtBookings({ limit: 50 });
+        const raw =
+          Array.isArray(response) ? response : response?.data || response?.items || response?.results || [];
+        const rawList = Array.isArray(raw) ? raw : [];
+        const normalized = rawList.map(normalizeBookingItem).filter(Boolean);
+        setBookings(normalized);
+      } catch (error) {
+        setBookings([]);
+        setBookingsError(
+          error?.response?.data?.message || error?.message || 'Không tải được lịch đã đặt.',
+        );
+      } finally {
+        setBookingsLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [],
+  );
+
+  const monthTitle = useMemo(() => formatMonthYear(currentMonth), [currentMonth]);
+
+  const goToMonth = useCallback(
+    delta => {
+      const newMonth = new Date(currentMonth);
+      newMonth.setMonth(currentMonth.getMonth() + delta);
+      const targetDate = new Date(newMonth.getFullYear(), newMonth.getMonth(), 1);
+      const diffDays = Math.floor((targetDate - anchorDate) / (1000 * 60 * 60 * 24));
+      const newIndex = anchorIndex + diffDays;
+
+      if (newIndex >= 0 && newIndex < infiniteDays.length) {
+        setCurrentMonth(targetDate);
+        setSelectedDate(targetDate);
+        setSelectedDateIndex(newIndex);
+        flatListRef.current?.scrollToIndex({
+          index: newIndex,
+          animated: true,
+          viewPosition: 0.5,
+        });
+      }
+    },
+    [anchorDate, anchorIndex, currentMonth, infiniteDays],
+  );
+
+  const goToPreviousMonth = useCallback(() => goToMonth(-1), [goToMonth]);
+  const goToNextMonth = useCallback(() => goToMonth(1), [goToMonth]);
+
+  const handleGoToday = useCallback(() => {
+    const todayClone = new Date(anchorDate);
+    setSelectedDate(todayClone);
+    setSelectedDateIndex(anchorIndex);
+    setCurrentMonth(new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1));
+    flatListRef.current?.scrollToIndex({
+      index: anchorIndex,
+      animated: true,
+      viewPosition: 0.5,
+    });
+  }, [anchorDate, anchorIndex]);
+
+  const handlePressDay = useCallback(day => {
+    setSelectedDate(day.dateObj);
+    setSelectedDateIndex(day.index);
+    setCurrentMonth(new Date(day.dateObj.getFullYear(), day.dateObj.getMonth(), 1));
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    if (selectedTab === 'Lịch PT đã đặt') {
+      fetchBookings(true);
+    }
+  }, [selectedTab, fetchBookings]);
+
+  useEffect(() => {
+    if (selectedTab === 'Lịch PT đã đặt') {
+      fetchBookings();
+    }
+  }, [selectedTab, fetchBookings]);
+
+  useEffect(() => {
+    const fetchSlots = async () => {
+      if (!staffIdToUse || !currentSelectedDate) {
+        setSlots([]);
+        return;
+      }
+
+      // Nếu là PT mẫu (dummy) thì trả về dữ liệu giả để không gọi API lỗi
+      const isDummy = PT_LIST.some(pt => pt.id === staffIdToUse);
+      if (isDummy) {
+        setSlots(buildSlotsForUI([
+          { key: '08:00', status: 'available' },
+          { key: '10:00', status: 'booked' },
+          { key: '14:00', status: 'available' },
+          { key: '16:00', status: 'available' },
+        ]));
+        return;
+      }
+
+      setLoadingSlots(true);
+      try {
+        const dateStr = formatDateKey(currentSelectedDate);
+        console.log('Fetching slots for:', staffIdToUse, dateStr);
+        const res = await getPtAvailability(staffIdToUse, dateStr);
+        console.log('Slots response:', JSON.stringify(res, null, 2));
+        
+        let rawSlots = [];
+        if (res && Array.isArray(res.slots)) {
+          rawSlots = res.slots;
+        } else if (typeof res?.slots === 'number') {
+          // Handle bitmask format (e.g. slots: 3 -> binary 011 -> index 0 and 1 available)
+          const mask = res.slots;
+          rawSlots = FIXED_SHIFTS.reduce((acc, shift, index) => {
+            if ((mask & (1 << index)) !== 0) {
+              acc.push({ key: shift.key, status: 'available' });
+            }
+            return acc;
+          }, []);
+          console.log('Converted bitmask', mask, 'to slots:', rawSlots);
+        } else if (res && Array.isArray(res)) {
+          rawSlots = res;
+        } else {
+          console.log('Unexpected slots format:', res);
+        }
+
+        setSlots(buildSlotsForUI(rawSlots));
+      } catch (error) {
+        console.log('Error fetching slots:', error);
+        // Không alert lỗi để tránh spam popup khi lướt
+        setSlots([]);
+      } finally {
+        setLoadingSlots(false);
+      }
+    };
+    fetchSlots();
+  }, [staffIdToUse, currentSelectedDate]);
+
+  const bookSlot = async slot => {
+    if (!staffIdToUse) {
+      Alert.alert('Thiếu PT', 'Vui lòng chọn hoặc nhập mã PT.');
+      return;
+    }
+    setBookingLoading(true);
+    try {
+      await createPtBooking({
+        staffId: staffIdToUse,
+        date: formatDateKey(currentSelectedDate),
+        slotKey: slot.key,
+      });
+      Alert.alert('Đã gửi yêu cầu', 'Booking đang chờ PT xác nhận.');
+      const res = await getPtAvailability(staffIdToUse, formatDateKey(currentSelectedDate));
+      setSlots(buildSlotsForUI(res?.slots || []));
+    } catch (error) {
+      Alert.alert(
+        'Đặt lịch thất bại',
+        error?.response?.data?.message || error?.message || 'Không thể đặt ca này.',
+      );
+    } finally {
+      setBookingLoading(false);
+    }
   };
 
-  const today = new Date();
-  const selectedKey = formatDateKey(selectedDate);
-  const shiftsForSelected = shiftData.filter(item => item.date === selectedKey);
+  const handleCancelBooking = useCallback(
+    booking => {
+      if (!booking?.bookingId) return;
+      Alert.alert('Hủy lịch', 'Bạn chắc chắn muốn hủy lịch này?', [
+        { text: 'Không', style: 'cancel' },
+        {
+          text: 'Hủy lịch',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await cancelPtBooking(booking.bookingId);
+              fetchBookings();
+            } catch (error) {
+              Alert.alert(
+                'Không thể hủy',
+                error?.response?.data?.message || error?.message || 'Vui lòng thử lại.',
+              );
+            }
+          },
+        },
+      ]);
+    },
+    [fetchBookings],
+  );
 
-  const monthLabel = () => {
-    const m = displayedDate.getMonth() + 1;
-    const y = displayedDate.getFullYear();
-    return `Tháng ${m < 10 ? `0${m}` : m} - ${y}`;
-  };
+  const renderCalendar = () => (
+    <View style={styles.calendarSection}>
+      <View style={styles.calendarHeader}>
+        <TouchableOpacity style={styles.calendarNavButton} onPress={goToPreviousMonth}>
+          <Icon name="chevron-left" size={22} color={CALENDAR_COLORS.primary} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.monthYearButton}
+          activeOpacity={0.9}
+          onPress={handleGoToday}
+        >
+          <Text style={styles.monthYearText}>{monthTitle}</Text>
+          <Icon name="event" size={18} color={CALENDAR_COLORS.primary} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.calendarNavButton} onPress={goToNextMonth}>
+          <Icon name="chevron-right" size={22} color={CALENDAR_COLORS.primary} />
+        </TouchableOpacity>
+      </View>
+
+      <FlatList
+        ref={flatListRef}
+        horizontal
+        data={infiniteDays}
+        keyExtractor={item => item.id}
+        renderItem={({ item }) => {
+          const isSelected = item.index === selectedDateIndex;
+          const isToday = item.isToday;
+          return (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => handlePressDay(item)}
+              style={[
+                styles.dayContainer,
+                isSelected && styles.selectedDayContainer,
+                isToday && !isSelected && styles.todayContainer,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.dayName,
+                  isSelected && styles.selectedDayName,
+                  isToday && !isSelected && styles.todayText,
+                ]}
+              >
+                {item.label}
+              </Text>
+              <Text
+                style={[
+                  styles.dayDate,
+                  isSelected && styles.selectedDayDate,
+                  isToday && !isSelected && styles.todayText,
+                ]}
+              >
+                {item.dayNumber}
+              </Text>
+              {isToday && !isSelected && <View style={styles.todayDot} />}
+            </TouchableOpacity>
+          );
+        }}
+        initialScrollIndex={anchorIndex}
+        getItemLayout={(_, index) => ({
+          length: ITEM_WIDTH + 8,
+          offset: (ITEM_WIDTH + 8) * index,
+          index,
+        })}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.daysScrollContainer}
+        onScrollToIndexFailed={info => {
+          const wait = new Promise(resolve => setTimeout(resolve, 300));
+          wait.then(() => {
+            flatListRef.current?.scrollToIndex({
+              index: info.index,
+              animated: true,
+              viewPosition: 0.5,
+            });
+          });
+        }}
+        windowSize={11}
+        maxToRenderPerBatch={20}
+        removeClippedSubviews={false}
+      />
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -131,256 +746,286 @@ const BookScreen = ({ navigation }) => {
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerIcon} onPress={() => navigation?.goBack?.()}>
-          <Icon name="arrow-back" size={24} color="#fff" />
+          <Icon name="arrow-back" size={24} color={CALENDAR_COLORS.onPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Đặt lịch huấn luyện viên</Text>
-        <View style={styles.headerPlaceholder} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.banner}>
-          <View style={styles.bannerBadge}>
-            <Icon name="fitness-center" size={18} color="#30C451" />
-            <Text style={styles.bannerBadgeText}>GymXFit</Text>
-          </View>
-          <Text style={styles.bannerTitle}>Chọn ngày &amp; HLV đồng hành</Text>
-          <Text style={styles.bannerSubtitle}>
-            Lên lịch tập cá nhân hóa, duy trì phong độ và tinh thần luyện tập mỗi ngày.
-          </Text>
+        <View style={styles.headerContent}>
+          <Text style={styles.greeting}>Xin chào, {userName} 👋</Text>
+          <Text style={styles.headerSubtitle}>Đặt lịch tập luyện hôm nay</Text>
         </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Huấn luyện viên</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => setSelectedTrainer(selectedTrainer)}>
-            <Text style={styles.dropdownText}>
-              {selectedTrainer || 'Chọn huấn luyện viên phù hợp'}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, selectedTab === 'Booking' && styles.activeTab]}
+            onPress={() => setSelectedTab('Booking')}
+          >
+            <MaterialCommunityIcons
+              name="format-list-bulleted"
+              size={18}
+              color={selectedTab === 'Booking' ? CALENDAR_COLORS.primary : CALENDAR_COLORS.onPrimary}
+            />
+            <Text style={[styles.tabText, selectedTab === 'Booking' && styles.activeTabText]}>
+              Đặt PT
             </Text>
-            <Icon name="keyboard-arrow-down" size={24} color="#102615" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, selectedTab === 'Lịch PT đã đặt' && styles.activeTab]}
+            onPress={() => setSelectedTab('Lịch PT đã đặt')}
+          >
+            <MaterialCommunityIcons
+              name="calendar-check"
+              size={18}
+              color={
+                selectedTab === 'Lịch PT đã đặt'
+                  ? CALENDAR_COLORS.primary
+                  : CALENDAR_COLORS.onPrimary
+              }
+            />
+            <Text
+              style={[styles.tabText, selectedTab === 'Lịch PT đã đặt' && styles.activeTabText]}
+            >
+              Lịch PT đã đặt
+            </Text>
           </TouchableOpacity>
         </View>
+      </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Câu lạc bộ</Text>
-          <View style={styles.clubCard}>
-            <Icon name="location-on" size={20} color="#30C451" />
-            <Text style={styles.clubText}>GymXFit Center</Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.calendarCard}>
-            <View style={styles.calendarHeaderRow}>
-              <TouchableOpacity style={styles.calendarControl} onPress={handlePrev}>
-                <Icon name="chevron-left" size={24} color="#102615" />
-              </TouchableOpacity>
-              <View style={styles.calendarHeaderText}>
-                <Text style={styles.calendarTitle}>
-                  {mode === 'month'
-                    ? monthLabel()
-                    : `${weekDays[0].toLocaleDateString('vi-VN', {
-                        day: '2-digit',
-                        month: '2-digit',
-                      })} - ${weekDays[6].toLocaleDateString('vi-VN', {
-                        day: '2-digit',
-                        month: '2-digit',
-                      })}`}
-                </Text>
-                <Text style={styles.calendarSubtitle}>
-                  {selectedDate.toLocaleDateString('vi-VN', {
-                    weekday: 'long',
-                    day: '2-digit',
-                    month: '2-digit',
-                  })}
-                </Text>
-              </View>
-              <TouchableOpacity style={styles.calendarControl} onPress={handleNext}>
-                <Icon name="chevron-right" size={24} color="#102615" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modeSwitcher}>
-              {['month', 'week'].map(value => (
-                <TouchableOpacity
-                  key={value}
-                  style={[styles.modeChip, mode === value && styles.modeChipActive]}
-                  onPress={() => setMode(value)}
-                >
-                  <Text style={[styles.modeChipText, mode === value && styles.modeChipTextActive]}>
-                    {value === 'month' ? 'Tháng' : 'Tuần'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.weekdayRow}>
-              {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map(label => (
-                <Text key={label} style={styles.weekdayLabel}>
-                  {label}
-                </Text>
-              ))}
-            </View>
-
-            {mode === 'month' ? (
-              <View style={styles.monthGrid}>
-                {monthDays.map((date, index) => {
-                  const isToday =
-                    date &&
-                    date.getDate() === today.getDate() &&
-                    date.getMonth() === today.getMonth() &&
-                    date.getFullYear() === today.getFullYear();
-                  const isSelected =
-                    date &&
-                    date.getDate() === selectedDate.getDate() &&
-                    date.getMonth() === selectedDate.getMonth() &&
-                    date.getFullYear() === selectedDate.getFullYear();
-                  return (
-                    <TouchableOpacity
-                      key={`${date?.toISOString?.() || index}`}
-                      activeOpacity={date ? 0.9 : 1}
-                      style={[
-                        styles.dayCell,
-                        !date && styles.dayCellEmpty,
-                        isToday && styles.dayCellToday,
-                        isSelected && styles.dayCellSelected,
-                      ]}
-                      onPress={() => openDayModal(date)}
-                      disabled={!date}
-                    >
-                      <Text
-                        style={[
-                          styles.dayCellText,
-                          !date && styles.dayCellTextEmpty,
-                          isToday && styles.dayCellTextToday,
-                          isSelected && styles.dayCellTextSelected,
-                        ]}
-                      >
-                        {date ? date.getDate() : ''}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ) : (
-              <View style={styles.weekRow}>
-                {weekDays.map(date => {
-                  const isToday = date.toDateString() === today.toDateString();
-                  const isSelected = date.toDateString() === selectedDate.toDateString();
-                  return (
-                    <TouchableOpacity
-                      key={date.toISOString()}
-                      activeOpacity={0.9}
-                      style={[
-                        styles.weekCell,
-                        isToday && styles.dayCellToday,
-                        isSelected && styles.dayCellSelected,
-                      ]}
-                      onPress={() => openDayModal(date)}
-                    >
-                      <Text
-                        style={[
-                          styles.weekCellDay,
-                          isSelected && styles.dayCellTextSelected,
-                        ]}
-                      >
-                        {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][date.getDay()]}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.weekCellDate,
-                          isSelected && styles.dayCellTextSelected,
-                        ]}
-                      >
-                        {date.getDate()}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.noticeCard}>
-            <View style={styles.noticeHeader}>
-              <Icon name="event-note" size={20} color="#30C451" />
-              <Text style={styles.noticeTitle}>
-                Ca tập ngày {selectedDate.toLocaleDateString('vi-VN')}
-              </Text>
-            </View>
-
-            <View style={styles.noticeContent}>
-              {shiftsForSelected.length > 0 ? (
-                shiftsForSelected.map(shift => (
-                  <TouchableOpacity
-                    key={shift.id}
-                    activeOpacity={0.9}
-                    style={[
-                      styles.shiftChip,
-                      selectedShift?.id === shift.id && styles.shiftChipActive,
-                    ]}
-                    onPress={() => setSelectedShift(shift)}
-                  >
-                    <Icon
-                      name="access-time"
-                      size={18}
-                      color={selectedShift?.id === shift.id ? '#fff' : '#30C451'}
-                    />
-                    <Text
-                      style={[
-                        styles.shiftText,
-                        selectedShift?.id === shift.id && styles.shiftTextActive,
-                      ]}
-                    >
-                      {shift.shift}
-                    </Text>
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <Text style={styles.noticeEmpty}>
-                  Chưa có ca mở cho ngày này, vui lòng chọn ngày khác hoặc liên hệ HLV để được hỗ trợ.
-                </Text>
-              )}
-            </View>
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.primaryButton}>
-          <Icon name="event-available" size={20} color="#fff" />
-          <Text style={styles.primaryButtonText}>
-            Xác nhận đặt lịch {selectedShift ? 'với ca đã chọn' : ''}
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          selectedTab === 'Lịch PT đã đặt'
+            ? (
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                colors={[CALENDAR_COLORS.primary]}
+                tintColor={CALENDAR_COLORS.primary}
+              />
+            )
+            : undefined
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>
-              Ca tập {selectedDate.toLocaleDateString('vi-VN')}
-            </Text>
-            {shiftsForSelected.length > 0 ? (
-              shiftsForSelected.map(shift => (
-                <View key={shift.id} style={styles.modalShiftRow}>
-                  <Icon name="schedule" size={18} color="#30C451" />
-                  <Text style={styles.modalShiftText}>{shift.shift}</Text>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.modalEmpty}>Chưa có ca nào cho ngày này.</Text>
-            )}
+        {selectedTab === 'Booking' ? (
+          <>
+            {renderCalendar()}
 
-            <TouchableOpacity style={styles.modalButton} onPress={() => setModalVisible(false)}>
-              <Text style={styles.modalButtonText}>Đóng</Text>
-            </TouchableOpacity>
+            <View style={[styles.section, styles.sectionCategory]}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoryScroll}
+              >
+                {skillOptions.map(cat => {
+                  const active = cat.key === selectedCategory;
+                  return (
+                    <TouchableOpacity
+                      key={cat.key}
+                      style={[styles.chip, active && styles.chipActive]}
+                      onPress={() => setSelectedCategory(cat.key)}
+                      activeOpacity={0.9}
+                    >
+                      <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                        {cat.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            <View style={styles.section}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>Danh sách PT</Text>
+                {ptLoading ? <ActivityIndicator size="small" color="#30C451" /> : null}
+              </View>
+              {ptError ? <Text style={styles.errorText}>{ptError}</Text> : null}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.ptRow}
+                snapToAlignment="start"
+                decelerationRate="fast"
+              >
+                {filteredTrainers.length ? (
+                  filteredTrainers.map(pt => {
+                    const active = selectedTrainer?.id === pt.id;
+                    return (
+                      <TouchableOpacity
+                        key={pt.id}
+                        style={[styles.ptCard, active && styles.ptCardActive]}
+                        onPress={() => handleSelectTrainer(pt)}
+                        activeOpacity={0.9}
+                      >
+                        <View style={styles.ptAvatarContainer}>
+                          {pt.avatar ? (
+                            <Image source={{ uri: pt.avatar }} style={styles.ptAvatar} />
+                          ) : (
+                            <View style={[styles.ptAvatar, styles.ptAvatarPlaceholder]}>
+                              <Icon name="person" size={30} color="#30C451" />
+                            </View>
+                          )}
+                          {active && (
+                            <View style={styles.activeBadge}>
+                              <Icon name="check" size={12} color="#fff" />
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.ptName} numberOfLines={1}>
+                          {pt.name}
+                        </Text>
+                        <Text style={styles.ptSkillText} numberOfLines={1}>
+                          {pt.skills?.length ? skillLabel(pt.skills[0]) : 'Personal Trainer'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })
+                ) : (
+                  <View style={[styles.emptyCard, { width: 200 }]}>
+                    <Icon name="search-off" size={26} color="#9ca3af" />
+                    <Text style={styles.emptyTitle}>No PT found</Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+
+            <View style={styles.section}>
+              {loadingSlots ? (
+                <ActivityIndicator color="#30C451" />
+              ) : !staffIdToUse || !currentSelectedDate ? (
+                <Text style={styles.emptySlots}>Chọn PT và ngày để xem ca trống.</Text>
+              ) : (
+                <View style={styles.slotGrid}>
+                  {FIXED_SHIFTS.map(shift => {
+                    const slotData = slots.find(s => s.key === shift.key) || {};
+                    const status = slotData.status || 'unavailable';
+                    const isAvailable = status === 'available';
+                    const isMine = status === 'booked_by_you';
+                    const isBlocked = status === 'blocked' || status === 'booked';
+                    const displayStatus = SLOT_LABELS[status] || (status === 'unavailable' ? 'Không có lịch' : status);
+
+                    return (
+                      <TouchableOpacity
+                        key={shift.id}
+                        style={[
+                          styles.slotCard,
+                          isAvailable && styles.slotAvailable,
+                          isMine && styles.slotMine,
+                          isBlocked && styles.slotBlocked,
+                          status === 'unavailable' && styles.slotUnavailable,
+                        ]}
+                        activeOpacity={isAvailable ? 0.85 : 1}
+                        onPress={() => isAvailable && bookSlot({ key: shift.key })}
+                        disabled={!isAvailable}
+                      >
+                        <View>
+                          <Text style={[styles.slotLabel, isAvailable && styles.slotLabelActive]}>
+                            {shift.label}
+                          </Text>
+                          <Text style={[styles.slotTime, isAvailable && styles.slotTimeActive]}>
+                            {shift.time}
+                          </Text>
+                        </View>
+                        <Text
+                          style={[
+                            styles.slotStatus,
+                            isAvailable && styles.slotStatusActive,
+                            isMine && styles.slotStatusMine,
+                          ]}
+                        >
+                          {displayStatus}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+              {bookingLoading && <ActivityIndicator style={{ marginTop: 8 }} color="#30C451" />}
+            </View>
+          </>
+        ) : (
+          <View style={styles.section}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Lịch PT đã đặt</Text>
+              {bookingsLoading && !refreshing ? (
+                <ActivityIndicator size="small" color={CALENDAR_COLORS.primary} />
+              ) : null}
+            </View>
+            {bookingsError ? <Text style={styles.errorText}>{bookingsError}</Text> : null}
+            {bookingsLoading && !refreshing ? (
+              <View style={styles.emptyCard}>
+                <ActivityIndicator color={CALENDAR_COLORS.primary} />
+              </View>
+            ) : bookings.length === 0 ? (
+              <View style={[styles.emptyCard, { alignItems: 'center' }]}>
+                <MaterialCommunityIcons
+                  name="calendar-blank-outline"
+                  size={48}
+                  color={CALENDAR_COLORS.outline}
+                />
+                <Text style={styles.emptyTitle}>Chưa có lịch</Text>
+                <Text style={styles.emptySubtitle}>Các booking PT của bạn sẽ hiển thị tại đây.</Text>
+              </View>
+            ) : (
+              bookings.map((booking, idx) => {
+                const key = booking.bookingId || `${booking.startTime || 'booking'}-${idx}`;
+                const statusColor =
+                  BOOKING_STATUS_COLORS[booking.status] || CALENDAR_COLORS.textSecondary;
+                const canCancel =
+                  booking.status !== 'cancelled' &&
+                  booking.status !== 'completed';
+                return (
+                  <View key={key} style={styles.bookingCard}>
+                    <View style={styles.bookingCardHeader}>
+                      <View style={styles.bookingTitleRow}>
+                        <MaterialCommunityIcons
+                          name="account-circle"
+                          size={24}
+                          color={CALENDAR_COLORS.primary}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.bookingTrainer}>{booking.staffName}</Text>
+                          {booking.slotKey ? (
+                            <Text style={styles.bookingSlot}>Ca: {booking.slotKey}</Text>
+                          ) : null}
+                        </View>
+                      </View>
+                      <View
+                        style={[
+                          styles.bookingStatusBadge,
+                          { backgroundColor: `${statusColor}22`, borderColor: statusColor },
+                        ]}
+                      >
+                        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                        <Text style={[styles.bookingStatusText, { color: statusColor }]}>
+                          {BOOKING_STATUS_LABEL[booking.status] || booking.status}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.bookingInfoRow}>
+                      <Icon name="event" size={18} color={CALENDAR_COLORS.secondary} />
+                      <Text style={styles.bookingInfoText}>{formatDateLabel(booking.startTime)}</Text>
+                    </View>
+                    <View style={styles.bookingInfoRow}>
+                      <Icon name="schedule" size={18} color={CALENDAR_COLORS.secondary} />
+                      <Text style={styles.bookingInfoText}>
+                        {formatTimeRange(booking.startTime, booking.endTime)}
+                      </Text>
+                    </View>
+
+                    {canCancel ? (
+                      <TouchableOpacity
+                        style={styles.cancelButton}
+                        onPress={() => handleCancelBooking(booking)}
+                      >
+                        <Text style={styles.cancelButtonText}>Hủy lịch</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                );
+              })
+            )}
           </View>
-        </View>
-      </Modal>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -393,28 +1038,60 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F9F5',
   },
   header: {
-    backgroundColor: '#30C451',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: CALENDAR_COLORS.primary,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 16,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
+    shadowColor: CALENDAR_COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   headerIcon: {
-    padding: 6,
+    padding: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignSelf: 'flex-start',
   },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
+  headerContent: {
+    marginTop: 12,
+    gap: 6,
   },
-  headerPlaceholder: {
-    width: 32,
+  greeting: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: CALENDAR_COLORS.onPrimary,
   },
+  headerSubtitle: {
+    fontSize: 14,
+    color: CALENDAR_COLORS.primaryContainer,
+    fontWeight: '600',
+  },
+  tabContainer: {
+    marginTop: 16,
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    padding: 4,
+    borderRadius: 16,
+    gap: 6,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  activeTab: {
+    backgroundColor: CALENDAR_COLORS.surface,
+  },
+  tabText: { color: CALENDAR_COLORS.onPrimary, fontWeight: '700' },
+  activeTabText: { color: CALENDAR_COLORS.primary },
   scrollContent: {
     paddingBottom: 40,
   },
@@ -453,324 +1130,336 @@ const styles = StyleSheet.create({
     color: '#cfe9d6',
   },
   section: {
-    marginTop: 24,
-    paddingHorizontal: H_PADDING,
+    marginTop: 12,
+    paddingHorizontal: 20,
+  },
+  sectionCategory: {
+    marginTop: 12,
+    paddingHorizontal: 20,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#102615',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  dropdown: {
+  categoryScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 0,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#d0d7de',
+    marginRight: 10,
+  },
+  chipActive: {
+    backgroundColor: '#30C451',
+    borderColor: '#30C451',
+  },
+  chipText: { color: '#102615', fontWeight: '600' },
+  chipTextActive: { color: '#fff' },
+  input: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: '#d0d7de',
+    color: '#0f172a',
+  },
+  helperText: {
+    display: 'none',
+  },
+  errorText: {
+    marginTop: 6,
+    color: '#ef4444',
+    fontSize: 12,
+  },
+  ptRow: {
+    marginTop: 12,
+    paddingRight: 20,
+    gap: 12,
+  },
+  ptCard: {
+    width: 120,
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginRight: 12,
+    shadowColor: '#102615',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  ptCardActive: {
+    borderColor: '#30C451',
+    backgroundColor: '#F0FDF4',
+  },
+  ptAvatarContainer: {
+    position: 'relative',
+    marginBottom: 8,
+  },
+  ptAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+  },
+  ptAvatarPlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#E6F9ED',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activeBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#30C451',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  ptName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#102615',
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  ptSkillText: {
+    fontSize: 12,
+    color: '#64748b',
+    textAlign: 'center',
+  },
+  emptyCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 14,
+    padding: 16,
+    alignItems: 'center',
+  },
+  emptyTitle: { marginTop: 6, fontWeight: '700', color: '#0f172a' },
+  emptySubtitle: { marginTop: 4, color: '#6b7280', fontSize: 12, textAlign: 'center' },
+  bookingCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#102615',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(48,196,81,0.25)',
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+    marginTop: 12,
+    gap: 10,
   },
-  dropdownText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#102615',
-  },
-  clubCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    shadowColor: '#102615',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-  },
-  clubText: {
-    marginLeft: 10,
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#102615',
-  },
-  calendarCard: {
-    backgroundColor: '#fff',
-    borderRadius: 22,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    shadowColor: '#102615',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-  },
-  calendarHeaderRow: {
+  bookingCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  calendarControl: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#ECF7EF',
+  bookingTitleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    marginRight: 8,
+  },
+  bookingTrainer: { fontSize: 16, fontWeight: '700', color: CALENDAR_COLORS.textPrimary },
+  bookingSlot: { marginTop: 4, fontSize: 13, color: CALENDAR_COLORS.textSecondary },
+  bookingStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 6,
+  },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  bookingStatusText: { fontSize: 12, fontWeight: '700' },
+  bookingInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  bookingInfoText: { fontSize: 14, color: CALENDAR_COLORS.textSecondary, fontWeight: '600' },
+  cancelButton: {
+    marginTop: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#F87171',
+  },
+  cancelButtonText: { color: '#B91C1C', fontWeight: '700', fontSize: 13 },
+  calendarSection: {
+    backgroundColor: CALENDAR_COLORS.surface,
+    paddingTop: 20,
+    paddingBottom: 20,
+    marginTop: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: CALENDAR_COLORS.outline,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  calendarNavButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
     justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: CALENDAR_COLORS.primaryContainer,
   },
   calendarHeaderText: {
     alignItems: 'center',
+    gap: 6,
   },
-  calendarTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#102615',
-  },
-  calendarSubtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#5C6F66',
-  },
-  modeSwitcher: {
+  monthYearButton: {
     flexDirection: 'row',
-    backgroundColor: '#ECF7EF',
-    borderRadius: 18,
-    padding: 4,
-    marginTop: 16,
-    marginBottom: 12,
-  },
-  modeChip: {
-    flex: 1,
-    borderRadius: 14,
     alignItems: 'center',
-    paddingVertical: 8,
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: CALENDAR_COLORS.primaryContainer,
   },
-  modeChipActive: {
-    backgroundColor: '#30C451',
-    shadowColor: '#30C451',
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
+  monthYearText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: CALENDAR_COLORS.textPrimary,
+  },
+  daysScrollContainer: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  dayContainer: {
+    width: ITEM_WIDTH,
+    height: 72,
+    borderRadius: 16,
+    backgroundColor: CALENDAR_COLORS.surface,
+    borderWidth: 2,
+    borderColor: CALENDAR_COLORS.outline,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 4,
+  },
+  selectedDayContainer: {
+    backgroundColor: CALENDAR_COLORS.primary,
+    borderColor: CALENDAR_COLORS.primary,
+    shadowColor: CALENDAR_COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
     elevation: 4,
   },
-  modeChipText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#102615',
+  todayContainer: {
+    borderColor: CALENDAR_COLORS.primary,
   },
-  modeChipTextActive: {
-    color: '#fff',
-  },
-  weekdayRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 4,
-  },
-  weekdayLabel: {
-    width: CELL_SIZE,
-    textAlign: 'center',
-    fontWeight: '700',
-    color: '#6F8579',
-  },
-  monthGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 12,
-  },
-  dayCell: {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: CELL_GAP,
-    backgroundColor: '#F5FBF7',
-  },
-  dayCellEmpty: {
-    backgroundColor: 'transparent',
-  },
-  dayCellToday: {
-    borderWidth: 2,
-    borderColor: '#30C451',
-  },
-  dayCellSelected: {
-    backgroundColor: '#30C451',
-    shadowColor: '#30C451',
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 5,
-  },
-  dayCellText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#102615',
-  },
-  dayCellTextToday: {
-    color: '#30C451',
-  },
-  dayCellTextSelected: {
-    color: '#fff',
-  },
-  dayCellTextEmpty: {
-    color: 'transparent',
-  },
-  weekRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 12,
-  },
-  weekCell: {
-    width: CELL_SIZE,
-    borderRadius: 16,
-    paddingVertical: 12,
-    backgroundColor: '#F5FBF7',
-    alignItems: 'center',
-  },
-  weekCellDay: {
+  dayName: {
     fontSize: 12,
-    color: '#6F8579',
     fontWeight: '600',
+    color: CALENDAR_COLORS.textSecondary,
     marginBottom: 4,
   },
-  weekCellDate: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#102615',
-  },
-  noticeCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    paddingVertical: 20,
-    paddingHorizontal: 18,
-    shadowColor: '#102615',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-  },
-  noticeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  noticeTitle: {
-    marginLeft: 10,
-    fontSize: 16,
+  dayDate: {
+    fontSize: 20,
     fontWeight: '700',
-    color: '#102615',
+    color: CALENDAR_COLORS.textPrimary,
   },
-  noticeContent: {
-    gap: 10,
+  selectedDayName: {
+    color: CALENDAR_COLORS.primaryContainer,
   },
-  shiftChip: {
+  selectedDayDate: {
+    color: CALENDAR_COLORS.onPrimary,
+  },
+  todayText: {
+    color: CALENDAR_COLORS.primary,
+  },
+  todayDot: {
+    position: 'absolute',
+    bottom: 6,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: CALENDAR_COLORS.primary,
+  },
+  slotGrid: {
+    flexDirection: 'column',
+    gap: 12,
+    marginTop: 8,
+  },
+  slotCard: {
+    width: '100%',
+    borderRadius: 12,
+    padding: 16,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#F5FBF7',
-    borderWidth: 1,
-    borderColor: 'rgba(48,196,81,0.3)',
-    gap: 10,
+    justifyContent: 'space-between',
   },
-  shiftChipActive: {
-    backgroundColor: '#30C451',
+  slotAvailable: {
+    backgroundColor: '#fff',
     borderColor: '#30C451',
     shadowColor: '#30C451',
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
-  shiftText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#102615',
+  slotMine: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#22C55E',
   },
-  shiftTextActive: {
-    color: '#fff',
+  slotBlocked: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+    opacity: 0.7,
   },
-  noticeEmpty: {
-    fontSize: 14,
-    color: '#6F8579',
-    fontStyle: 'italic',
-    lineHeight: 20,
+  slotUnavailable: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    opacity: 0.5,
   },
-  primaryButton: {
-    marginTop: 30,
-    marginHorizontal: H_PADDING,
-    backgroundColor: '#30C451',
-    borderRadius: 18,
-    paddingVertical: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#30C451',
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
-  },
-  primaryButtonText: {
-    marginLeft: 10,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  modalContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    paddingHorizontal: 20,
-    paddingVertical: 22,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#102615',
-    marginBottom: 14,
-  },
-  modalShiftRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    gap: 10,
-  },
-  modalShiftText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#102615',
-  },
-  modalEmpty: {
-    fontSize: 14,
-    color: '#6F8579',
-    fontStyle: 'italic',
-  },
-  modalButton: {
-    marginTop: 20,
-    backgroundColor: '#30C451',
-    borderRadius: 14,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 15,
-  },
+  slotLabel: { fontSize: 16, fontWeight: '800', color: '#64748B', marginBottom: 4 },
+  slotLabelActive: { color: '#102615' },
+  slotTime: { fontSize: 13, fontWeight: '600', color: '#94A3B8' },
+  slotTimeActive: { color: '#475569' },
+  slotStatus: { fontSize: 13, fontWeight: '700', color: '#94A3B8' },
+  slotStatusActive: { color: '#30C451' },
+  slotStatusMine: { color: '#15803D' },
+  emptySlots: { color: '#6b7280', fontSize: 14 },
 });

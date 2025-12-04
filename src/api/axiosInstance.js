@@ -54,7 +54,13 @@ const createAxiosInstance = (contentType = 'application/json') => {
       return response.data;
     },
     error => {
-      // Log chi tiết lỗi để debug
+      // Nếu là lỗi 401 (Unauthorized), chỉ log warning nhẹ nhàng vì UserContext sẽ xử lý logout
+      if (error.response?.status === 401) {
+        console.warn(`⚠️ Phiên đăng nhập hết hạn (401) tại ${error.config?.url}`);
+        return Promise.reject(error);
+      }
+
+      // Log chi tiết lỗi để debug cho các lỗi khác
       console.error('=== Axios Error ===');
       console.error('URL:', error.config?.url);
       console.error('BaseURL:', error.config?.baseURL);

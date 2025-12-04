@@ -107,7 +107,7 @@ export const UserProvider = ({ children }) => {
     } catch (error) {
       if (isUnauthorizedError(error)) {
         await clearStoredAuthState(setUser, setUserToken);
-        console.warn('Token không hợp lệ hoặc đã hết hạn sau khi đăng nhập:', error);
+        // console.warn('Token không hợp lệ hoặc đã hết hạn sau khi đăng nhập:', error);
         throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
       }
 
@@ -158,7 +158,7 @@ export const UserProvider = ({ children }) => {
       } catch (error) {
         if (isUnauthorizedError(error)) {
           await clearStoredAuthState(setUser, setUserToken);
-          console.warn('Token không hợp lệ hoặc đã hết hạn, tự động đăng xuất.');
+          console.log('Token cũ đã hết hạn, tự động đăng xuất.');
         } else {
           console.error('Lỗi khi kiểm tra trạng thái đăng nhập:', error);
         }

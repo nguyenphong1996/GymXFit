@@ -95,9 +95,22 @@ const ProfileScreen = () => {
           text="Chỉnh sửa hồ sơ"
           onPress={() => navigation.navigate('UpdateProfile')}
         />
-        <OptionItem icon="book-open-page-variant" text="Hướng dẫn sử dụng" />
+        <OptionItem
+          icon="credit-card-outline"
+          text="Thông tin thẻ"
+          onPress={() => navigation.navigate('PaymentCards')}
+        />
+        <OptionItem
+          icon="help-circle"
+          text="FAQ"
+          onPress={() => navigation.navigate('MembershipFAQ')}
+        />
         <OptionItem icon="headset" text="Liên hệ hỗ trợ" />
-        <OptionItem icon="file-document" text="Hợp đồng của tôi" />
+        <OptionItem
+          icon="file-document"
+          text="Chính sách GYMXFIT"
+          onPress={() => navigation.navigate('GymxfitPolicy')}
+        />
       </View>
 
       {/* Logout */}

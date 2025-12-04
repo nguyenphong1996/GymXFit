@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  Image,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
@@ -159,20 +158,24 @@ const CalendarScreen = ({ navigation }) => {
       >
         {/* Hero */}
         <View style={styles.heroContainer}>
-          <Image
-            source={require('@assets/images/headercalender.png')}
-            style={styles.heroImage}
-          />
           <LinearGradient
-            colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.5)']}
-            style={styles.heroOverlay}
-          />
-          <View style={styles.heroText}>
-            <Text style={styles.heroTitle}>Theo dõi tiến trình tập luyện</Text>
-            <Text style={styles.heroSubtitle}>
-              Lịch học được đồng bộ giúp bạn chủ động thời gian tập luyện.
-            </Text>
-          </View>
+            colors={['#34d399', '#10b981']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroGradient}
+          >
+            <View style={styles.heroRow}>
+              <View style={styles.heroIconWrapper}>
+                <Icon name="calendar-month" size={42} color="#fff" />
+              </View>
+              <View style={styles.heroText}>
+                <Text style={styles.heroTitle}>Theo dõi tiến trình tập luyện</Text>
+                <Text style={styles.heroSubtitle}>
+                  Lịch học được đồng bộ giúp bạn chủ động thời gian tập luyện.
+                </Text>
+              </View>
+            </View>
+          </LinearGradient>
         </View>
 
         {/* View Mode Switch */}
@@ -276,23 +279,30 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   heroContainer: {
-    position: 'relative',
-    borderRadius: 20,
-    overflow: 'hidden',
     margin: 16,
   },
-  heroImage: {
-    width: '100%',
-    height: 180,
+  heroGradient: {
+    borderRadius: 20,
+    padding: 20,
+    minHeight: 170,
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
-  heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  heroIconWrapper: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroText: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
-    right: 16,
+    flex: 1,
   },
   heroTitle: {
     color: '#fff',
