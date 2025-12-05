@@ -101,6 +101,11 @@ const ProfileScreen = () => {
           onPress={() => navigation.navigate('PaymentCards')}
         />
         <OptionItem
+          icon="shield-check-outline"
+          text="Thông tin dịch vụ"
+          onPress={() => navigation.navigate('ServiceInfo')}
+        />
+        <OptionItem
           icon="help-circle"
           text="FAQ"
           onPress={() => navigation.navigate('MembershipFAQ')}
@@ -191,7 +196,7 @@ const styles = StyleSheet.create({
   },
 
   logoutButton: {
-    backgroundColor: '#20B24A',
+    backgroundColor: '#EF4444',
     marginHorizontal: 30,
     marginTop: 40,
     marginBottom: 50,

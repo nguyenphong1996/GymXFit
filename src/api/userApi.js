@@ -80,10 +80,45 @@ export async function verifyLoginOtp(phoneNumber, code) {
 
 export async function getProfile() {
     try {
-        const response = await createAxiosInstance().get('/api/user/profile');
+        const response = await createAxiosInstance().get('/api/user/profile', {
+            params: { cacheBust: Date.now() },
+            headers: { 'Cache-Control': 'no-cache' },
+        });
         return response;
     } catch (error) {
         const errorMessage = error.response?.data?.message || 'Không thể tải thông tin cá nhân.';
+        throw new Error(errorMessage);
+    }
+}
+
+export async function getUserMe() {
+    const client = createAxiosInstance();
+    try {
+        const response = await client.get('/api/user/me', {
+            params: { cacheBust: Date.now() },
+            headers: { 'Cache-Control': 'no-cache' },
+        });
+        return response;
+    } catch (error) {
+        const status = error?.response?.status;
+
+        // Fallback: một số môi trường chưa có /api/user/me, thử /api/user/profile
+        if (status === 404 || status === 405 || status === 501) {
+            try {
+                const profileResponse = await client.get('/api/user/profile', {
+                    params: { cacheBust: Date.now() },
+                    headers: { 'Cache-Control': 'no-cache' },
+                });
+                return profileResponse;
+            } catch (fallbackError) {
+                const fallbackMessage =
+                    fallbackError.response?.data?.message ||
+                    'Không thể tải thông tin hội viên (fallback).';
+                throw new Error(fallbackMessage);
+            }
+        }
+
+        const errorMessage = error.response?.data?.message || 'Không thể tải thông tin hội viên.';
         throw new Error(errorMessage);
     }
 }

@@ -36,6 +36,13 @@ import {
   cancelEnrollment,
 } from '@api/classesApi';
 import { useRoute } from '@react-navigation/native';
+import { getUserMe } from '@api/userApi';
+import {
+  normalizeMembership,
+  estimateClassPricing,
+  calculateDaysLeft,
+  formatCurrency,
+} from '../../utils/membership';
 
 // Material Design 3 Colors
 const MATERIAL_COLORS = {
@@ -384,6 +391,9 @@ const SearchCalendarScreen = () => {
   const { user } = useContext(UserContext);
   const userName = user?.name || user?.phone || 'Bạn';
   const highlightClassId = route.params?.highlightClassId;
+  const [membership, setMembership] = useState(null);
+  const [membershipLoading, setMembershipLoading] = useState(false);
+  const [membershipError, setMembershipError] = useState(null);
 
   // Tabs & search
   const [selectedTab, setSelectedTab] = useState('Danh sách lớp');
@@ -444,6 +454,16 @@ const SearchCalendarScreen = () => {
 
   const [selectedDateIndex, setSelectedDateIndex] = useState(anchorIndex);
 
+  const classPricing = useMemo(() => estimateClassPricing(membership), [membership]);
+  const daysLeft = useMemo(() => calculateDaysLeft(membership), [membership]);
+  const remainingClassCreditsLabel = useMemo(() => {
+    if (!membership) return '—';
+    if (classPricing.remainingCredits === Infinity) return 'Không giới hạn';
+    if (Number.isFinite(classPricing.remainingCredits)) return `${classPricing.remainingCredits}`;
+    if (Number.isFinite(membership.remainingClassCredits)) return `${membership.remainingClassCredits}`;
+    return '—';
+  }, [membership, classPricing]);
+
   /* API helpers */
   const normalizeClasses = useCallback((items = []) => {
     if (!Array.isArray(items)) return [];
@@ -451,6 +471,21 @@ const SearchCalendarScreen = () => {
       ...item,
       classId: item.classId || item.id || item._id || item.class_id,
     }));
+  }, []);
+
+  const fetchMembership = useCallback(async () => {
+    setMembershipLoading(true);
+    setMembershipError(null);
+    try {
+      const response = await getUserMe();
+      const normalized = normalizeMembership(response?.user || response?.data || response);
+      setMembership(normalized);
+    } catch (error) {
+      setMembership(null);
+      setMembershipError(error.message);
+    } finally {
+      setMembershipLoading(false);
+    }
   }, []);
 
   const fetchClasses = useCallback(
@@ -523,6 +558,10 @@ const SearchCalendarScreen = () => {
   useEffect(() => {
     fetchClasses(selectedDate);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    fetchMembership();
+  }, [fetchMembership]);
 
   /* refetch on selectedTab change or date change */
   useEffect(() => {
@@ -701,9 +740,24 @@ const SearchCalendarScreen = () => {
     setIsEnrolling(true);
     try {
       const response = await enrollInClass(selectedClass.classId);
+      const charged =
+        response?.pricing?.priceCharged ??
+        response?.pricing?.price_charged ??
+        response?.pricing?.chargedAmount;
+      const usedCredit =
+        response?.pricing?.usedClassCredit ??
+        response?.pricing?.used_class_credit ??
+        response?.usedClassCredit;
+      let successMessage = response?.message || 'Bạn đã đăng ký lớp thành công.';
+      if (charged !== undefined) {
+        successMessage += `\nPhí thực tế: ${formatCurrency(charged)}`;
+      }
+      if (usedCredit) {
+        successMessage += '\nĐã sử dụng 1 lượt lớp tặng.';
+      }
       Alert.alert(
         'Thành công',
-        response?.message || 'Bạn đã đăng ký lớp thành công.',
+        successMessage,
       );
       handleCloseModal();
       await fetchClasses(selectedDate);
@@ -713,7 +767,13 @@ const SearchCalendarScreen = () => {
     } finally {
       setIsEnrolling(false);
     }
-  }, [selectedClass, handleCloseModal, fetchClasses, fetchEnrollments, selectedDate]);
+  }, [
+    selectedClass,
+    handleCloseModal,
+    fetchClasses,
+    fetchEnrollments,
+    selectedDate,
+  ]);
 
   /* highlight class from route params - scroll to class date first */
   useEffect(() => {
@@ -864,6 +924,54 @@ const SearchCalendarScreen = () => {
             </Text>
           </TouchableOpacity>
         </View>
+      </View>
+
+      <View style={styles.membershipCard}>
+        <View style={styles.membershipHeaderRow}>
+          <View>
+            <Text style={styles.membershipLabel}>Gói hiện tại</Text>
+            <Text style={styles.membershipName}>{membership?.packageName || 'Chưa có gói'}</Text>
+          </View>
+          {membershipLoading ? (
+            <ActivityIndicator size="small" color={MATERIAL_COLORS.primary} />
+          ) : (
+            <View
+              style={[
+                styles.statusPill,
+                membership ? styles.statusPillActive : styles.statusPillInactive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusPillText,
+                  membership ? styles.statusPillTextActive : styles.statusPillTextInactive,
+                ]}
+              >
+                {membership?.status || 'Chưa kích hoạt'}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.membershipMetaRow}>
+          <View style={styles.metaItem}>
+            <Text style={styles.metaLabel}>Còn lại</Text>
+            <Text style={styles.metaValue}>{daysLeft != null ? `${daysLeft} ngày` : '—'}</Text>
+          </View>
+          <View style={styles.metaDivider} />
+          <View style={styles.metaItem}>
+            <Text style={styles.metaLabel}>Lượt lớp tặng</Text>
+            <Text style={styles.metaValue}>{remainingClassCreditsLabel}</Text>
+          </View>
+          <View style={styles.metaDivider} />
+          <View style={styles.metaItem}>
+            <Text style={styles.metaLabel}>Ước tính phí</Text>
+            <Text style={styles.metaValue}>{formatCurrency(classPricing.price)}</Text>
+          </View>
+        </View>
+
+        <Text style={styles.metaNote}>{classPricing.note}</Text>
+        {membershipError ? <Text style={styles.membershipError}>{membershipError}</Text> : null}
       </View>
 
       {/* Modern Calendar Section - Only show for "Danh sách lớp" */}
@@ -1144,6 +1252,14 @@ const SearchCalendarScreen = () => {
                     </Text>
                   </View>
                 </View>
+              </View>
+
+              <View style={styles.priceCard}>
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Ước tính phí</Text>
+                  <Text style={styles.priceValue}>{formatCurrency(classPricing.price)}</Text>
+                </View>
+                <Text style={styles.priceNote}>{classPricing.note}</Text>
               </View>
 
               {/* Status Note */}
@@ -1546,12 +1662,128 @@ const styles = StyleSheet.create({
   },
   tabText: { 
     color: MATERIAL_COLORS.primaryContainer,
-    fontSize: 14,
+    fontSize: 14, 
     fontWeight: '600',
   },
   activeTabText: { 
     color: MATERIAL_COLORS.primary,
     fontWeight: '700',
+  },
+
+  // Membership card
+  membershipCard: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    backgroundColor: MATERIAL_COLORS.surface,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: MATERIAL_COLORS.outline,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  membershipHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  membershipLabel: {
+    color: MATERIAL_COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  membershipName: {
+    color: MATERIAL_COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  statusPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  statusPillActive: {
+    backgroundColor: '#E6F9ED',
+  },
+  statusPillInactive: {
+    backgroundColor: '#FEE2E2',
+  },
+  statusPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  statusPillTextActive: {
+    color: MATERIAL_COLORS.primary,
+  },
+  statusPillTextInactive: {
+    color: MATERIAL_COLORS.error,
+  },
+  membershipMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 12,
+  },
+  metaItem: { flex: 1 },
+  metaLabel: {
+    color: MATERIAL_COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  metaValue: {
+    color: MATERIAL_COLORS.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  metaDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: MATERIAL_COLORS.outline,
+  },
+  metaNote: {
+    marginTop: 10,
+    color: MATERIAL_COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  membershipError: {
+    marginTop: 6,
+    color: MATERIAL_COLORS.error,
+    fontSize: 12,
+  },
+  priceCard: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: MATERIAL_COLORS.surfaceVariant,
+    borderWidth: 1,
+    borderColor: MATERIAL_COLORS.outline,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  priceLabel: {
+    color: MATERIAL_COLORS.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  priceValue: {
+    color: MATERIAL_COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  priceNote: {
+    marginTop: 6,
+    color: MATERIAL_COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
   },
 
   // Calendar Section

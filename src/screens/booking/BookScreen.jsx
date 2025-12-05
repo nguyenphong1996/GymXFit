@@ -25,6 +25,13 @@ import {
   cancelPtBooking,
 } from '@api/ptBookingApi';
 import { listStaff } from '@api/staffApi';
+import { getUserMe } from '@api/userApi';
+import {
+  normalizeMembership,
+  estimatePtPricing,
+  calculateDaysLeft,
+  formatCurrency,
+} from '../../utils/membership';
 
 const SKILL_LABEL_MAP = {
   strength: 'Strength',
@@ -200,6 +207,9 @@ const normalizeBookingItem = item => {
 function BookScreen({ navigation }) {
   const { user } = useContext(UserContext);
   const userName = user?.name || user?.phone || 'Bạn';
+  const [membership, setMembership] = useState(null);
+  const [membershipLoading, setMembershipLoading] = useState(false);
+  const [membershipError, setMembershipError] = useState(null);
   const [selectedTab, setSelectedTab] = useState('Booking');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [trainers, setTrainers] = useState(PT_LIST);
@@ -254,6 +264,15 @@ function BookScreen({ navigation }) {
     clone.setHours(0, 0, 0, 0);
     return clone;
   }, [selectedDate]);
+
+  const ptPricing = useMemo(() => estimatePtPricing(membership), [membership]);
+  const membershipDaysLeft = useMemo(() => calculateDaysLeft(membership), [membership]);
+  const remainingPtSessionsLabel = useMemo(() => {
+    if (!membership) return '—';
+    if (Number.isFinite(ptPricing.remainingSessions)) return `${ptPricing.remainingSessions}`;
+    if (Number.isFinite(membership?.remainingSessions)) return `${membership.remainingSessions}`;
+    return '—';
+  }, [membership, ptPricing]);
 
   const skillLabel = useCallback(key => {
     if (!key) return 'Other';
@@ -454,6 +473,25 @@ function BookScreen({ navigation }) {
   useEffect(() => {
     fetchStaffList();
   }, [fetchStaffList]);
+
+  const fetchMembership = useCallback(async () => {
+    setMembershipLoading(true);
+    setMembershipError(null);
+    try {
+      const response = await getUserMe();
+      const normalized = normalizeMembership(response?.user || response?.data || response);
+      setMembership(normalized);
+    } catch (error) {
+      setMembership(null);
+      setMembershipError(error.message);
+    } finally {
+      setMembershipLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMembership();
+  }, [fetchMembership]);
 
   const handleSelectTrainer = trainer => {
     setSelectedTrainer(trainer);
@@ -803,6 +841,55 @@ function BookScreen({ navigation }) {
             : undefined
         }
       >
+        <View style={styles.membershipCard}>
+          <View style={styles.membershipHeaderRow}>
+            <View>
+              <Text style={styles.membershipLabel}>Gói hiện tại</Text>
+              <Text style={styles.membershipName}>{membership?.packageName || 'Chưa có gói'}</Text>
+            </View>
+            {membershipLoading ? (
+              <ActivityIndicator size="small" color={CALENDAR_COLORS.primary} />
+            ) : (
+              <View
+                style={[
+                  styles.statusPill,
+                  membership ? styles.statusPillActive : styles.statusPillInactive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusPillText,
+                    membership ? styles.statusPillTextActive : styles.statusPillTextInactive,
+                  ]}
+                >
+                  {membership?.status || 'Chưa kích hoạt'}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.membershipMetaRow}>
+            <View style={styles.metaItem}>
+              <Text style={styles.metaLabel}>Còn lại</Text>
+              <Text style={styles.metaValue}>
+                {membershipDaysLeft != null ? `${membershipDaysLeft} ngày` : '—'}
+              </Text>
+            </View>
+            <View style={styles.metaDivider} />
+            <View style={styles.metaItem}>
+              <Text style={styles.metaLabel}>Lượt PT</Text>
+              <Text style={styles.metaValue}>{remainingPtSessionsLabel}</Text>
+            </View>
+            <View style={styles.metaDivider} />
+            <View style={styles.metaItem}>
+              <Text style={styles.metaLabel}>Ước tính phí</Text>
+              <Text style={styles.metaValue}>{formatCurrency(ptPricing.price)}</Text>
+            </View>
+          </View>
+          <Text style={styles.metaNote}>{ptPricing.note}</Text>
+          {membershipError ? <Text style={styles.membershipError}>{membershipError}</Text> : null}
+        </View>
+
         {selectedTab === 'Booking' ? (
           <>
             {renderCalendar()}
@@ -892,50 +979,59 @@ function BookScreen({ navigation }) {
               ) : !staffIdToUse || !currentSelectedDate ? (
                 <Text style={styles.emptySlots}>Chọn PT và ngày để xem ca trống.</Text>
               ) : (
-                <View style={styles.slotGrid}>
-                  {FIXED_SHIFTS.map(shift => {
-                    const slotData = slots.find(s => s.key === shift.key) || {};
-                    const status = slotData.status || 'unavailable';
-                    const isAvailable = status === 'available';
-                    const isMine = status === 'booked_by_you';
-                    const isBlocked = status === 'blocked' || status === 'booked';
-                    const displayStatus = SLOT_LABELS[status] || (status === 'unavailable' ? 'Không có lịch' : status);
+                <>
+                  <View style={styles.priceHint}>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                      <Text style={styles.priceHintLabel}>Ước tính phí</Text>
+                      <Text style={styles.priceHintValue}>{formatCurrency(ptPricing.price)}</Text>
+                    </View>
+                    <Text style={styles.priceHintNote}>{ptPricing.note}</Text>
+                  </View>
+                  <View style={styles.slotGrid}>
+                    {FIXED_SHIFTS.map(shift => {
+                      const slotData = slots.find(s => s.key === shift.key) || {};
+                      const status = slotData.status || 'unavailable';
+                      const isAvailable = status === 'available';
+                      const isMine = status === 'booked_by_you';
+                      const isBlocked = status === 'blocked' || status === 'booked';
+                      const displayStatus = SLOT_LABELS[status] || (status === 'unavailable' ? 'Không có lịch' : status);
 
-                    return (
-                      <TouchableOpacity
-                        key={shift.id}
-                        style={[
-                          styles.slotCard,
-                          isAvailable && styles.slotAvailable,
-                          isMine && styles.slotMine,
-                          isBlocked && styles.slotBlocked,
-                          status === 'unavailable' && styles.slotUnavailable,
-                        ]}
-                        activeOpacity={isAvailable ? 0.85 : 1}
-                        onPress={() => isAvailable && bookSlot({ key: shift.key })}
-                        disabled={!isAvailable}
-                      >
-                        <View>
-                          <Text style={[styles.slotLabel, isAvailable && styles.slotLabelActive]}>
-                            {shift.label}
-                          </Text>
-                          <Text style={[styles.slotTime, isAvailable && styles.slotTimeActive]}>
-                            {shift.time}
-                          </Text>
-                        </View>
-                        <Text
+                      return (
+                        <TouchableOpacity
+                          key={shift.id}
                           style={[
-                            styles.slotStatus,
-                            isAvailable && styles.slotStatusActive,
-                            isMine && styles.slotStatusMine,
+                            styles.slotCard,
+                            isAvailable && styles.slotAvailable,
+                            isMine && styles.slotMine,
+                            isBlocked && styles.slotBlocked,
+                            status === 'unavailable' && styles.slotUnavailable,
                           ]}
+                          activeOpacity={isAvailable ? 0.85 : 1}
+                          onPress={() => isAvailable && bookSlot({ key: shift.key })}
+                          disabled={!isAvailable}
                         >
-                          {displayStatus}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                          <View>
+                            <Text style={[styles.slotLabel, isAvailable && styles.slotLabelActive]}>
+                              {shift.label}
+                            </Text>
+                            <Text style={[styles.slotTime, isAvailable && styles.slotTimeActive]}>
+                              {shift.time}
+                            </Text>
+                          </View>
+                          <Text
+                            style={[
+                              styles.slotStatus,
+                              isAvailable && styles.slotStatusActive,
+                              isMine && styles.slotStatusMine,
+                            ]}
+                          >
+                            {displayStatus}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
               )}
               {bookingLoading && <ActivityIndicator style={{ marginTop: 8 }} color="#30C451" />}
             </View>
@@ -1092,6 +1188,81 @@ const styles = StyleSheet.create({
   },
   tabText: { color: CALENDAR_COLORS.onPrimary, fontWeight: '700' },
   activeTabText: { color: CALENDAR_COLORS.primary },
+  membershipCard: {
+    marginTop: 12,
+    marginHorizontal: 20,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: CALENDAR_COLORS.outline,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  membershipHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  membershipLabel: {
+    color: CALENDAR_COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  membershipName: {
+    color: CALENDAR_COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  statusPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  statusPillActive: {
+    backgroundColor: '#E6F9ED',
+  },
+  statusPillInactive: {
+    backgroundColor: '#FEE2E2',
+  },
+  statusPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  statusPillTextActive: {
+    color: CALENDAR_COLORS.primary,
+  },
+  statusPillTextInactive: {
+    color: '#B91C1C',
+  },
+  membershipMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    gap: 12,
+  },
+  metaItem: { flex: 1 },
+  metaLabel: { color: CALENDAR_COLORS.textSecondary, fontSize: 12, fontWeight: '600' },
+  metaValue: { color: CALENDAR_COLORS.textPrimary, fontSize: 15, fontWeight: '700', marginTop: 4 },
+  metaDivider: { width: 1, height: 24, backgroundColor: CALENDAR_COLORS.outline },
+  metaNote: { marginTop: 10, color: CALENDAR_COLORS.textSecondary, fontSize: 12, lineHeight: 18 },
+  membershipError: { marginTop: 6, color: '#B91C1C', fontSize: 12 },
+  priceHint: {
+    marginTop: 4,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  priceHintLabel: { color: CALENDAR_COLORS.textSecondary, fontSize: 13, fontWeight: '700' },
+  priceHintValue: { color: CALENDAR_COLORS.textPrimary, fontSize: 16, fontWeight: '800' },
+  priceHintNote: { marginTop: 4, color: CALENDAR_COLORS.textSecondary, fontSize: 12 },
   scrollContent: {
     paddingBottom: 40,
   },

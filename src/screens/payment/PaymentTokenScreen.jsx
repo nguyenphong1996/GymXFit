@@ -169,8 +169,22 @@ const PaymentTokenScreen = ({ route, navigation }) => {
       console.warn('Poll trạng thái giao dịch VNPAY lỗi:', err?.message);
     }
 
-    if (attempt < 8) {
-      pollTimer.current = setTimeout(() => pollStatus(ref, attempt + 1), 2000);
+    // Tăng thời gian chờ: thử lại tối đa 20 lần, 3 giây/lần (~1 phút)
+    if (attempt < 20) {
+      pollTimer.current = setTimeout(() => pollStatus(ref, attempt + 1), 3000);
+    } else {
+      setUsingSdk(false);
+      Alert.alert(
+        'Đang chờ xác nhận',
+        'Chưa nhận được trạng thái thanh toán từ VNPAY. Bạn có thể thử kiểm tra lại.',
+        [
+          { text: 'Đóng' },
+          {
+            text: 'Kiểm tra lại',
+            onPress: () => pollStatus(ref, 0),
+          },
+        ],
+      );
     }
   };
 
@@ -373,6 +387,12 @@ const PaymentTokenScreen = ({ route, navigation }) => {
                 onPress={() => openVnpaySdkSession(paymentUrl, txnRef)}
               >
                 <Text style={styles.reopenButtonText}>Mở lại ứng dụng thanh toán</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.reopenButton}
+                onPress={() => pollStatus(txnRef)}
+              >
+                <Text style={styles.reopenButtonText}>Kiểm tra trạng thái</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.cancelButton}
