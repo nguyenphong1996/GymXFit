@@ -15,6 +15,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { createVnpayPaymentUrl, checkVnpayPaymentStatus } from '../../api/paymentApi';
 import { UserContext } from '@context/UserContext';
 import { launchVnpaySdk } from '../../utils/vnpaySdk';
+import { computeCyclePrice } from '../../utils/membership';
 
 // Reusing MD3 design tokens for consistency
 const MD3_COLORS = {
@@ -57,6 +58,15 @@ const PaymentScreen = ({ route, navigation }) => {
   const [returnUrl, setReturnUrl] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const webViewRef = React.useRef(null);
+  const resolveAmountNumber = () => {
+    if (typeof plan?.amountDue === 'number') return plan.amountDue;
+    if (plan?.price && typeof plan.price === 'string') {
+      const parsed = parseInt(plan.price.replace(/[^0-9]/g, ''), 10);
+      if (!Number.isNaN(parsed)) return parsed;
+    }
+    if (plan?.basePrice) return computeCyclePrice(plan.basePrice, plan?.billingCycle || 'month');
+    return 0;
+  };
 
   const defaultApiBaseUrl = React.useMemo(() => {
     const base =
@@ -116,7 +126,7 @@ const PaymentScreen = ({ route, navigation }) => {
         navigation.navigate('PaymentResult', {
           status: '00',
           message: decodeURIComponent(params.message || 'Giao dịch thành công'),
-          amount: params.amount || plan?.price,
+          amount: params.amount || resolveAmountNumber(),
           txnRef: params.orderId,
           method: 'vnpay',
           planName: plan?.name,
@@ -126,7 +136,7 @@ const PaymentScreen = ({ route, navigation }) => {
         navigation.navigate('PaymentResult', {
           status: params.code || '99',
           message: decodeURIComponent(params.message || 'Giao dịch thất bại'),
-          amount: params.amount || plan?.price,
+          amount: params.amount || resolveAmountNumber(),
           txnRef: params.orderId,
           method: 'vnpay',
           planName: plan?.name,
@@ -180,12 +190,18 @@ const PaymentScreen = ({ route, navigation }) => {
           return;
         }
 
-        const priceNumber = parseInt(plan.price.replace(/[^0-9]/g, ''), 10) || 0;
+        const priceNumber =
+          typeof plan?.amountDue === 'number'
+            ? plan.amountDue
+            : computeCyclePrice(plan?.basePrice, plan?.billingCycle || 'month');
         const paymentDetails = {
           amount: priceNumber,
           userId: userId,
           packageId: plan.id,
           orderInfo: `Thanh toan goi ${plan.name}`,
+          billingCycle: plan?.billingCycle || 'month',
+          isUpgrade: plan?.isUpgrade || false,
+          isTemporary: plan?.isTemporary || false,
         };
 
         const response = await createVnpayPaymentUrl(paymentDetails);

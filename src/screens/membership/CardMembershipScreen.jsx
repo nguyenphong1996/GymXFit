@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Alert,
   ScrollView,
@@ -15,7 +15,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { membershipPlans, MEMBERSHIP_CONTACT } from './membershipPlans';
+import { formatCurrency, computeCyclePrice, cycleMultipliers } from '../../utils/membership';
+import { getMembershipUpgradeQuote } from '@api/userApi';
 import SpecialUtilities from './SpecialUtilities';
+import { getMembershipInfo, getUserMe, getProfile, getAllPackages } from '@api/userApi';
+import { normalizeMembership } from '../../utils/membership';
 
 // Material Design 3 Color Tokens
 const MD3_COLORS = {
@@ -93,15 +97,22 @@ const serviceHighlights = [
 ];
 
 // Membership Card Component
-const MembershipCard = ({ plan, onShowDetails, onRegister }) => {
-  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+const MembershipCard = ({ plan, onShowDetails, onRegister, priceLabel, discountLabel, subLabel, saveLabel, disabled }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => Animated.spring(scaleAnim, { toValue: 0.98, useNativeDriver: true }).start();
   const handlePressOut = () => Animated.spring(scaleAnim, { toValue: 1, friction: 3, tension: 40, useNativeDriver: true }).start();
 
   return (
-    <Animated.View style={[styles.planCard, { transform: [{ scale: scaleAnim }] }]}>
-      <View style={styles.planCardInner}>
+    <Animated.View
+      pointerEvents={disabled ? 'none' : 'auto'}
+      style={[
+        styles.planCard,
+        { transform: [{ scale: scaleAnim }] },
+        disabled && styles.cardDisabled,
+      ]}
+    >
+      <View style={[styles.planCardInner, disabled && styles.cardInnerDisabled]}>
         {plan.id === 'plus' && (
           <View style={[styles.planBadgeTop, { backgroundColor: plan.accent }]}>
             <MaterialIcons name="star" size={14} color={plan.accentText} />
@@ -116,7 +127,25 @@ const MembershipCard = ({ plan, onShowDetails, onRegister }) => {
           <Image source={plan.image} style={styles.planImage} resizeMode="cover" />
         </View>
         <View style={styles.priceContainer}>
-          <Text style={styles.planPrice}>{plan.price}</Text>
+          <Text style={styles.planPrice}>{priceLabel || plan.price}</Text>
+          {discountLabel ? (
+            <View style={styles.discountPillRow}>
+              <View style={styles.discountPill}>
+                <MaterialCommunityIcons name="tag-outline" size={14} color={MD3_COLORS.primary} />
+                <Text style={styles.discountText}>{discountLabel}</Text>
+              </View>
+            </View>
+          ) : null}
+          {subLabel ? (
+            <View style={styles.subRow}>
+              <Text style={styles.priceSub}>{subLabel}</Text>
+            </View>
+          ) : null}
+          {saveLabel ? (
+            <View style={styles.subRow}>
+              <Text style={styles.priceSave}>{saveLabel}</Text>
+            </View>
+          ) : null}
         </View>
         <View style={styles.divider} />
         <View style={styles.featureList}>
@@ -130,15 +159,16 @@ const MembershipCard = ({ plan, onShowDetails, onRegister }) => {
           ))}
         </View>
         <View style={styles.planActions}>
-          <TouchableOpacity style={styles.outlinedButton} onPress={() => onShowDetails?.(plan)} activeOpacity={0.8}>
+          <TouchableOpacity style={[styles.outlinedButton, disabled && styles.buttonDisabled]} onPress={() => onShowDetails?.(plan)} activeOpacity={0.8}>
             <Text style={styles.outlinedButtonText}>Chi tiết</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.filledButton}
-            onPress={() => onRegister?.(plan)}
+            style={[styles.filledButton, disabled && styles.buttonDisabled]}
+            onPress={() => !disabled && onRegister?.(plan)}
             activeOpacity={0.9}
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
+            disabled={disabled}
           >
             <Text style={styles.filledButtonText}>Chọn gói này</Text>
             <MaterialIcons name="arrow-forward" size={18} color={MD3_COLORS.onPrimary} />
@@ -150,15 +180,273 @@ const MembershipCard = ({ plan, onShowDetails, onRegister }) => {
 };
 
 const CardMembershipScreen = ({ navigation }) => {
-  const scrollViewRef = React.useRef(null);
+  const scrollViewRef = useRef(null);
+  const [billingCycle, setBillingCycle] = useState('quarter'); // month | quarter | year
+  const [currentMembership, setCurrentMembership] = useState(null);
+  const [currentPlanPrice, setCurrentPlanPrice] = useState(0);
+  const [currentTier, setCurrentTier] = useState(null);
+  const [quotes, setQuotes] = useState({});
+  const [planIdMap, setPlanIdMap] = useState({});
+  const cycleOptions = useMemo(
+    () => [
+      { id: 'month', label: 'Tháng', discount: 0 },
+      { id: 'quarter', label: 'Quý', discount: 20 },
+      { id: 'year', label: 'Năm', discount: 50 },
+    ],
+    [],
+  );
+
+  useEffect(() => {
+    const fetchMembership = async () => {
+      try {
+        // Fetch backend packages to map IDs
+        const packagesRes = await getAllPackages().catch(() => []);
+        const packages = packagesRes?.data || packagesRes || [];
+        const newMap = {};
+        if (Array.isArray(packages)) {
+          packages.forEach(pkg => {
+            const localPlan = membershipPlans.find(
+              p => p.id === pkg.slug || p.id === pkg.id || p.name.toLowerCase() === (pkg.name || '').toLowerCase(),
+            );
+            if (localPlan) {
+              newMap[localPlan.id] = pkg._id || pkg.id;
+            }
+          });
+          setPlanIdMap(newMap);
+        }
+
+        // Ưu tiên endpoint membership
+        let res = await getMembershipInfo().catch(() => null);
+        let normalized = normalizeMembership(res?.membership || res?.data || res);
+
+        if (!normalized) {
+          res = await getUserMe().catch(() => null);
+          normalized = normalizeMembership(res?.user || res?.data || res);
+        }
+
+        if (!normalized) {
+          res = await getProfile().catch(() => null);
+          normalized = normalizeMembership(res?.user || res?.data || res);
+        }
+
+        setCurrentMembership(normalized);
+        if (normalized) {
+          const resolvedPlan =
+            membershipPlans.find(p => p.id === normalized.packageId) ||
+            membershipPlans.find(
+              p => p.name?.toLowerCase() === (normalized.packageName || '').toLowerCase(),
+            );
+          setCurrentPlanPrice(resolvedPlan?.basePrice || 0);
+          setCurrentTier(
+            normalized?.packageTier ||
+              normalized?.roleTier ||
+              resolvedPlan?.tier ||
+              null,
+          );
+        } else {
+          setCurrentPlanPrice(0);
+          setCurrentTier(null);
+        }
+      } catch (e) {
+        setCurrentMembership(null);
+        setCurrentPlanPrice(0);
+        setCurrentTier(null);
+      }
+    };
+
+    fetchMembership();
+  }, []);
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchQuotes = async () => {
+      if (!currentMembership) {
+        if (isMounted) setQuotes({});
+        return;
+      }
+
+      const newQuotes = {};
+      await Promise.all(
+        membershipPlans.map(async plan => {
+          // Skip fetching quote for lower tiers (downgrade) to avoid 400 error
+          if (currentTier != null && plan.tier < currentTier) {
+            return;
+          }
+
+          try {
+            const realId = planIdMap[plan.id] || plan.id;
+            const quote = await getMembershipUpgradeQuote({
+              packageId: realId,
+              billingCycle,
+            });
+            if (quote) {
+              newQuotes[plan.id] = quote;
+            }
+          } catch (e) {
+            // Ignore errors
+          }
+        }),
+      );
+      
+      if (isMounted) {
+        setQuotes(newQuotes);
+      }
+    };
+
+    fetchQuotes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentMembership, billingCycle, currentTier, planIdMap]);
 
   const handleContactPress = () => Linking.openURL(`tel:${CONTACT_PHONE}`).catch(() => undefined);
 
   const handleShowDetails = plan => navigation.navigate('CardMembershipDetail', { planId: plan?.id });
 
-  const handleRegister = (plan) => {
-    // Navigate to PaymentMethod screen to let user choose method
-    navigation.navigate('PaymentMethod', { plan });
+  const priceForPlan = plan => {
+    const quote = quotes[plan.id];
+    const cycleCfg = cycleMultipliers[billingCycle] || cycleMultipliers.month;
+    
+    let priceNumber = computeCyclePrice(plan.basePrice, billingCycle);
+    
+    // Use quote if available
+    if (quote && typeof quote.amountDue === 'number') {
+      priceNumber = quote.amountDue;
+    }
+
+    const perMonth = Math.round(priceNumber / cycleCfg.months);
+    const saved = plan.basePrice * cycleCfg.months - priceNumber;
+    const label = `${formatCurrency(priceNumber)}/${cycleCfg.months === 1 ? 'tháng' : `${cycleCfg.months} tháng`}`;
+    const discount = cycleCfg.discount ? `-${cycleCfg.discount * 100}%` : null;
+    const subLabel = `Bình quân: ${formatCurrency(perMonth)}/tháng`;
+    
+    let saveLabel = saved > 0 ? `Tiết kiệm ${formatCurrency(saved)}` : null;
+    if (quote && quote.creditValue > 0) {
+      saveLabel = `Đã trừ ${formatCurrency(quote.creditValue)} từ gói cũ`;
+    }
+
+    return {
+      number: priceNumber,
+      label,
+      discount,
+      perMonth,
+      subLabel,
+      saveLabel,
+    };
+  };
+
+  const getPlanTier = plan => plan?.tier || null;
+
+  const getRemainingDays = (membership) => {
+    if (!membership?.endDate) return 0;
+    const end = new Date(membership.endDate);
+    const now = new Date();
+    if (end < now) return 0;
+    const diffTime = end - now;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  const getDurationDays = (cycle) => {
+    if (cycle === 'year') return 365;
+    if (cycle === 'quarter') return 90;
+    return 30;
+  };
+
+  const handleRegister = async (plan) => {
+    const targetTier = getPlanTier(plan);
+    const isDowngradeTier =
+      currentTier != null && targetTier != null && targetTier < currentTier;
+    
+    if (isDowngradeTier) {
+      Alert.alert('Không thể hạ gói', 'Bạn đang ở gói cao hơn. Vui lòng chọn gói ngang hoặc cao hơn.');
+      return;
+    }
+
+    // Identify Case
+    const currentPlanId = membershipPlans.find(p => p.id === currentMembership?.packageId || p.name.toLowerCase() === (currentMembership?.packageName || '').toLowerCase())?.id;
+    const isRenewal = currentMembership && currentPlanId === plan.id;
+
+    if (isRenewal) {
+      // Case A: Renewal
+      proceedToPayment(plan, { isUpgrade: false, isTemporary: false });
+      return;
+    }
+
+    // Case B & C: Upgrade
+    const remainingDays = getRemainingDays(currentMembership);
+    const targetDays = getDurationDays(billingCycle);
+
+    // Check for Temporary Trial condition: Target Duration < Current Remaining Days
+    // And must be an upgrade tier (implied by !isRenewal and !isDowngradeTier, but good to check)
+    if (remainingDays > targetDays && targetTier > (currentTier || 0)) {
+      Alert.alert(
+        'Lựa chọn nâng cấp',
+        `Bạn đang còn ${remainingDays} ngày gói hiện tại. Bạn muốn nâng cấp vĩnh viễn hay chỉ mua trải nghiệm ${targetDays} ngày gói ${plan.name}?`,
+        [
+          {
+            text: 'Mua trải nghiệm',
+            onPress: () => proceedToPayment(plan, { isUpgrade: true, isTemporary: true })
+          },
+          {
+            text: 'Nâng cấp vĩnh viễn',
+            onPress: () => proceedToPayment(plan, { isUpgrade: true, isTemporary: false })
+          }
+        ]
+      );
+    } else {
+      // Case B: Permanent Upgrade (or new purchase)
+      proceedToPayment(plan, { isUpgrade: true, isTemporary: false });
+    }
+  };
+
+  const proceedToPayment = async (plan, { isUpgrade, isTemporary }) => {
+    const pricing = priceForPlan(plan);
+    try {
+      const realId = planIdMap[plan.id] || plan.id;
+      let quote = null;
+      
+      // Only fetch quote if it's an upgrade or new purchase to get credit value
+      // For renewal, we might just use base price, but fetching quote is safer if backend supports it
+      try {
+        quote = await getMembershipUpgradeQuote({
+          packageId: realId,
+          billingCycle,
+        });
+      } catch (e) {
+        console.warn('Failed to fetch quote in proceedToPayment', e);
+      }
+
+      // Extract real ObjectId from quote if available to avoid CastError on backend
+      const finalPackageId = quote?.packageId || quote?.package?._id || quote?.id || realId;
+
+      let amountDue = quote?.amountDue ?? pricing.number;
+      let creditValue = quote?.creditValue ?? 0;
+
+      // For Renewal, force credit to 0 if backend returns weird data (optional safety)
+      if (!isUpgrade && !isTemporary) {
+        // amountDue should be the full price for renewal
+        // creditValue should be 0
+        // But let's trust the quote if it exists, otherwise fallback
+      }
+
+      navigation.navigate('PaymentMethod', {
+        plan: {
+          ...plan,
+          id: finalPackageId,
+          billingCycle,
+          amountDue,
+          creditValue,
+          isUpgrade,
+          isTemporary,
+          priceLabel: pricing.label,
+        },
+        quote,
+      });
+    } catch (error) {
+      const rawMessage = error?.response?.data?.message || error?.message || '';
+      Alert.alert('Không thể mua/nâng cấp', rawMessage || 'Vui lòng thử lại.');
+    }
   };
 
   const handleStatPress = (statType) => {
@@ -232,14 +520,49 @@ const CardMembershipScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {membershipPlans.map(plan => (
-          <MembershipCard
-            key={plan.id}
-            plan={plan}
-            onShowDetails={handleShowDetails}
-            onRegister={handleRegister}
-          />
-        ))}
+        <View style={styles.cycleSelector}>
+          {cycleOptions.map(option => {
+            const active = option.id === billingCycle;
+            return (
+              <TouchableOpacity
+                key={option.id}
+                style={[styles.cycleChip, active && styles.cycleChipActive]}
+                onPress={() => setBillingCycle(option.id)}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.cycleChipText, active && styles.cycleChipTextActive]}>
+                  {option.label}
+                </Text>
+                {option.discount ? (
+                  <View style={styles.cycleBadge}>
+                    <Text style={styles.cycleBadgeText}>-{option.discount}%</Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {membershipPlans
+          .filter(plan => {
+            const targetTier = getPlanTier(plan);
+            if (currentTier != null && targetTier != null && targetTier < currentTier) {
+              return false; // ẩn gói tier thấp hơn
+            }
+            return true;
+          })
+          .map(plan => (
+            <MembershipCard
+              key={plan.id}
+              plan={plan}
+              priceLabel={priceForPlan(plan).label}
+              discountLabel={priceForPlan(plan).discount ? priceForPlan(plan).discount : null}
+              subLabel={priceForPlan(plan).subLabel}
+              saveLabel={priceForPlan(plan).saveLabel}
+              onShowDetails={handleShowDetails}
+              onRegister={handleRegister}
+            />
+          ))}
 
         <View style={styles.supportCard}>
           <View style={styles.supportIcon}>
@@ -283,6 +606,23 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: 16, paddingTop: 24 },
   sectionTitle: { ...MD3_TYPE.titleLarge, color: MD3_COLORS.onBackground, marginBottom: 4 },
   sectionDescription: { ...MD3_TYPE.bodyMedium, color: MD3_COLORS.textSecondary },
+  cycleSelector: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 8 },
+  cycleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: MD3_COLORS.outlineVariant,
+    backgroundColor: MD3_COLORS.surface,
+    gap: 8,
+  },
+  cycleChipActive: { borderColor: MD3_COLORS.primary, backgroundColor: MD3_COLORS.primary + '15' },
+  cycleChipText: { ...MD3_TYPE.labelLarge, color: MD3_COLORS.onSurface },
+  cycleChipTextActive: { color: MD3_COLORS.primary, fontWeight: '700' },
+  cycleBadge: { backgroundColor: '#FFECE5', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
+  cycleBadgeText: { color: '#C2410C', fontWeight: '800', fontSize: 12 },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 16 },
   chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: MD3_COLORS.surfaceContainerHigh, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, gap: 8 },
   chipPressed: { backgroundColor: MD3_COLORS.surfaceContainerHighest },
@@ -291,6 +631,8 @@ const styles = StyleSheet.create({
   plansHeader: { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   planCard: { marginHorizontal: 16, marginVertical: 12 },
   planCardInner: { backgroundColor: MD3_COLORS.surface, borderRadius: 20, padding: 20, ...MD3_ELEVATION.level2 },
+  cardDisabled: { opacity: 0.4 },
+  cardInnerDisabled: { backgroundColor: MD3_COLORS.surfaceContainer, borderWidth: 1, borderColor: MD3_COLORS.outlineVariant },
   planBadge: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, marginBottom: 16 },
   planBadgeText: { ...MD3_TYPE.labelSmall, letterSpacing: 0.5, textTransform: 'uppercase' },
   planBadgeTop: { position: 'absolute', top: 12, right: 12, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 4, zIndex: 10, ...MD3_ELEVATION.level1 },
@@ -300,8 +642,24 @@ const styles = StyleSheet.create({
   planCaption: { ...MD3_TYPE.bodyMedium, color: MD3_COLORS.textSecondary },
   planImageWrapper: { width: '100%', height: 180, borderRadius: 16, overflow: 'hidden', marginBottom: 16 },
   planImage: { width: '100%', height: '100%' },
-  priceContainer: { marginBottom: 16 },
+ priceContainer: { marginBottom: 16 },
   planPrice: { ...MD3_TYPE.headlineMedium, color: MD3_COLORS.primary },
+  subRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  priceSub: { ...MD3_TYPE.bodySmall, color: '#0EA5E9', fontWeight: '700' },
+  priceSave: { ...MD3_TYPE.bodySmall, color: '#C2410C', fontWeight: '800' },
+  discountPillRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  discountPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: '#E6F9ED',
+    borderWidth: 1,
+    borderColor: MD3_COLORS.primary + '55',
+  },
+  discountText: { color: MD3_COLORS.primary, fontWeight: '800', fontSize: 12 },
   compareSection: { backgroundColor: MD3_COLORS.surfaceContainerLow, borderRadius: 12, padding: 12, marginBottom: 12 },
   compareTitle: { ...MD3_TYPE.labelMedium, color: MD3_COLORS.textPrimary, marginBottom: 8, fontWeight: '600' },
   compareGrid: { flexDirection: 'row', gap: 8 },
@@ -317,6 +675,7 @@ const styles = StyleSheet.create({
   filledButton: { flex: 1, backgroundColor: MD3_COLORS.primary, borderRadius: 20, paddingVertical: 14, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, ...MD3_ELEVATION.level1 },
   filledButtonText: { ...MD3_TYPE.labelLarge, color: MD3_COLORS.onPrimary },
   outlinedButton: { flex: 1, backgroundColor: 'transparent', borderWidth: 1, borderColor: MD3_COLORS.outline, borderRadius: 20, paddingVertical: 14, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center' },
+  buttonDisabled: { opacity: 0.5 },
   outlinedButtonText: { ...MD3_TYPE.labelLarge, color: MD3_COLORS.primary },
   filledTonalButton: { backgroundColor: MD3_COLORS.secondaryContainer, borderRadius: 20, paddingVertical: 14, paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   filledTonalButtonText: { ...MD3_TYPE.labelLarge, color: MD3_COLORS.onSecondaryContainer },
