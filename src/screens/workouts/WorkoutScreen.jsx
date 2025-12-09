@@ -1,3 +1,5 @@
+/* ==================== WORKOUT SCREEN WITH HEART ICON ==================== */
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Alert,
@@ -39,9 +41,7 @@ const formatDuration = seconds => {
 };
 
 /* ============================================================
-   HELPER: PHÂN LOẠI VIDEO THEO 3 NHÓM (yoga, tap co, dinh duong)
-   Logic: kiểm tra cả video.category và video.subcategory (nếu có)
-   Nếu không khớp, video sẽ rơi vào "Khác" (không hiển thị trong 3 mục)
+   PHÂN LOẠI VIDEO
 ============================================================ */
 const classifyVideo = video => {
   const cat = (
@@ -70,7 +70,6 @@ const classifyVideo = video => {
   )
     return 'dinhduong';
 
-  // Fallback: try keywords in title
   const title = (video.title || '').toLowerCase();
   if (title.includes('yoga')) return 'yoga';
   if (
@@ -91,8 +90,7 @@ const classifyVideo = video => {
 };
 
 /* ============================================================
-   COMPONENT CHÍNH - LAYOUT: OPTION B (3 SECTION, cuộn dọc)
-   Yêu cầu: giữ nguyên featured banner như trước, sau đó chia 3 mục
+   SCREEN CHÍNH
 ============================================================ */
 const WorkoutScreen = ({ navigation, route }) => {
   const incomingKeyword =
@@ -103,14 +101,15 @@ const WorkoutScreen = ({ navigation, route }) => {
   const [debouncedSearch, setDebouncedSearch] = useState(
     incomingKeyword.trim(),
   );
+
   const [favoriteMap, setFavoriteMap] = useState({});
   const [updatingFavoriteId, setUpdatingFavoriteId] = useState(null);
 
-  const [allVideos, setAllVideos] = useState([]); // store everything fetched
+  const [allVideos, setAllVideos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  /* Đồng bộ keyword */
+  /* Sync keyword */
   useEffect(() => {
     if (incomingKeyword !== keywordRef.current) {
       keywordRef.current = incomingKeyword;
@@ -132,8 +131,7 @@ const WorkoutScreen = ({ navigation, route }) => {
       });
 
       if (response?.success) {
-        const rawVideos = response.videos || [];
-        setAllVideos(rawVideos);
+        setAllVideos(response.videos || []);
       } else {
         setAllVideos([]);
         setError(response?.message || 'Không thể tải danh sách bài tập.');
@@ -174,7 +172,7 @@ const WorkoutScreen = ({ navigation, route }) => {
       });
       setFavoriteMap(mapped);
     } catch (err) {
-      console.warn('Lỗi lấy danh sách yêu thích:', err?.message || err);
+      console.warn('Lỗi khi lấy danh sách yêu thích:', err);
     }
   }, []);
 
@@ -196,9 +194,9 @@ const WorkoutScreen = ({ navigation, route }) => {
       if (isFavorite) {
         await removeVideoFromFavorites(videoId);
         setFavoriteMap(prev => {
-          const n = { ...prev };
-          delete n[videoId];
-          return n;
+          const next = { ...prev };
+          delete next[videoId];
+          return next;
         });
       } else {
         const response = await addVideoToFavorites(videoId);
@@ -223,19 +221,15 @@ const WorkoutScreen = ({ navigation, route }) => {
     });
   };
 
-  /* Phân nhóm videos theo phân loại */
+  /* Group videos */
   const groups = React.useMemo(() => {
     const yoga = [];
     const tapco = [];
     const dinhduong = [];
-
-    // If there is a debouncedSearch, we already fetched with search param
-    // but to be safe, still filter client-side by title/category
-    const normalizedSearch = debouncedSearch.toLowerCase();
+    const q = debouncedSearch.toLowerCase();
 
     allVideos.forEach(v => {
-      // If search is present, filter out videos that don't match
-      if (normalizedSearch) {
+      if (q) {
         const haystack = (
           (v.title || '') +
           ' ' +
@@ -243,7 +237,8 @@ const WorkoutScreen = ({ navigation, route }) => {
           ' ' +
           (v.subcategory || '')
         ).toLowerCase();
-        if (!haystack.includes(normalizedSearch)) return;
+
+        if (!haystack.includes(q)) return;
       }
 
       const cls = classifyVideo(v);
@@ -252,41 +247,12 @@ const WorkoutScreen = ({ navigation, route }) => {
       else if (cls === 'dinhduong') dinhduong.push(v);
     });
 
-    // Optional: sort each group by relevance (title match first)
-    const sorter = list => {
-      const q = normalizedSearch;
-      if (!q) return list;
-      return list
-        .map((video, idx) => {
-          const title = (video.title || '').toLowerCase();
-          const category = (
-            video.subcategory ||
-            '' ||
-            video.category ||
-            ''
-          ).toLowerCase();
-          const score =
-            (title === q ? 5 : 0) +
-            (title.includes(q) ? 3 : 0) +
-            (category.includes(q) ? 2 : 0);
-          return { video, score, idx };
-        })
-        .sort((a, b) =>
-          b.score === a.score ? a.idx - b.idx : b.score - a.score,
-        )
-        .map(x => x.video);
-    };
-
-    return {
-      yoga: sorter(yoga),
-      tapco: sorter(tapco),
-      dinhduong: sorter(dinhduong),
-    };
+    return { yoga, tapco, dinhduong };
   }, [allVideos, debouncedSearch]);
 
-  const featuredVideo = allVideos.length ? allVideos[0] : null; // giữ logic ban đầu: featured là video đầu
+  const featuredVideo = allVideos.length ? allVideos[0] : null;
 
-  /* Render mỗi item (tái sử dụng) */
+  /* Render ITEM */
   const renderWorkoutItem = ({ item }) => {
     const isFavorite = Boolean(favoriteMap[item.id]);
     const isUpdating = updatingFavoriteId === item.id;
@@ -332,6 +298,7 @@ const WorkoutScreen = ({ navigation, route }) => {
           </View>
         </View>
 
+        {/* Thumbnail + Heart button */}
         <View style={styles.resultThumbnailWrapper}>
           <Image
             source={
@@ -352,9 +319,9 @@ const WorkoutScreen = ({ navigation, route }) => {
             disabled={isUpdating}
           >
             <MaterialIcons
-              name={isFavorite ? 'star' : 'star-border'}
+              name={isFavorite ? 'favorite' : 'favorite-border'}
               size={20}
-              color={isFavorite ? '#FFD700' : '#fff'}
+              color={isFavorite ? '#ff4c4c' : '#fff'}
             />
           </TouchableOpacity>
         </View>
@@ -381,7 +348,7 @@ const WorkoutScreen = ({ navigation, route }) => {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* SEARCH */}
+      {/* SEARCH BAR */}
       <View style={styles.searchBar}>
         <MaterialIcons name="search" size={20} color="#4d6654" />
         <TextInput
@@ -405,8 +372,9 @@ const WorkoutScreen = ({ navigation, route }) => {
         )}
       </View>
 
+      {/* CONTENT */}
       <ScrollView contentContainerStyle={{ paddingBottom: 80 }}>
-        {/* FEATURED BANNER (giữ nguyên) */}
+        {/* FEATURED */}
         {featuredVideo && (
           <TouchableOpacity
             style={styles.dailyCard}
@@ -445,90 +413,41 @@ const WorkoutScreen = ({ navigation, route }) => {
           </TouchableOpacity>
         )}
 
-        {/* 3 SECTION: YOGA */}
-        <View style={styles.sectionWrap}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Yoga</Text>
-            <TouchableOpacity
-              onPress={() => {
-                /* optional: navigate to full list */
-              }}
-            >
-              <Text style={styles.sectionMore}>Xem tất cả</Text>
-            </TouchableOpacity>
-          </View>
+        {/* SECTIONS */}
+        {['Yoga', 'Tập cơ', 'Dinh dưỡng'].map((title, idx) => {
+          const key = ['yoga', 'tapco', 'dinhduong'][idx];
+          const list = groups[key];
 
-          {isLoading ? (
-            <ActivityIndicator size="small" />
-          ) : groups.yoga.length ? (
-            <FlatList
-              data={groups.yoga}
-              renderItem={renderWorkoutItem}
-              keyExtractor={i => i.id}
-              contentContainerStyle={{ paddingHorizontal: 20 }}
-              scrollEnabled={false}
-            />
-          ) : (
-            <View style={styles.emptyRow}>
-              <Text style={styles.emptyText}>Không có video Yoga.</Text>
+          return (
+            <View style={styles.sectionWrap} key={key}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{title}</Text>
+                <TouchableOpacity>
+                  <Text style={styles.sectionMore}>Xem tất cả</Text>
+                </TouchableOpacity>
+              </View>
+
+              {isLoading ? (
+                <ActivityIndicator size="small" />
+              ) : list.length ? (
+                <FlatList
+                  data={list}
+                  renderItem={renderWorkoutItem}
+                  keyExtractor={i => i.id}
+                  scrollEnabled={false}
+                  contentContainerStyle={{ paddingHorizontal: 20 }}
+                />
+              ) : (
+                <View style={styles.emptyRow}>
+                  <Text style={styles.emptyText}>Không có video {title}.</Text>
+                </View>
+              )}
             </View>
-          )}
-        </View>
-
-        {/* TẬP CƠ */}
-        <View style={styles.sectionWrap}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Tập cơ</Text>
-            <TouchableOpacity onPress={() => {}}>
-              <Text style={styles.sectionMore}>Xem tất cả</Text>
-            </TouchableOpacity>
-          </View>
-
-          {isLoading ? (
-            <ActivityIndicator size="small" />
-          ) : groups.tapco.length ? (
-            <FlatList
-              data={groups.tapco}
-              renderItem={renderWorkoutItem}
-              keyExtractor={i => i.id}
-              contentContainerStyle={{ paddingHorizontal: 20 }}
-              scrollEnabled={false}
-            />
-          ) : (
-            <View style={styles.emptyRow}>
-              <Text style={styles.emptyText}>Không có video Tập cơ.</Text>
-            </View>
-          )}
-        </View>
-
-        {/* DINH DƯỠNG */}
-        <View style={styles.sectionWrap}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Dinh dưỡng</Text>
-            <TouchableOpacity onPress={() => {}}>
-              <Text style={styles.sectionMore}>Xem tất cả</Text>
-            </TouchableOpacity>
-          </View>
-
-          {isLoading ? (
-            <ActivityIndicator size="small" />
-          ) : groups.dinhduong.length ? (
-            <FlatList
-              data={groups.dinhduong}
-              renderItem={renderWorkoutItem}
-              keyExtractor={i => i.id}
-              contentContainerStyle={{ paddingHorizontal: 20 }}
-              scrollEnabled={false}
-            />
-          ) : (
-            <View style={styles.emptyRow}>
-              <Text style={styles.emptyText}>Không có video Dinh dưỡng.</Text>
-            </View>
-          )}
-        </View>
+          );
+        })}
       </ScrollView>
 
-      {/* Loading / Error full screen fallback (nếu muốn hiện khi danh sách trống) */}
+      {/* Load/Error fallback */}
       {!allVideos.length && isLoading && (
         <View style={styles.feedbackContainer}>
           <ActivityIndicator size="large" color="#30C451" />
@@ -549,7 +468,7 @@ const WorkoutScreen = ({ navigation, route }) => {
 export default WorkoutScreen;
 
 /* ============================================================
-   STYLES (tham khảo giữ nguyên phần lớn style cũ, thêm vài style section)
+   STYLES
 ============================================================ */
 const styles = StyleSheet.create({
   container: {
@@ -598,7 +517,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  /* SEARCH */
+  /* Search */
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -620,7 +539,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
 
-  /* DAILY FEATURED (BANNER) */
+  /* Featured */
   dailyCard: {
     marginTop: 20,
     marginHorizontal: 20,
@@ -667,7 +586,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  /* SECTION */
+  /* Section */
   sectionWrap: {
     marginTop: 18,
     marginBottom: 6,
@@ -689,13 +608,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  listContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
-  },
-
-  /* ITEM CARD */
+  /* Card */
   resultCard: {
     flexDirection: 'row',
     backgroundColor: '#fff',
@@ -726,6 +639,8 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+
+  /* Heart Icon */
   favoriteButton: {
     position: 'absolute',
     top: 6,
