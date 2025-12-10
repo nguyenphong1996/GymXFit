@@ -12,7 +12,15 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import MIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 
-// Tabs
+const MATERIAL_COLORS = {
+  primary: '#1F8E4A',
+  background: '#F5F7F6',
+  surface: '#FFFFFF',
+  outline: '#D7E5DB',
+  textPrimary: '#10241A',
+  textSecondary: '#47614F',
+};
+
 const TABS = ['All', 'Circuit', 'Split', 'Legs', 'Cardio', 'Arm'];
 
 const mockData = [
@@ -71,7 +79,7 @@ const mockData = [
 ];
 
 const renderContentItem = ({ item }) => {
-  // 🔹 Kiểu 1: Workout Full (ảnh nền + overlay)
+  // Full Image Card (Workout Full)
   if (item.type === 'workout-full') {
     return (
       <TouchableOpacity style={styles.cardFullContainer}>
@@ -80,54 +88,43 @@ const renderContentItem = ({ item }) => {
           style={styles.cardFullBackground}
           imageStyle={{ borderRadius: 20 }}
         >
-          <View style={styles.cardOverlay}>
-            <Icon
-              name="star-border"
-              size={20}
-              color="#fff"
-              style={styles.starIcon}
-            />
-            <View style={styles.cardFullContent}>
-              <Text style={styles.cardTitleWhite}>{item.title}</Text>
-              <View style={styles.cardInfoRow}>
-                <Icon name="schedule" size={14} color="#fff" />
-                <Text style={styles.cardInfoWhite}>
-                  {' '}
-                  {item.duration} Minutes
-                </Text>
-                <MIcon
-                  name="fire"
-                  size={14}
-                  color="#fff"
-                  style={{ marginLeft: 5 }}
-                />
-                <Text style={styles.cardInfoWhite}> {item.calories} Kcal</Text>
-              </View>
+          <View style={styles.cardOverlay} />
+
+          <View style={styles.cardFullContent}>
+            <Text style={styles.cardTitleWhite}>{item.title}</Text>
+
+            <View style={styles.cardInfoRow}>
+              <Icon name="schedule" size={14} color="#fff" />
+              <Text style={styles.cardInfoWhite}> {item.duration} Minutes</Text>
+
+              <MIcon name="fire" size={14} color="#fff" />
+              <Text style={styles.cardInfoWhite}> {item.calories} Kcal</Text>
             </View>
-            <MIcon
-              name="play-circle"
-              size={30}
-              color="#fff"
-              style={styles.playIcon}
-            />
           </View>
+
+          <MIcon
+            name="play-circle"
+            size={38}
+            color="#fff"
+            style={styles.playIcon}
+          />
         </ImageBackground>
       </TouchableOpacity>
     );
   }
 
-  // 🔹 Kiểu 2: Split (chữ trái, ảnh phải)
+  // Split Card (thumbnail right)
   if (item.type.includes('-split')) {
-    const isWorkout = item.type.startsWith('workout');
+    const isWorkout = item.type.includes('workout');
+
     return (
       <TouchableOpacity style={styles.cardSplitContainer}>
         <View style={styles.cardSplitTextContainer}>
           <Text style={styles.cardTitleBlack}>{item.title}</Text>
+
           <View style={styles.cardInfoRow}>
             <Text style={styles.cardInfoGray}>⏰ {item.duration} Minutes</Text>
-            <Text style={styles.cardInfoGray}>
-              🔥 {item.calories} {isWorkout ? 'Kcal' : 'Cal'}
-            </Text>
+            <Text style={styles.cardInfoGray}>🔥 {item.calories} Kcal</Text>
             {isWorkout && (
               <Text style={styles.cardInfoGray}>
                 🤸 {item.exercises} Exercises
@@ -135,14 +132,9 @@ const renderContentItem = ({ item }) => {
             )}
           </View>
         </View>
-        <View style={styles.cardSplitImageContainer}>
+
+        <View style={styles.cardSplitImageWrapper}>
           <Image source={item.image} style={styles.cardSplitImage} />
-          <Icon
-            name="star-border"
-            size={18}
-            color="#fff"
-            style={[styles.starIcon, { top: 8, right: 8 }]}
-          />
         </View>
       </TouchableOpacity>
     );
@@ -179,52 +171,51 @@ const SearchScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('All');
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
+    <View style={styles.screen}>
+      {/* FULL WIDTH HEADER giống BookScreen */}
+      <View style={styles.headerContainer}>
         <TouchableOpacity
-          style={styles.arrowSearchContainer}
+          style={styles.backHeader}
           onPress={() => navigation.goBack()}
         >
-          <Icon name="arrow-back" size={24} color="#000" />
-          <Text style={styles.txtsize20bold}>Search</Text>
+          <Icon name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <View style={styles.headerIcon}>
-          <TouchableOpacity>
-            <Icon
-              name="notifications-none"
-              size={26}
-              color="#000"
-              style={{ marginEnd: 21 }}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity>
-            <Icon name="person-outline" size={26} color="#000" />
-          </TouchableOpacity>
+
+        <View style={styles.titleHeader}>
+          <Text style={styles.headerTitle}>Tìm kiếm</Text>
         </View>
+
+        <View style={{ flex: 1 }} />
       </View>
 
-      {/* Ô tìm kiếm */}
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search"
-          value={keyword}
-          onChangeText={setKeyword}
+      {/* CONTENT WRAPPER */}
+      <View style={styles.container}>
+        <View style={styles.searchContainer}>
+          <Icon
+            name="search"
+            size={22}
+            color={MATERIAL_COLORS.textSecondary}
+            style={{ marginRight: 10 }}
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Tìm kiếm..."
+            placeholderTextColor="#9AA5A0"
+            value={keyword}
+            onChangeText={setKeyword}
+          />
+        </View>
+
+        <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
+
+        <FlatList
+          data={mockData}
+          renderItem={renderContentItem}
+          keyExtractor={item => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 140 }}
         />
       </View>
-
-      {/* Thanh tab */}
-      <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
-
-      {/* Danh sách */}
-      <FlatList
-        data={mockData}
-        renderItem={renderContentItem}
-        keyExtractor={item => item.id}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }}
-      />
     </View>
   );
 };
@@ -232,154 +223,190 @@ const SearchScreen = ({ navigation }) => {
 export default SearchScreen;
 
 const styles = StyleSheet.create({
-  // --- Layout ---
-  container: {
+  screen: {
     flex: 1,
-    width: '100%',
-    backgroundColor: '#fff',
-    padding: 35,
-    paddingBottom: 0,
+    backgroundColor: MATERIAL_COLORS.background,
   },
-  header: {
+
+  /** HEADER FULL WIDTH – chuẩn BookScreen */
+  headerContainer: {
+    height: 110,
+    backgroundColor: MATERIAL_COLORS.primary,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingBottom: 18,
+    paddingHorizontal: 18,
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25,
   },
-  arrowSearchContainer: {
+
+  backHeader: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  txtsize20bold: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginStart: 12,
-  },
-  headerIcon: {
-    flexDirection: 'row',
+
+  titleHeader: {
+    flex: 2,
+    alignItems: 'center',
   },
 
-  // --- Search ---
+  headerTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '700',
+  },
+
+  /** CONTENT WRAPPER */
+  container: {
+    flex: 1,
+    paddingHorizontal: 22,
+    paddingTop: 20,
+  },
+
+  /** SEARCH BOX */
   searchContainer: {
-    marginVertical: 13,
-  },
-  searchInput: {
-    borderColor: '#212020',
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderRadius: 30,
-    fontSize: 13,
-    paddingStart: 12,
+    borderColor: MATERIAL_COLORS.outline,
+    alignItems: 'center',
+    marginBottom: 18,
+    elevation: 2,
   },
 
-  // --- Tab Bar ---
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: MATERIAL_COLORS.textPrimary,
+  },
+
+  /** TABS */
   tabBar: {
     flexDirection: 'row',
-    gap: 7,
     flexWrap: 'wrap',
+    gap: 10,
     justifyContent: 'center',
     marginBottom: 20,
   },
+
   tabButton: {
-    width: '31%',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    alignItems: 'center',
-  },
-  activeTab: {
-    backgroundColor: '#30c451',
-    borderColor: '#30c451',
-  },
-  inactiveTab: {
-    backgroundColor: '#fff',
-    borderColor: '#212020',
-  },
-  activeTabText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    paddingVertical: 4,
-    fontSize: 16,
-  },
-  inactiveTabText: {
-    color: '#212020',
-    fontSize: 16,
-    paddingVertical: 4,
   },
 
-  // --- Card Style 1 ---
-  cardFullContainer: {
-    height: 180,
-    marginBottom: 20,
-    borderRadius: 20,
+  activeTab: {
+    backgroundColor: MATERIAL_COLORS.primary,
+    borderColor: MATERIAL_COLORS.primary,
   },
+
+  inactiveTab: {
+    backgroundColor: '#fff',
+    borderColor: MATERIAL_COLORS.outline,
+  },
+
+  activeTabText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+
+  inactiveTabText: {
+    color: MATERIAL_COLORS.textPrimary,
+    fontWeight: '500',
+  },
+
+  /** FULL IMAGE CARD */
+  cardFullContainer: {
+    height: 190,
+    marginBottom: 22,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+  },
+
   cardFullBackground: {
     flex: 1,
     justifyContent: 'flex-end',
   },
+
   cardOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 20,
-    padding: 15,
-  },
-  cardFullContent: {
-    position: 'absolute',
-    bottom: 15,
-    left: 15,
-  },
-  cardTitleWhite: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  cardInfoRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    alignItems: 'center',
-  },
-  cardInfoWhite: {
-    color: '#fff',
-    fontSize: 12,
-  },
-  starIcon: {
-    position: 'absolute',
-    top: 15,
-    right: 15,
-  },
-  playIcon: {
-    position: 'absolute',
-    bottom: 15,
-    right: 15,
+    backgroundColor: 'rgba(0,0,0,0.28)',
   },
 
-  // --- Card Style 2 ---
+  cardFullContent: {
+    position: 'absolute',
+    bottom: 18,
+    left: 15,
+  },
+
+  cardTitleWhite: {
+    color: '#fff',
+    fontSize: 19,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+
+  cardInfoWhite: {
+    color: '#fff',
+    fontSize: 13,
+  },
+
+  playIcon: {
+    position: 'absolute',
+    bottom: 18,
+    right: 18,
+  },
+
+  /** SPLIT CARD */
   cardSplitContainer: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
     borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: MATERIAL_COLORS.outline,
     marginBottom: 20,
-    borderWidth: 0.5,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    overflow: 'hidden',
   },
+
   cardSplitTextContainer: {
     flex: 1,
+    padding: 15,
     justifyContent: 'center',
-    paddingHorizontal: 10,
   },
+
   cardTitleBlack: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '700',
+    color: MATERIAL_COLORS.textPrimary,
     marginBottom: 10,
   },
+
   cardInfoGray: {
-    color: '#888',
-    fontSize: 12,
+    fontSize: 13,
+    color: MATERIAL_COLORS.textSecondary,
+    marginBottom: 2,
   },
-  cardSplitImageContainer: {
-    width: 120,
-    height: 120,
+
+  cardSplitImageWrapper: {
+    width: 125,
+    height: 125,
   },
+
   cardSplitImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 15,
+    borderTopRightRadius: 20,
+    borderBottomRightRadius: 20,
   },
 });

@@ -1,3 +1,4 @@
+// Updated code without SafeAreaView
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,7 +11,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute } from '@react-navigation/native';
 import Video from 'react-native-video';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -30,7 +30,10 @@ const formatDurationLabel = value => {
   if (!Number.isFinite(numeric) || numeric <= 0) return '00:00';
   const minutes = Math.floor(numeric / 60);
   const seconds = Math.floor(numeric % 60);
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(
+    2,
+    '0',
+  )}`;
 };
 
 const WorkoutVideoScreen = ({ navigation }) => {
@@ -75,34 +78,31 @@ const WorkoutVideoScreen = ({ navigation }) => {
     let isMounted = true;
 
     const syncFavoriteState = async () => {
-      if (!videoId) {
-        return;
-      }
+      if (!videoId) return;
+
       try {
         const response = await getFavoriteVideos();
         const list = Array.isArray(response?.data)
           ? response.data
           : response?.favorites || [];
         const found = list.some(item => item.videoId === videoId);
-        if (isMounted) {
-          setIsFavorite(found);
-        }
+        if (isMounted) setIsFavorite(found);
       } catch (err) {
-        console.warn('Không thể đồng bộ trạng thái yêu thích:', err?.message || err);
+        console.warn(
+          'Không thể đồng bộ trạng thái yêu thích:',
+          err?.message || err,
+        );
       }
     };
 
     syncFavoriteState();
-
     return () => {
       isMounted = false;
     };
   }, [videoId]);
 
   const handleToggleFavorite = async () => {
-    if (!videoId) {
-      return;
-    }
+    if (!videoId) return;
 
     setIsSyncingFavorite(true);
     try {
@@ -128,7 +128,10 @@ const WorkoutVideoScreen = ({ navigation }) => {
     return raw.length ? raw : FALLBACK_DESCRIPTION;
   }, [videoData?.description]);
 
-  const durationLabel = useMemo(() => formatDurationLabel(videoData?.duration), [videoData?.duration]);
+  const durationLabel = useMemo(
+    () => formatDurationLabel(videoData?.duration),
+    [videoData?.duration],
+  );
 
   const viewCount = useMemo(() => {
     const raw =
@@ -138,12 +141,19 @@ const WorkoutVideoScreen = ({ navigation }) => {
       videoData?.total_view ??
       videoData?.watchCount ??
       0;
+
     const numeric = Number(raw);
     return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
   }, [videoData]);
 
   const intensityLabel = useMemo(() => {
-    const labels = [videoData?.level, videoData?.difficulty, videoData?.subcategory, videoData?.category].filter(Boolean);
+    const labels = [
+      videoData?.level,
+      videoData?.difficulty,
+      videoData?.subcategory,
+      videoData?.category,
+    ].filter(Boolean);
+
     return labels.length ? labels[0] : 'Tổng hợp';
   }, [videoData]);
 
@@ -159,16 +169,23 @@ const WorkoutVideoScreen = ({ navigation }) => {
   }, [viewCount]);
 
   const metaChips = useMemo(() => {
-    const chips = [{ key: 'duration', icon: 'schedule', label: durationLabel || '00:00' }];
-    if (caloriesLabel) {
-      chips.push({ key: 'calories', icon: 'local-fire-department', label: caloriesLabel });
-    }
-    if (viewLabel) {
+    const chips = [
+      { key: 'duration', icon: 'schedule', label: durationLabel || '00:00' },
+    ];
+    if (caloriesLabel)
+      chips.push({
+        key: 'calories',
+        icon: 'local-fire-department',
+        label: caloriesLabel,
+      });
+    if (viewLabel)
       chips.push({ key: 'views', icon: 'visibility', label: viewLabel });
-    }
-    if (intensityLabel) {
-      chips.push({ key: 'level', icon: 'fitness-center', label: intensityLabel });
-    }
+    if (intensityLabel)
+      chips.push({
+        key: 'level',
+        icon: 'fitness-center',
+        label: intensityLabel,
+      });
     return chips;
   }, [durationLabel, caloriesLabel, viewLabel, intensityLabel]);
 
@@ -197,38 +214,32 @@ const WorkoutVideoScreen = ({ navigation }) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.headerWrap}>
-        <View style={styles.header}>
-          <TouchableOpacity activeOpacity={0.8} style={styles.backWrap} onPress={() => navigation.goBack()}>
-            <Icon name="arrow-back" size={26} color="#20B24A" />
-          </TouchableOpacity>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.headerIcon}
+          onPress={() => navigation.goBack()}
+        >
+          <Icon name="arrow-back" size={28} color="#FFFFFF" />
+        </TouchableOpacity>
 
-          <Text style={styles.headerText}>{videoData.level || 'Bài tập'}</Text>
-
-          <View style={styles.headerRight}>
-            <TouchableOpacity activeOpacity={0.8} onPress={() => setShowSearch(prev => !prev)}>
-              <Icon name="search" size={26} color="#20B24A" style={styles.rightIcon} />
-            </TouchableOpacity>
-            <TouchableOpacity activeOpacity={0.8}>
-              <Icon name="notifications-none" size={26} color="#20B24A" style={styles.rightIcon} />
-            </TouchableOpacity>
-            <TouchableOpacity activeOpacity={0.8}>
-              <Icon name="person-outline" size={26} color="#20B24A" style={styles.rightIcon} />
-            </TouchableOpacity>
-          </View>
+        <View style={styles.headerTextWrap}>
+          <Text style={styles.greeting}>Bài tập</Text>
+          <Text style={styles.headerSub}>Khám phá và luyện tập mỗi ngày</Text>
         </View>
 
-        {showSearch ? (
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Tìm kiếm trong mô tả bài tập..."
-            placeholderTextColor="#888"
-            value={searchText}
-            onChangeText={setSearchText}
-          />
-        ) : null}
+        <View style={{ width: 40 }} />
       </View>
+
+      {showSearch ? (
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Tìm kiếm trong mô tả bài tập..."
+          placeholderTextColor="#888"
+          value={searchText}
+          onChangeText={setSearchText}
+        />
+      ) : null}
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.videoContainer}>
@@ -253,7 +264,11 @@ const WorkoutVideoScreen = ({ navigation }) => {
             {isSyncingFavorite ? (
               <ActivityIndicator size="small" color="#FFD700" />
             ) : (
-              <Icon name={isFavorite ? 'star' : 'star-border'} size={32} color={isFavorite ? '#FFD700' : '#20B24A'} />
+              <Icon
+                name={isFavorite ? 'star' : 'star-border'}
+                size={32}
+                color={isFavorite ? '#FFD700' : '#20B24A'}
+              />
             )}
           </TouchableOpacity>
         </View>
@@ -272,7 +287,7 @@ const WorkoutVideoScreen = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -280,8 +295,45 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-    paddingTop: Platform.OS === 'ios' ? 36 : 10,
   },
+
+  header: {
+    backgroundColor: '#2FAE66',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 28 : 40,
+    paddingBottom: 28,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    shadowColor: '#2FAE66',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerIcon: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+  },
+  headerTextWrap: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  greeting: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  headerSub: {
+    marginTop: 4,
+    fontSize: 15,
+    color: '#CFF7E6',
+    fontWeight: '500',
+  },
+
   centerStatus: {
     flex: 1,
     justifyContent: 'center',
@@ -291,34 +343,10 @@ const styles = StyleSheet.create({
     color: 'red',
     fontSize: 16,
   },
-  headerWrap: {
-    paddingHorizontal: 18,
-    marginBottom: 10,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  backWrap: {
-    width: 30,
-    alignItems: 'flex-start',
-  },
-  headerText: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  rightIcon: {
-    marginLeft: 14,
-  },
+
   searchInput: {
     marginTop: 10,
+    marginHorizontal: 20,
     backgroundColor: '#f1f1f1',
     borderRadius: 10,
     paddingHorizontal: 15,
@@ -328,11 +356,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
   },
+
   scrollContent: {
     paddingHorizontal: 18,
     paddingTop: 12,
     paddingBottom: 60,
   },
+
   videoContainer: {
     width: '100%',
     aspectRatio: 16 / 9,
@@ -340,6 +370,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginBottom: 20,
   },
+
   videoPlayer: {
     position: 'absolute',
     top: 0,
@@ -347,12 +378,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     right: 0,
   },
+
   favoriteBtn: {
     position: 'absolute',
     top: 16,
     right: 16,
     zIndex: 6,
   },
+
   infoSection: {
     backgroundColor: '#ffffff',
     borderRadius: 24,
@@ -366,21 +399,25 @@ const styles = StyleSheet.create({
     elevation: 3,
     gap: 12,
   },
+
   videoTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#10381d',
   },
+
   videoDescription: {
     fontSize: 14,
     color: '#465b4c',
     lineHeight: 20,
   },
+
   chipContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
   },
+
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -390,6 +427,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
+
   chipText: {
     fontSize: 13,
     color: '#2f6f4f',

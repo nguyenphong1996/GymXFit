@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  Image,
   StatusBar,
   StyleSheet,
   useColorScheme,
@@ -10,55 +9,25 @@ import {
   FlatList,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 
-const NEWS_DATA = [
-  {
-    id: '1',
-    image: null,
-    title: 'Phòng gym Bình Thạnh tốt nhất bạn nên biết',
-    date: '06/10/2025',
-  },
-  {
-    id: '2',
-    image: null,
-    title: 'Phòng tập tiên phong ứng dụng công nghệ Face ID',
-    date: '07/10/2025',
-  },
-  {
-    id: '3',
-    image: require('@assets/images/lesmils3.jpg'),
-    title: 'Carb là gì? Những thực phẩm giàu carb tốt cho sức khỏe',
-    date: '08/10/2025',
-  },
-  {
-    id: '4',
-    image: require('@assets/images/lesmils4.jpg'),
-    title: 'Thực phẩm bổ sung hiệu quả cho người tập gym',
-    date: '09/10/2025',
-  },
-];
-
-const NewsScreen = ({ navigation }) => {
+const NotificationScreen = ({ navigation }) => {
   const isDarkMode = useColorScheme() === 'dark';
-  const [articles] = useState(NEWS_DATA);
 
-  const renderNewsItem = ({ item }) => (
+  const [notifications] = useState([]);
+
+  const renderItem = ({ item }) => (
     <View style={styles.itemContent}>
-      {item.image ? (
-        <Image style={styles.imageContent} source={item.image} />
-      ) : (
-        <View style={[styles.imageContent, styles.imagePlaceholder]}>
-          <Icon name="article" size={34} color="#30C451" />
-        </View>
-      )}
+      <View style={styles.iconContainer}>
+        <MaterialCommunityIcons
+          name="bell-circle-outline"
+          size={28}
+          color="#30C451"
+        />
+      </View>
+
       <View style={styles.textContent}>
-        <Text
-          style={styles.textTitleContent}
-          numberOfLines={2}
-          ellipsizeMode="tail"
-        >
-          {item.title}
-        </Text>
+        <Text style={styles.textTitleContent}>{item.title}</Text>
         <Text style={styles.textDate}>{item.date}</Text>
       </View>
     </View>
@@ -75,33 +44,49 @@ const NewsScreen = ({ navigation }) => {
           onPress={() => navigation.goBack()}
         >
           <Icon name="arrow-back" size={22} color="#fff" />
-          <Text style={styles.textBack}>Quay lại</Text>
         </TouchableOpacity>
+
         <View style={styles.titleHeader}>
-          <Text style={styles.textTitle}>Tin tức GymXFit</Text>
+          <Text style={styles.textTitle}>Thông báo</Text>
         </View>
+
         <View style={{ flex: 1 }} />
       </View>
 
-      {/* Danh sách tin tức */}
-      <FlatList
-        data={articles}
-        renderItem={renderNewsItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      />
+      {/* Danh sách thông báo */}
+      {notifications.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <MaterialCommunityIcons
+            name="bell-off-outline"
+            size={70}
+            color="#BDBDBD"
+          />
+          <Text style={styles.emptyTitle}>Chưa có thông báo</Text>
+          <Text style={styles.emptyText}>
+            Lịch sử hoạt động của bạn sẽ xuất hiện tại đây khi có cập nhật mới.
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={notifications}
+          renderItem={renderItem}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </View>
   );
 };
 
-export default NewsScreen;
+export default NotificationScreen;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
   },
+
   headerContainer: {
     height: 100,
     backgroundColor: '#30C451',
@@ -112,59 +97,80 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 25,
     borderBottomRightRadius: 25,
   },
+
   backHeader: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  textBack: {
-    color: '#fff',
-    marginStart: 7,
-    fontSize: 13,
-  },
+
   titleHeader: {
     flex: 2,
     alignItems: 'center',
   },
+
   textTitle: {
     color: '#fff',
     fontSize: 20,
     fontWeight: '600',
   },
+
   contentContainer: {
     paddingHorizontal: 20,
     paddingVertical: 15,
   },
+
   itemContent: {
+    flexDirection: 'row',
     backgroundColor: '#fff',
-    marginBottom: 15,
+    padding: 12,
     borderRadius: 10,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 3,
-    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    marginBottom: 15,
   },
-  imageContent: {
-    width: '100%',
-    height: 150,
-  },
-  imagePlaceholder: {
-    backgroundColor: '#e5f7ec',
+
+  iconContainer: {
+    width: 45,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   textContent: {
-    padding: 10,
+    flex: 1,
+    paddingHorizontal: 10,
   },
+
   textTitleContent: {
     fontSize: 15,
     fontWeight: '600',
   },
+
   textDate: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#666',
     marginTop: 5,
+  },
+
+  emptyContainer: {
+    marginTop: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+  },
+
+  emptyTitle: {
+    marginTop: 15,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+  },
+
+  emptyText: {
+    marginTop: 8,
+    fontSize: 14,
+    textAlign: 'center',
+    color: '#666',
+    lineHeight: 20,
   },
 });

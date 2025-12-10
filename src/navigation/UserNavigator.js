@@ -16,20 +16,29 @@ import WorkoutScreen from '@screens/workouts/WorkoutScreen';
 import WorkoutVideoScreen from '@screens/video/WorkoutVideoScreen';
 import UpdateProfileScreen from '@screens/profile/UpdateProfileScreen';
 import BookScreen from '@screens/booking/BookScreen';
+import FavoriteVideosScreen from '@screens/video/FavoriteVideosScreen';
+import SearchCalendarScreen from '@screens/booking/SearchCalendarScreen';
+import NotificationScreen from '@screens/home/NotificationScreen';
+import HomeScreen from '@screens/home/HomeScreen';
+import SearchScreen from '@screens/home/SearchScreen';
+
 
 const Stack = createNativeStackNavigator();
 
 const UserNavigator = () => {
   return (
     <Stack.Navigator
-      initialRouteName="RegisterScreen"
+      initialRouteName="BookScreen"
       screenOptions={{
         headerShown: false,
       }}
     >
       <Stack.Screen name="LoginScreen" component={LoginScreen} />
       <Stack.Screen name="RegisterScreen" component={RegisterScreen} />
-      <Stack.Screen name="VerifyRegisterScreen" component={VerifyRegisterScreen} />
+      <Stack.Screen
+        name="VerifyRegisterScreen"
+        component={VerifyRegisterScreen}
+      />
       <Stack.Screen name="VerifyLoginScreen" component={VerifyLoginScreen} />
       <Stack.Screen name="SurveyScreen" component={SurveyScreen} />
       <Stack.Screen name="CustomerService" component={CustomerServiceScreen} />
@@ -42,6 +51,17 @@ const UserNavigator = () => {
       <Stack.Screen name="WorkoutVideo" component={WorkoutVideoScreen} />
       <Stack.Screen name="UpdateProfile" component={UpdateProfileScreen} />
       <Stack.Screen name="BookScreen" component={BookScreen} />
+      <Stack.Screen
+        name="FavoriteVideosScreen"
+        component={FavoriteVideosScreen}
+      />
+      <Stack.Screen
+        name="SearchCalendarScreen"
+        component={SearchCalendarScreen}
+      />
+      <Stack.Screen name="NotificationScreen" component={NotificationScreen} />
+      <Stack.Screen name="HomeScreen" component={HomeScreen} />
+      <Stack.Screen name="SearchScreen" component={SearchScreen} />
     </Stack.Navigator>
   );
 };
