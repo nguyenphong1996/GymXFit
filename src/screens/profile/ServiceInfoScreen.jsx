@@ -146,7 +146,18 @@ const ServiceInfoScreen = ({ navigation }) => {
       >
         {/* Membership Card */}
         <View style={styles.card}>
-
+          <View style={styles.cardHeader}>
+            <View>
+              <Text style={styles.cardLabel}>Gói thành viên hiện tại</Text>
+              <Text style={styles.packageName}>
+                {membership?.packageName || 'Chưa có gói'}
+              </Text>
+            </View>
+            <View style={[styles.statusPill, { backgroundColor: `${statusColor}20` }]}>
+              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+              <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+            </View>
+          </View>
           <View style={styles.row}>
             <View style={styles.metaBlock}>
               <Text style={styles.metaLabel}>Ngày bắt đầu</Text>

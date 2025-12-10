@@ -6,7 +6,7 @@ const DEFAULT_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL
   || process.env.API_BASE_URL
   || 'https://be.vnchack.com/';
 
-const createAxiosInstance = (contentType = 'application/json') => {
+const createAxiosInstance = (contentType = 'application/json', token = null) => {
   // Log Base URL để debug lỗi kết nối
   if (__DEV__) {
     console.log('Creating Axios Instance with Base URL:', DEFAULT_BASE_URL);
@@ -20,7 +20,9 @@ const createAxiosInstance = (contentType = 'application/json') => {
 
   axiosInstance.interceptors.request.use(
     async (config) => {
-      const token = await AsyncStorage.getItem('token');
+      // Ưu tiên token được truyền trực tiếp, nếu không có thì lấy từ storage
+      // Giúp tránh race-condition trong flow login
+      const tokenToUse = token || (await AsyncStorage.getItem('token'));
       const headers = {
         Accept: 'application/json',
       };
@@ -29,8 +31,8 @@ const createAxiosInstance = (contentType = 'application/json') => {
         headers['Content-Type'] = contentType;
       }
 
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
+      if (tokenToUse) {
+        headers.Authorization = `Bearer ${tokenToUse}`;
       }
 
       config.headers = {
@@ -68,10 +70,20 @@ const createAxiosInstance = (contentType = 'application/json') => {
       console.error('Status:', error.response?.status);
       console.error('Data:', error.response?.data);
       console.error('Message:', error.message);
+      console.error('Code:', error.code);
+      console.error('Errno:', error.errno);
+      console.error('Syscall:', error.syscall);
+      console.error('Hostname:', error.hostname);
+      console.error('Full Error:', JSON.stringify(error, null, 2));
       console.error('==================');
 
       if (error.message === 'Network Error' && !error.response) {
         console.warn('⚠️ Lỗi kết nối mạng: Vui lòng kiểm tra xem thiết bị và server có cùng mạng Wifi không, và IP server đã chính xác chưa.');
+        console.warn('🔍 Gợi ý debug:');
+        console.warn('  - Kiểm tra server https://be.vnchack.com/ có đang chạy không');
+        console.warn('  - Test URL từ browser: https://be.vnchack.com/api/user/profile');
+        console.warn('  - Kiểm tra kết nối internet của thiết bị/emulator');
+        console.warn('  - Thử ping domain: ping be.vnchack.com');
       }
       
       return Promise.reject(error);

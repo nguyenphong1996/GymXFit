@@ -86,6 +86,16 @@ export const calculateDaysLeft = membership => {
     return null;
   }
 };
+export const cycleMultipliers = {
+  month: { months: 1, multiplier: 1, discount: 0 },
+  quarter: { months: 3, multiplier: 3, discount: 0.2 }, // 20% off
+  year: { months: 12, multiplier: 12, discount: 0.5 }, // 50% off
+};
+
+export const computeCyclePrice = (basePrice, cycle) => {
+  const cfg = cycleMultipliers[cycle] || cycleMultipliers.month;
+  return Math.round(basePrice * cfg.months * (1 - cfg.discount));
+};
 
 export const formatCurrency = amount => {
   if (amount === null || amount === undefined) return '—';

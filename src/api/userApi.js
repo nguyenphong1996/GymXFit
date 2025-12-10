@@ -78,14 +78,22 @@ export async function verifyLoginOtp(phoneNumber, code) {
     }
 }
 
-export async function getProfile() {
+export async function getProfile(token = null) {
     try {
-        const response = await createAxiosInstance().get('/api/user/profile', {
+        console.log('🔄 getProfile: Starting profile fetch...');
+        // Truyền token vào instance nếu có, để login flow không bị race condition
+        const client = createAxiosInstance(undefined, token);
+        const response = await client.get('/api/user/profile', {
             params: { cacheBust: Date.now() },
             headers: { 'Cache-Control': 'no-cache' },
         });
+        console.log('✅ getProfile: Success', response);
         return response;
     } catch (error) {
+        // Nếu là lỗi 401 (Unauthorized), không cần log error vì UserContext sẽ xử lý logout
+        if (error.response?.status !== 401) {
+            console.error('❌ getProfile: Failed', error.message);
+        }
         const errorMessage = error.response?.data?.message || 'Không thể tải thông tin cá nhân.';
         throw new Error(errorMessage);
     }
@@ -240,3 +248,45 @@ export async function removeVideoFromFavorites(videoId) {
         throw new Error(errorMessage);
     }
 }
+
+// ============== MEMBERSHIP & PACKAGES ==============
+
+export const getMembershipInfo = async () => {
+    const client = createAxiosInstance();
+    try {
+        const response = await client.get('/api/user/membership', {
+            params: { cacheBust: Date.now() },
+            headers: { 'Cache-Control': 'no-cache' },
+        });
+        return response; // FIX: Return response directly
+    } catch (error) {
+        console.error('❌ getMembershipInfo: Failed', error.response?.data || error.message);
+        throw error;
+    }
+};
+
+export const getAllPackages = async () => {
+    const client = createAxiosInstance();
+    try {
+        const response = await client.get('/api/packages');
+        return response; // FIX: Return response directly
+    } catch (error) {
+        console.error('❌ getAllPackages: Failed', error.response?.data || error.message);
+        throw error;
+    }
+};
+
+export const getMembershipUpgradeQuote = async ({ packageId, billingCycle, isTemporary }) => {
+  const client = createAxiosInstance();
+  try {
+    const payload = { packageId, billingCycle };
+    if (isTemporary !== undefined) {
+      payload.isTemporary = isTemporary;
+    }
+    const response = await client.post('/api/user/membership/quote', payload);
+    return response; // FIX: Return response directly
+  } catch (error) {
+    console.error('❌ getMembershipUpgradeQuote: Failed', error.response?.data || error.message);
+    throw error;
+  }
+};
