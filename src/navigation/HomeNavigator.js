@@ -29,6 +29,7 @@ import WorkoutScreen from '@screens/workouts/WorkoutScreen';
 import WorkoutVideoScreen from '@screens/video/WorkoutVideoScreen';
 import { UserContext } from '@context/UserContext';
 import { scanAttendance } from '@api/classesApi';
+import ServiceInfoScreen from '@screens/profile/ServiceInfoScreen';
 
 const resolveCheckinWindowMessage = (message = '', code = '') => {
     const normalizedMessage = typeof message === 'string' ? message.toLowerCase() : '';
@@ -341,6 +342,7 @@ const ProfileStack = () => {
             <Stack.Screen name='PaymentResult' component={PaymentResultScreen} />
             <Stack.Screen name='MembershipFAQ' component={FAQScreen} />
             <Stack.Screen name='GymxfitPolicy' component={GymxfitPolicyScreen} />
+            <Stack.Screen name='ServiceInfo' component={ServiceInfoScreen} />
         </Stack.Navigator>
     )
 }

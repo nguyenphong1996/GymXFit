@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,18 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   FlatList,
-  StatusBar
+  StatusBar,
+  Alert,
+  Animated,
+  Dimensions
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
+import { Swipeable } from 'react-native-gesture-handler';
 import { UserContext } from '@context/UserContext';
-import { getVnpayTokens } from '../../api/paymentApi';
+import { getVnpayTokens, deleteVnpayToken } from '../../api/paymentApi';
+
+const { width } = Dimensions.get('window');
 
 const MD3_COLORS = {
   primary: '#1F8E4A',
@@ -82,45 +88,96 @@ const PaymentCardsScreen = ({ navigation }) => {
     });
   };
 
+  const handleDelete = (item) => {
+    Alert.alert(
+      'Xóa thẻ',
+      `Bạn có chắc chắn muốn xóa thẻ ${item.bankCode || 'này'} đuôi ${item.cardMask?.slice(-4) || '...'} không?`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        {
+          text: 'Xóa',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsLoading(true);
+              await deleteVnpayToken(item._id);
+              await fetchTokens(); // Refresh list
+            } catch (error) {
+              Alert.alert('Lỗi', 'Không thể xóa thẻ. Vui lòng thử lại.');
+            } finally {
+              setIsLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderRightActions = (progress, dragX, item) => {
+    const scale = dragX.interpolate({
+      inputRange: [-80, 0],
+      outputRange: [1, 0],
+      extrapolate: 'clamp',
+    });
+
+    return (
+      <TouchableOpacity
+        style={styles.deleteAction}
+        onPress={() => handleDelete(item)}
+      >
+        <Animated.View style={{ transform: [{ scale }] }}>
+          <MaterialIcons name="delete-outline" size={30} color="#fff" />
+          <Text style={styles.deleteText}>Xóa</Text>
+        </Animated.View>
+      </TouchableOpacity>
+    );
+  };
+
   const renderItem = ({ item }) => {
     const typeLabel = buildCardTypeLabel(item.cardType);
     const expiryLabel = buildExpiry(item);
+    
     return (
-      <TouchableOpacity
-        style={styles.card}
-        activeOpacity={0.9}
-        onPress={() => handleSelect(item)}
+      <Swipeable
+        renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item)}
+        containerStyle={styles.swipeContainer}
       >
-        <LinearGradient
-          colors={['rgba(122, 46, 42, 0.95)', 'rgba(255, 102, 51, 0.95)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.cardGradient}
+        <TouchableOpacity
+          style={styles.card}
+          activeOpacity={0.9}
+          onPress={() => handleSelect(item)}
         >
-          <View style={styles.cardHeader}>
-            <View style={styles.bankBadge}>
-              <MaterialIcons name="account-balance" size={16} color="#fff" />
-              <Text style={styles.cardTitle}>{item.bankName || item.bankCode || 'Thẻ đã lưu'}</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={22} color="#ffe8e0" />
-          </View>
-
-          <Text style={styles.cardMask}>{item.cardMask || '•••• •••• •••• ••••'}</Text>
-
-          <View style={styles.cardMetaRow}>
-            <View style={styles.metaItem}>
-              <MaterialIcons name="credit-card" size={16} color="#ffe8e0" />
-              <Text style={styles.cardMetaText}>{typeLabel}</Text>
-            </View>
-            {expiryLabel ? (
-              <View style={styles.metaItem}>
-                <MaterialIcons name="schedule" size={16} color="#ffe8e0" />
-                <Text style={styles.cardMetaText}>{expiryLabel}</Text>
+          <LinearGradient
+            colors={['rgba(122, 46, 42, 0.95)', 'rgba(255, 102, 51, 0.95)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.cardGradient}
+          >
+            <View style={styles.cardHeader}>
+              <View style={styles.bankBadge}>
+                <MaterialIcons name="account-balance" size={16} color="#fff" />
+                <Text style={styles.cardTitle}>{item.bankName || item.bankCode || 'Thẻ đã lưu'}</Text>
               </View>
-            ) : null}
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
+              <MaterialIcons name="chevron-right" size={22} color="#ffe8e0" />
+            </View>
+
+            <Text style={styles.cardMask}>{item.cardMask || '•••• •••• •••• ••••'}</Text>
+
+            <View style={styles.cardMetaRow}>
+              <View style={styles.metaItem}>
+                <MaterialIcons name="credit-card" size={16} color="#ffe8e0" />
+                <Text style={styles.cardMetaText}>{typeLabel}</Text>
+              </View>
+              {expiryLabel ? (
+                <View style={styles.metaItem}>
+                  <MaterialIcons name="schedule" size={16} color="#ffe8e0" />
+                  <Text style={styles.cardMetaText}>{expiryLabel}</Text>
+                </View>
+              ) : null}
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+      </Swipeable>
     );
   };
 
@@ -184,13 +241,33 @@ const styles = StyleSheet.create({
   loaderText: { fontSize: 14, color: MD3_COLORS.textSecondary, textAlign: 'center' },
   card: {
     borderRadius: 14,
-    marginBottom: 14,
     overflow: 'hidden',
     elevation: 3,
     shadowColor: '#000',
     shadowOpacity: 0.12,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
+    backgroundColor: '#fff',
+  },
+  swipeContainer: {
+    marginBottom: 14,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  deleteAction: {
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    height: '100%',
+    borderTopRightRadius: 14,
+    borderBottomRightRadius: 14,
+  },
+  deleteText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 12,
+    marginTop: 4,
   },
   cardGradient: { padding: 16 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

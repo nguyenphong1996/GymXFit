@@ -98,20 +98,31 @@ export const UserProvider = ({ children }) => {
     }
 
     try {
-      const response = await getProfile();
+      console.log('🔄 UserContext login: Fetching profile after setting token...');
+      // Pass the token directly to getProfile to avoid race conditions with AsyncStorage
+      const response = await getProfile(resolvedToken);
       if (response?.ok && response?.user) {
         setUser(response.user);
+        console.log('✅ UserContext login: Profile loaded successfully');
         return response.user;
       }
+      console.warn('⚠️ UserContext login: Profile response not ok or no user data');
       return null;
     } catch (error) {
       if (isUnauthorizedError(error)) {
         await clearStoredAuthState(setUser, setUserToken);
         // console.warn('Token không hợp lệ hoặc đã hết hạn sau khi đăng nhập:', error);
+        console.warn('⚠️ UserContext login: Token invalid after login, cleared state');
         throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
       }
 
-      console.error('Lỗi khi lấy profile sau khi đăng nhập:', error);
+      console.error('❌ UserContext login: Profile fetch failed:', error.message);
+      // For network errors, allow login to continue but warn user
+      if (error.message.includes('Network Error') || !error.response) {
+        console.warn('🔄 UserContext login: Network error detected, allowing login without profile');
+        // Don't throw, allow login to complete
+        return null;
+      }
       throw new Error(getErrorMessage(error, 'Không thể tải thông tin cá nhân.'));
     } finally {
       setIsLoading(false);

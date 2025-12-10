@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,12 @@ import {
   StatusBar,
   Image,
 } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+
 import { UserContext } from '@context/UserContext';
 import { useNavigation } from '@react-navigation/native';
+import { normalizeMembership } from '@utils/membership';
 
 const formatDateForDisplay = dateString => {
   if (!dateString) return '';
@@ -71,6 +74,8 @@ const ProfileScreen = () => {
     ? { uri: `${user.avatar}?timestamp=${Date.now()}` }
     : require('@assets/images/avt.png');
 
+  const membership = useMemo(() => normalizeMembership(user), [user]);
+
   return (
     <ScrollView style={styles.container}>
       <StatusBar backgroundColor="#20B24A" barStyle="light-content" />
@@ -80,6 +85,7 @@ const ProfileScreen = () => {
         <Image style={styles.avatar} source={avatarSource} />
         <Text style={styles.name}>{userName}</Text>
         <Text style={styles.email}>{userEmail}</Text>
+        <MembershipBadge membership={membership} />
 
         <View style={styles.infoStats}>
           <InfoStat label="Cân nặng" value={`${userWeight} kg`} />
@@ -99,6 +105,11 @@ const ProfileScreen = () => {
           icon="credit-card-outline"
           text="Thông tin thẻ"
           onPress={() => navigation.navigate('PaymentCards')}
+        />
+        <OptionItem
+          icon="shield-check-outline"
+          text="Thông tin dịch vụ"
+          onPress={() => navigation.navigate('ServiceInfo')}
         />
         <OptionItem
           icon="help-circle"
@@ -139,6 +150,23 @@ const OptionItem = ({ icon, text, onPress }) => (
   </TouchableOpacity>
 );
 
+/* === COMPONENT: MembershipBadge === */
+const MembershipBadge = ({ membership }) => {
+  if (!membership?.packageName) return null;
+
+  return (
+    <LinearGradient
+      colors={['rgba(32, 178, 74, 1)', 'rgba(26, 158, 66, 1)']} // Green gradient
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+      style={styles.badge}
+    >
+      <Icon name="credit-card-outline" size={22} color="#FFFFFF" />
+      <Text style={styles.badgeText}>{membership.packageName}</Text>
+    </LinearGradient>
+  );
+};
+
 export default ProfileScreen;
 
 const styles = StyleSheet.create({
@@ -159,7 +187,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8F5E9',
   },
   name: { fontSize: 22, fontWeight: '700', color: '#fff', marginTop: 12 },
-  email: { fontSize: 14, color: '#E0FFE8', marginBottom: 20 },
+  email: { fontSize: 14, color: '#E0FFE8' },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  badgeText: { color: '#FFFFFF',
+    fontWeight: '900',
+fontSize: 14,
+    marginLeft: 10,
+  },
 
   infoStats: {
     flexDirection: 'row',
@@ -191,7 +240,7 @@ const styles = StyleSheet.create({
   },
 
   logoutButton: {
-    backgroundColor: '#20B24A',
+    backgroundColor: '#EF4444',
     marginHorizontal: 30,
     marginTop: 40,
     marginBottom: 50,
