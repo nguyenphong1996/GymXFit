@@ -1,36 +1,30 @@
 const pickMembershipPayload = data => {
   if (!data) return null;
-  
-  // Check if 'membership' key exists explicitly (even if null)
-  if (data && Object.prototype.hasOwnProperty.call(data, 'membership')) {
-    return data.membership;
-  }
 
-  // Common wrappers
-  if (data.user && (data.user.membership || data.user.membershipInfo || data.user.memberShip)) {
-    return data.user.membership || data.user.membershipInfo || data.user.memberShip;
-  }
+  // Case 1: `data.membership` exists (e.g., from getMembershipInfo)
+  if (data.membership) return data.membership;
   
-  if (data.membershipInfo) return data.membershipInfo;
-  if (data.memberShip) return data.memberShip;
+  // Case 2: `data.user.membership` exists (e.g., from getProfile, getUserMe)
+  if (data.user && data.user.membership) return data.user.membership;
+  
+  // Case 3: `data.data.membership` exists (common wrapper)
   if (data.data && data.data.membership) return data.data.membership;
-  
-  return data;
+
+  // Case 4: The data object itself is the membership object.
+  if (data.packageId && data.status) return data;
+
+  return null; // Return null if no membership object is found.
 };
 
 const pickPackageInfo = membership => {
   if (!membership) return {};
   if (membership.packageId && typeof membership.packageId === 'object') return membership.packageId;
-  if (membership.package && typeof membership.package === 'object') return membership.package;
-  if (membership.packageInfo) return membership.packageInfo;
-  if (membership.plan) return membership.plan;
-  if (membership.planInfo) return membership.planInfo;
-  return {};
+  return {}; // Simplified
 };
 
 export const normalizeMembership = raw => {
   const membership = pickMembershipPayload(raw);
-  if (!membership || typeof membership !== 'object') return null;
+  if (!membership || typeof membership !== 'object' || !membership.packageId) return null;
 
   const pkg = pickPackageInfo(membership);
   const packageName = membership.packageName || pkg.name || pkg.title || '';
@@ -66,7 +60,7 @@ export const normalizeMembership = raw => {
     remainingClassCredits: Number(remainingClassCredits) || 0,
     remainingSessions: Number(remainingSessions) || 0,
     facilityAccess: membership.facilityAccess || pkg.facilityAccess || null,
-    packageId: pkg._id || pkg.id || membership.packageId || membership.package_id || null,
+    packageId: membership.packageId || pkg._id || pkg.id || membership.package_id || null,
     packageName,
     raw: membership,
   };

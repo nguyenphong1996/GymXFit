@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useContext } from 'react';
 import {
   Alert,
   ScrollView,
@@ -10,6 +10,7 @@ import {
   Image,
   Linking,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -17,8 +18,30 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { membershipPlans, MEMBERSHIP_CONTACT } from './membershipPlans';
 import { formatCurrency, computeCyclePrice, cycleMultipliers } from '../../utils/membership';
 import { getPermanentUpgradeQuote, getTemporaryUpgradeQuote, getMembershipInfo, getUserMe, getProfile, getAllPackages } from '@api/membershipApi';
+import { UserContext } from '@context/UserContext';
 import SpecialUtilities from './SpecialUtilities';
 import { normalizeMembership } from '../../utils/membership';
+
+// --- (Existing MD3 Tokens and other constants) ---
+
+const PlanCardSkeleton = () => (
+  <View style={[styles.planCard, { backgroundColor: MD3_COLORS.surfaceContainer }]}>
+    <View style={styles.planCardInner}>
+      <View style={{ height: 20, width: '60%', backgroundColor: MD3_COLORS.surfaceContainerHigh, borderRadius: 8, marginBottom: 8 }} />
+      <View style={{ height: 16, width: '40%', backgroundColor: MD3_COLORS.surfaceContainerHigh, borderRadius: 8, marginBottom: 16 }} />
+      <View style={[styles.planImageWrapper, { backgroundColor: MD3_COLORS.surfaceContainerHigh }]} />
+      <View style={{ height: 28, width: '50%', backgroundColor: MD3_COLORS.surfaceContainerHigh, borderRadius: 8, marginBottom: 16 }} />
+      <View style={styles.divider} />
+      <View style={{ height: 16, width: '80%', backgroundColor: MD3_COLORS.surfaceContainerHigh, borderRadius: 8, marginBottom: 8 }} />
+      <View style={{ height: 16, width: '90%', backgroundColor: MD3_COLORS.surfaceContainerHigh, borderRadius: 8, marginBottom: 8 }} />
+      <View style={{ height: 16, width: '70%', backgroundColor: MD3_COLORS.surfaceContainerHigh, borderRadius: 8, marginBottom: 20 }} />
+      <View style={styles.planActions}>
+        <View style={{ height: 48, flex: 1, backgroundColor: MD3_COLORS.surfaceContainerHigh, borderRadius: 20 }} />
+        <View style={{ height: 48, flex: 1, backgroundColor: MD3_COLORS.surfaceContainerHigh, borderRadius: 20 }} />
+      </View>
+    </View>
+  </View>
+);
 
 // Material Design 3 Color Tokens
 const MD3_COLORS = {
@@ -96,23 +119,31 @@ const serviceHighlights = [
 ];
 
 // Membership Card Component
-const MembershipCard = ({ plan, onShowDetails, onRegister, priceLabel, discountLabel, subLabel, saveLabel, disabled }) => {
+const MembershipCard = ({ plan, onShowDetails, onRegister, priceLabel, discountLabel, subLabel, saveLabel, disabled, isCurrent }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => Animated.spring(scaleAnim, { toValue: 0.98, useNativeDriver: true }).start();
   const handlePressOut = () => Animated.spring(scaleAnim, { toValue: 1, friction: 3, tension: 40, useNativeDriver: true }).start();
 
+  const actualDisabled = disabled; // Disable if explicitly set
+
   return (
     <Animated.View
-      pointerEvents={disabled ? 'none' : 'auto'}
+      pointerEvents={actualDisabled ? 'none' : 'auto'}
       style={[
         styles.planCard,
         { transform: [{ scale: scaleAnim }] },
-        disabled && styles.cardDisabled,
+        actualDisabled && styles.cardDisabled,
       ]}
     >
-      <View style={[styles.planCardInner, disabled && styles.cardInnerDisabled]}>
-        {plan.id === 'plus' && (
+      <View style={[styles.planCardInner, actualDisabled && styles.cardInnerDisabled]}>
+        {isCurrent && (
+          <View style={[styles.planBadgeTop, { backgroundColor: MD3_COLORS.primary, right: 12 }]}>
+            <MaterialCommunityIcons name="crown" size={14} color={MD3_COLORS.onPrimary} />
+            <Text style={[styles.planBadgeTopText, { color: MD3_COLORS.onPrimary }]}>Gói hiện tại của bạn</Text>
+          </View>
+        )}
+        {plan.id === 'plus' && !isCurrent && (
           <View style={[styles.planBadgeTop, { backgroundColor: plan.accent }]}>
             <MaterialIcons name="star" size={14} color={plan.accentText} />
             <Text style={[styles.planBadgeTopText, { color: plan.accentText }]}>{plan.badge}</Text>
@@ -158,19 +189,19 @@ const MembershipCard = ({ plan, onShowDetails, onRegister, priceLabel, discountL
           ))}
         </View>
         <View style={styles.planActions}>
-          <TouchableOpacity style={[styles.outlinedButton, disabled && styles.buttonDisabled]} onPress={() => onShowDetails?.(plan)} activeOpacity={0.8}>
+          <TouchableOpacity style={[styles.outlinedButton, actualDisabled && styles.buttonDisabled]} onPress={() => onShowDetails?.(plan)} activeOpacity={0.8}>
             <Text style={styles.outlinedButtonText}>Chi tiết</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.filledButton, disabled && styles.buttonDisabled]}
-            onPress={() => !disabled && onRegister?.(plan)}
+            style={[styles.filledButton, actualDisabled && styles.buttonDisabled]}
+            onPress={() => !actualDisabled && onRegister?.(plan)}
             activeOpacity={0.9}
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
-            disabled={disabled}
+            disabled={actualDisabled}
           >
-            <Text style={styles.filledButtonText}>Chọn gói này</Text>
-            <MaterialIcons name="arrow-forward" size={18} color={MD3_COLORS.onPrimary} />
+            <Text style={styles.filledButtonText}>{isCurrent ? 'Gia hạn' : 'Chọn gói này'}</Text>
+            {!isCurrent && <MaterialIcons name="arrow-forward" size={18} color={MD3_COLORS.onPrimary} />}
           </TouchableOpacity>
         </View>
       </View>
@@ -179,14 +210,15 @@ const MembershipCard = ({ plan, onShowDetails, onRegister, priceLabel, discountL
 };
 
 const CardMembershipScreen = ({ navigation }) => {
+  const { user } = useContext(UserContext); // Get user from Context
   const scrollViewRef = useRef(null);
   const [billingCycle, setBillingCycle] = useState('quarter'); // month | quarter | year
   const [currentMembership, setCurrentMembership] = useState(null);
-  const [currentPlanPrice, setCurrentPlanPrice] = useState(0);
   const [currentTier, setCurrentTier] = useState(null);
+  const [displayedPlans, setDisplayedPlans] = useState([]);
   const [permanentQuotes, setPermanentQuotes] = useState({});
   const [temporaryQuotes, setTemporaryQuotes] = useState({});
-  const [planIdMap, setPlanIdMap] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
   const cycleOptions = useMemo(
     () => [
       { id: 'month', label: 'Tháng', discount: 0 },
@@ -197,129 +229,90 @@ const CardMembershipScreen = ({ navigation }) => {
   );
 
   useEffect(() => {
-    const fetchMembership = async () => {
-      try {
-        // Fetch backend packages to map IDs
-        const packagesRes = await getAllPackages().catch(() => []);
-        const packages = packagesRes?.data || packagesRes || [];
-        const newMap = {};
-        if (Array.isArray(packages)) {
-          packages.forEach(pkg => {
-            const localPlan = membershipPlans.find(
-              p => p.id === pkg.slug || p.id === pkg.id || p.name.toLowerCase() === (pkg.name || '').toLowerCase(),
-            );
-            if (localPlan) {
-              newMap[localPlan.id] = pkg._id || pkg.id;
-            }
-          });
-          setPlanIdMap(newMap);
-        }
-
-        // Ưu tiên endpoint membership
-        let res = await getMembershipInfo().catch(() => null);
-        let normalized = normalizeMembership(res?.membership || res?.data || res);
-
-        if (!normalized) {
-          res = await getUserMe().catch(() => null);
-          normalized = normalizeMembership(res?.user || res?.data || res);
-        }
-
-        if (!normalized) {
-          res = await getProfile().catch(() => null);
-          normalized = normalizeMembership(res?.user || res?.data || res);
-        }
-
-        setCurrentMembership(normalized);
-        if (normalized) {
-          const resolvedPlan =
-            membershipPlans.find(p => p.id === normalized.packageId) ||
-            membershipPlans.find(
-              p => p.name?.toLowerCase() === (normalized.packageName || '').toLowerCase(),
-            );
-          setCurrentPlanPrice(resolvedPlan?.basePrice || 0);
-          setCurrentTier(
-            normalized?.packageTier ||
-              normalized?.roleTier ||
-              resolvedPlan?.tier ||
-              null,
-          );
-        } else {
-          setCurrentPlanPrice(0);
-          setCurrentTier(null);
-        }
-      } catch (e) {
-        setCurrentMembership(null);
-        setCurrentPlanPrice(0);
+    const fetchAndProcessData = async () => {
+      setIsLoading(true);
+      if (!user) {
         setCurrentTier(null);
-      }
-    };
-
-    fetchMembership();
-  }, []);
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchAllQuotes = async () => {
-      if (!currentMembership) {
-        if (isMounted) {
-          setPermanentQuotes({});
-          setTemporaryQuotes({});
-        }
+        setCurrentMembership(null);
+        setPermanentQuotes({});
+        setTemporaryQuotes({});
+        setIsLoading(false);
         return;
       }
 
-      const newPermanentQuotes = {};
-      const newTemporaryQuotes = {};
+      try {
+        const packagesRes = await getAllPackages();
+        const backendPackages = packagesRes?.data?.data || [];
+        
+        // Merge backend data with local static data
+        const mergedPlans = backendPackages
+          .map(pkg => {
+            const localPlan = membershipPlans.find(
+              p => p.name.toLowerCase() === (pkg.name || '').toLowerCase(),
+            );
+            if (!localPlan) return null; // Ignore if no local counterpart
+            return {
+              ...localPlan, // static data: images, captions, summary
+              ...pkg,       // backend data: price, durationDays, tier
+              id: pkg._id,  // IMPORTANT: Overwrite id with backend _id
+              localId: localPlan.id, // Keep local id for quotes mapping
+            };
+          })
+          .filter(Boolean); // Remove null entries
+        
+        setDisplayedPlans(mergedPlans);
 
-      await Promise.all(
-        membershipPlans.map(async plan => {
-          // Skip fetching quote for lower tiers (downgrade) to avoid 400 error from backend
-          if (currentTier != null && plan.tier < currentTier) {
-            return;
-          }
+        const membershipData = user.membership || null;
+        setCurrentMembership(membershipData);
 
-          try {
-            const realId = planIdMap[plan.id] || plan.id;
-            // Fetch permanent upgrade quote
-            const permanentResponse = await getPermanentUpgradeQuote({
-              packageId: realId,
-              billingCycle,
-            });
-            if (permanentResponse && permanentResponse.quote) {
-              newPermanentQuotes[plan.id] = permanentResponse.quote;
-            }
-          } catch (e) {
-            console.warn(`Could not fetch permanent quote for plan ${plan.id}:`, e);
-          }
+        let tier = null;
+        if (membershipData && membershipData.packageId && mergedPlans.length > 0) {
+          const currentPackageDetails = mergedPlans.find(p => p.id === membershipData.packageId);
+          tier = currentPackageDetails?.tier;
+        }
+        setCurrentTier(tier);
 
-          // Fetch temporary upgrade quote
-          try {
-            const realId = planIdMap[plan.id] || plan.id;
-            const temporaryResponse = await getTemporaryUpgradeQuote({
-              packageId: realId,
-              billingCycle,
-            });
-            if (temporaryResponse && temporaryResponse.quote) {
-              newTemporaryQuotes[plan.id] = temporaryResponse.quote;
-            }
-          } catch (e) {
-            console.warn(`Could not fetch temporary quote for plan ${plan.id}:`, e);
-          }
-        }),
-      );
-      
-      if (isMounted) {
-        setPermanentQuotes(newPermanentQuotes);
-        setTemporaryQuotes(newTemporaryQuotes);
+        if (membershipData && tier != null) {
+            const newPermanentQuotes = {};
+            const newTemporaryQuotes = {};
+
+            await Promise.all(
+                mergedPlans.map(async (plan) => {
+                    if (plan.tier <= tier) return;
+                    
+                    try {
+                        const permResponse = await getPermanentUpgradeQuote({ packageId: plan.id, billingCycle });
+                        if (permResponse?.data?.quote) newPermanentQuotes[plan.localId] = permResponse.data.quote;
+                    } catch (e) {
+                        console.error(`Failed to get permanent quote for ${plan.name}:`, e);
+                    }
+                    
+                    try {
+                        const tempResponse = await getTemporaryUpgradeQuote({ packageId: plan.id, billingCycle });
+                        if (tempResponse?.data?.quote) newTemporaryQuotes[plan.localId] = tempResponse.data.quote;
+                    } catch (e) {
+                        console.error(`Failed to get temporary quote for ${plan.name}:`, e);
+                    }
+                })
+            );
+
+            setPermanentQuotes(newPermanentQuotes);
+            setTemporaryQuotes(newTemporaryQuotes);
+        } else {
+             setPermanentQuotes({});
+             setTemporaryQuotes({});
+        }
+
+      } catch (e) {
+        Alert.alert('Lỗi', 'Không thể tải dữ liệu gói thành viên. Vui lòng thử lại.');
+        console.error('Failed to fetch membership data:', e);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    fetchAllQuotes();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [currentMembership, billingCycle, currentTier, planIdMap]);
+    fetchAndProcessData();
+  }, [user, billingCycle]);
 
   const handleContactPress = () => Linking.openURL(`tel:${CONTACT_PHONE}`).catch(() => undefined);
 
@@ -328,32 +321,45 @@ const CardMembershipScreen = ({ navigation }) => {
   const priceForPlan = (plan, type = 'permanent') => {
     const quote = type === 'permanent' ? permanentQuotes[plan.id] : temporaryQuotes[plan.id];
     const cycleCfg = cycleMultipliers[billingCycle] || cycleMultipliers.month;
-    
+
+    console.log(`[DEBUG] priceForPlan for ${plan.id}, type=${type}, quote:`, quote);
+
     let priceNumber = computeCyclePrice(plan.basePrice, billingCycle);
-    
+
     // Use quote if available
+    let creditValue = quote?.creditValue || 0;
     if (quote && typeof quote.amountDue === 'number') {
       priceNumber = quote.amountDue;
+      console.log(`[DEBUG] Using quoted price: ${priceNumber}`);
+    } else {
+      console.log(`[DEBUG] Using base price: ${priceNumber}`);
     }
 
     const perMonth = Math.round(priceNumber / cycleCfg.months);
     const originalFullPrice = plan.basePrice * cycleCfg.months;
     const savedAmount = originalFullPrice - priceNumber;
 
+    // If quote has amountDue but no creditValue, calculate it
+    if (quote && typeof quote.amountDue === 'number' && quote.amountDue < originalFullPrice && creditValue === 0) {
+      creditValue = originalFullPrice - quote.amountDue;
+      console.log(`[DEBUG] Calculated creditValue: ${creditValue}`);
+    }
+
     const label = `${formatCurrency(priceNumber)}/${cycleCfg.months === 1 ? 'tháng' : `${cycleCfg.months} tháng`}`;
     const discount = cycleCfg.discount ? `-${cycleCfg.discount * 100}%` : null;
     const subLabel = `Bình quân: ${formatCurrency(perMonth)}/tháng`;
-    
+
     let saveLabel = null;
 
-    if (quote && quote.creditValue > 0) {
-      if (quote.amountDue === 0) {
-        saveLabel = 'Miễn phí nâng cấp (từ giá trị gói cũ)';
-      } else {
-        saveLabel = `Đã trừ ${formatCurrency(quote.creditValue)} từ gói cũ`;
-      }
+    if (priceNumber === 0 && creditValue > 0) {
+      saveLabel = 'Miễn phí nâng cấp (từ giá trị gói cũ)';
+      console.log(`[DEBUG] Showing free upgrade: ${saveLabel}`);
+    } else if (creditValue > 0) {
+      saveLabel = `Đã trừ ${formatCurrency(creditValue)} từ gói cũ`;
+      console.log(`[DEBUG] Showing credit deduction: ${saveLabel}`);
     } else if (savedAmount > 0) {
       saveLabel = `Tiết kiệm ${formatCurrency(savedAmount)}`;
+      console.log(`[DEBUG] Showing cycle discount: ${saveLabel}`);
     }
 
     return {
@@ -406,9 +412,9 @@ const CardMembershipScreen = ({ navigation }) => {
       return;
     }
 
-    // Case: New purchase (no active membership or expired, handled as permanent upgrade with 0 credit)
-    if (!currentMembership || currentMembership.status !== 'active' || currentMembership.endDate < new Date()) {
-      proceedToPayment(plan, { isUpgrade: true, isTemporary: false, quoteType: 'permanent' });
+    // Case: New purchase (no active membership or expired)
+    if (!currentMembership || currentMembership.status !== 'active' || (currentMembership.endDate && new Date(currentMembership.endDate) < new Date())) {
+      proceedToPayment(plan, { isUpgrade: false, isTemporary: false, quoteType: 'permanent' });
       return;
     }
 
@@ -425,33 +431,35 @@ const CardMembershipScreen = ({ navigation }) => {
       const actions = [];
 
       // Option 1: Permanent Upgrade
-      if (permanentAmountDue === 0 && permanentCreditValue > 0) {
-        // Special case: Free upgrade due to high credit value
-        actions.push({
-          text: 'Nâng cấp miễn phí',
-          onPress: () => {
-            Alert.alert(
-              'Xác nhận Nâng cấp Đặc biệt',
-              `Giá trị còn lại của gói hiện tại (${formatCurrency(permanentCreditValue)}) cao hơn giá của gói mới (${formatCurrency(permanentQuote?.targetPrice || 0)}). Việc nâng cấp sẽ là MIỄN PHÍ. Tuy nhiên, phần giá trị chênh lệch là ${formatCurrency(permanentCreditValue - (permanentQuote?.targetPrice || 0))} sẽ không được hoàn lại. Bạn có muốn tiếp tục không?`,
-              [
-                { text: 'Hủy', style: 'cancel' },
-                { text: 'Tiếp tục (Miễn phí)', onPress: () => proceedToPayment(plan, { isUpgrade: true, isTemporary: false, quoteType: 'permanent' }) }
-              ]
-            );
-          }
-        });
-      } else if (permanentQuote) {
-        actions.push({
-          text: `Nâng cấp vĩnh viễn (${formatCurrency(permanentAmountDue)})`,
-          onPress: () => proceedToPayment(plan, { isUpgrade: true, isTemporary: false, quoteType: 'permanent' }) 
-        });
+      if (permanentQuote) {
+        if (permanentAmountDue === 0 && permanentCreditValue > 0) {
+          // Special case: Free upgrade due to high credit value
+          actions.push({
+            text: 'Nâng cấp miễn phí',
+            onPress: () => {
+              Alert.alert(
+                'Xác nhận Nâng cấp Đặc biệt',
+                `Giá trị còn lại của gói hiện tại (${formatCurrency(permanentCreditValue)}) cao hơn giá của gói mới (${formatCurrency(permanentQuote?.targetPrice || 0)}).\n\nViệc nâng cấp sẽ là MIỄN PHÍ. Tuy nhiên, phần giá trị chênh lệch là ${formatCurrency(permanentCreditValue - (permanentQuote?.targetPrice || 0))} sẽ không được hoàn lại. Bạn có muốn tiếp tục không?`,
+                [
+                  { text: 'Hủy', style: 'cancel' },
+                  { text: 'Tiếp tục (Miễn phí)', onPress: () => proceedToPayment(plan, { isUpgrade: true, isTemporary: false, quoteType: 'permanent' }) }
+                ]
+              );
+            }
+          });
+        } else {
+          actions.push({
+            text: `Nâng cấp vĩnh viễn (+${targetDurationDays} ngày) - ${formatCurrency(permanentAmountDue)}`,
+            onPress: () => proceedToPayment(plan, { isUpgrade: true, isTemporary: false, quoteType: 'permanent' })
+          });
+        }
       }
 
       // Option 2: Temporary Upgrade
       if (temporaryQuote) {
         actions.push({
-          text: `Mua trải nghiệm (${formatCurrency(temporaryAmountDue)})`,
-          onPress: () => proceedToPayment(plan, { isUpgrade: true, isTemporary: true, quoteType: 'temporary' }) 
+          text: `Mua trải nghiệm (${remainingDays} ngày) - ${formatCurrency(temporaryAmountDue)}`,
+          onPress: () => proceedToPayment(plan, { isUpgrade: true, isTemporary: true, quoteType: 'temporary' })
         });
       }
 
@@ -460,7 +468,7 @@ const CardMembershipScreen = ({ navigation }) => {
       
       Alert.alert(
         'Lựa chọn nâng cấp',
-        `Bạn đang còn ${remainingDays} ngày gói hiện tại. Vui lòng chọn hình thức nâng cấp cho gói ${plan.name}.`,
+        `Bạn đang còn ${remainingDays} ngày ở gói hiện tại. Vui lòng chọn hình thức nâng cấp cho gói ${plan.name}.`,
         actions
       );
     } else {
@@ -470,40 +478,39 @@ const CardMembershipScreen = ({ navigation }) => {
   };
 
   const proceedToPayment = async (plan, { isUpgrade, isTemporary, quoteType }) => {
+    const finalPackageId = plan._id; // ALWAYS use backend _id
+
     let quote = null;
     let amountDue = 0;
     let creditValue = 0;
-    let finalPackageId = planIdMap[plan.id] || plan.id;
 
     if (isUpgrade) {
       if (isTemporary) {
-        quote = temporaryQuotes[plan.id];
+        quote = temporaryQuotes[plan.localId];
       } else {
-        quote = permanentQuotes[plan.id];
+        quote = permanentQuotes[plan.localId];
       }
       if (quote) {
         amountDue = quote.amountDue;
         creditValue = quote.creditValue;
-        finalPackageId = quote?.packageId || quote?.package?.target?.id || finalPackageId; // Ensure we get the backend package ID
       } else {
-        // Fallback: If quote not found (e.g., API error), use base price
+        // Fallback if quote is missing for some reason
         const pricing = priceForPlan(plan, quoteType);
         amountDue = pricing.number;
         creditValue = 0;
       }
     } else {
-      // Not an upgrade (renewal or new purchase without active membership)
       const pricing = priceForPlan(plan, quoteType);
       amountDue = pricing.number;
       creditValue = 0;
-      finalPackageId = planIdMap[plan.id] || plan.id;
     }
 
     try {
       navigation.navigate('PaymentMethod', {
         plan: {
           ...plan,
-          id: finalPackageId,
+          _id: finalPackageId, // Pass correct backend ID
+          id: finalPackageId, // Keep id for compatibility if other parts use it
           billingCycle,
           amountDue,
           creditValue,
@@ -511,7 +518,7 @@ const CardMembershipScreen = ({ navigation }) => {
           isTemporary,
           priceLabel: formatCurrency(amountDue),
         },
-        quote, // Pass the relevant quote object
+        quote,
       });
     } catch (error) {
       const rawMessage = error?.response?.data?.message || error?.message || '';
@@ -536,7 +543,7 @@ const CardMembershipScreen = ({ navigation }) => {
         <TouchableOpacity style={styles.appBarButton} onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <MaterialIcons name="arrow-back" size={24} color={MD3_COLORS.onBackground} />
         </TouchableOpacity>
-        <Text style={styles.appBarTitle}>Gói dịch vụ</Text>
+        <Text style={styles.appBarTitle}>GÓI DỊCH VỤ</Text>
         <TouchableOpacity style={styles.appBarButton} onPress={() => navigation.navigate('MembershipFAQ')} activeOpacity={0.7}>
           <MaterialIcons name="info-outline" size={24} color={MD3_COLORS.onBackground} />
         </TouchableOpacity>
@@ -613,26 +620,39 @@ const CardMembershipScreen = ({ navigation }) => {
           })}
         </View>
 
-        {membershipPlans
-          .filter(plan => {
-            const targetTier = getPlanTier(plan);
-            if (currentTier != null && targetTier != null && targetTier < currentTier) {
-              return false; // ẩn gói tier thấp hơn
-            }
-            return true;
-          })
-          .map(plan => (
-            <MembershipCard
-              key={plan.id}
-              plan={plan}
-              priceLabel={priceForPlan(plan).label}
-              discountLabel={priceForPlan(plan).discount ? priceForPlan(plan).discount : null}
-              subLabel={priceForPlan(plan).subLabel}
-              saveLabel={priceForPlan(plan).saveLabel}
-              onShowDetails={handleShowDetails}
-              onRegister={handleRegister}
-            />
-          ))}
+        {isLoading ? (
+          <>
+            <PlanCardSkeleton />
+            <PlanCardSkeleton />
+            <PlanCardSkeleton />
+          </>
+        ) : (
+          membershipPlans
+            .filter(plan => {
+              const targetTier = getPlanTier(plan);
+              if (currentTier != null && targetTier != null && targetTier < currentTier) {
+                return false; // hide lower tier packages
+              }
+              return true;
+            })
+            .map(plan => {
+              const pricing = priceForPlan(plan);
+              const isCurrentPlan = currentMembership?.packageId === plan.id;
+              return (
+                <MembershipCard
+                  key={plan.id}
+                  plan={plan}
+                  priceLabel={pricing.label}
+                  discountLabel={pricing.discount}
+                  subLabel={pricing.subLabel}
+                  saveLabel={pricing.saveLabel}
+                  onShowDetails={handleShowDetails}
+                  onRegister={handleRegister}
+                  isCurrent={isCurrentPlan}
+                />
+              );
+            })
+        )}
 
         <View style={styles.supportCard}>
           <View style={styles.supportIcon}>
