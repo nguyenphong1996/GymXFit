@@ -17,6 +17,7 @@ import BookScreen from '@screens/booking/BookScreen';
 import NewsScreen from '@screens/home/NewsScreen';
 import PaymentScreen from '@screens/payment/PaymentScreen';
 import PaymentTokenScreen from '@screens/payment/PaymentTokenScreen';
+import PaymentTokenizationScreen from '@screens/payment/PaymentTokenizationScreen';
 import PaymentCardSelectScreen from '@screens/payment/PaymentCardSelectScreen';
 import BankTransferScreen from '@screens/payment/BankTransferScreen';
 import CalendarScreen from '../screens/booking/CalendarScreen';
@@ -59,8 +60,6 @@ const resolveCheckinWindowMessage = (message = '', code = '') => {
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
-
-const renderCustomTabBar = props => <CustomTabBar {...props} />;
 
 // Custom Tab Bar với FAB
 const CustomTabBar = ({ state, descriptors, navigation }) => {
@@ -308,28 +307,33 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
     );
 };
 
+// Stack riêng cho luồng thanh toán
+const PaymentStack = () => (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name='PaymentMethod' component={PaymentMethodScreen} />
+        <Stack.Screen name='PaymentCardSelect' component={PaymentCardSelectScreen} />
+        <Stack.Screen name='PaymentTokenization' component={PaymentTokenizationScreen} />
+        <Stack.Screen name='PaymentTokenScreen' component={PaymentTokenScreen} />
+        <Stack.Screen name='BankTransferScreen' component={BankTransferScreen} />
+        <Stack.Screen name='PaymentResult' component={PaymentResultScreen} />
+    </Stack.Navigator>
+);
+
 const HomeStack = () => {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name='Home' component={HomeScreen} />
-            <Stack.Screen name='SearchCalendarScreen' component={SearchCalendarScreen} />
             <Stack.Screen name='News' component={NewsScreen} />
             <Stack.Screen name='CalendarScreen' component={CalendarScreen} />
             <Stack.Screen name='CardMembershipScreen' component={CardMembershipScreen} />
             <Stack.Screen name='CardMembershipDetail' component={CardMembershipDetailScreen} />
-            <Stack.Screen name='PaymentScreen' component={PaymentScreen} />
-            <Stack.Screen name='PaymentTokenScreen' component={PaymentTokenScreen} />
-            <Stack.Screen name='PaymentCardSelect' component={PaymentCardSelectScreen} />
-            <Stack.Screen name='BankTransferScreen' component={BankTransferScreen} />
             <Stack.Screen name='MembershipFAQ' component={FAQScreen} />
-            <Stack.Screen name='PaymentMethod' component={PaymentMethodScreen} />
-            <Stack.Screen name='PaymentResult' component={PaymentResultScreen} />
             <Stack.Screen name='WorkoutScreen' component={WorkoutScreen} />
             <Stack.Screen name='WorkoutVideo' component={WorkoutVideoScreen} />
             <Stack.Screen name='BookScreen' component={BookScreen} />
         </Stack.Navigator>
-    )
-}
+    );
+};
 
 const ProfileStack = () => {
     return (
@@ -337,30 +341,38 @@ const ProfileStack = () => {
             <Stack.Screen name='Profile' component={ProfileScreen} />
             <Stack.Screen name='UpdateProfile' component={UpdateProfileScreen} />
             <Stack.Screen name='PaymentCards' component={PaymentCardsScreen} />
-            <Stack.Screen name='PaymentTokenScreen' component={PaymentTokenScreen} />
-            <Stack.Screen name='PaymentCardSelect' component={PaymentCardSelectScreen} />
-            <Stack.Screen name='PaymentResult' component={PaymentResultScreen} />
             <Stack.Screen name='MembershipFAQ' component={FAQScreen} />
             <Stack.Screen name='GymxfitPolicy' component={GymxfitPolicyScreen} />
             <Stack.Screen name='ServiceInfo' component={ServiceInfoScreen} />
         </Stack.Navigator>
-    )
-}
+    );
+};
+
+// Tab Navigator chính
+const MainTabs = () => (
+    <Tab.Navigator
+        initialRouteName='HomeStack'
+        tabBar={props => <CustomTabBar {...props} />}
+        screenOptions={{ headerShown: false }}
+    >
+        <Tab.Screen name="HomeStack" component={HomeStack} />
+        <Tab.Screen name="SearchCalendarScreen" component={SearchCalendarScreen} />
+        <Tab.Screen name="Favorites" component={FavoriteVideosScreen} />
+        <Tab.Screen name="ProfileStack" component={ProfileStack} />
+    </Tab.Navigator>
+);
+
+// Root Navigator để quản lý modal
+const RootStack = createNativeStackNavigator();
 
 const HomeNavigator = () => {
     return (
-        <Tab.Navigator
-            initialRouteName='HomeStack'
-            tabBar={renderCustomTabBar}
-            screenOptions={{
-                headerShown: false,
-            }}
-        >
-            <Tab.Screen name="HomeStack" component={HomeStack} />
-            <Tab.Screen name="SearchCalendarScreen" component={SearchCalendarScreen} />
-            <Tab.Screen name="Favorites" component={FavoriteVideosScreen} />
-            <Tab.Screen name="ProfileStack" component={ProfileStack} />
-        </Tab.Navigator>
+        <RootStack.Navigator screenOptions={{ headerShown: false }}>
+            <RootStack.Screen name="Main" component={MainTabs} />
+            <RootStack.Group screenOptions={{ presentation: 'modal' }}>
+                <RootStack.Screen name="PaymentStack" component={PaymentStack} />
+            </RootStack.Group>
+        </RootStack.Navigator>
     );
 };
 

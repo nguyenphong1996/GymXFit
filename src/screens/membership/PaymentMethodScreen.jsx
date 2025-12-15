@@ -10,6 +10,7 @@ import {
   Alert,
   Linking,
   ActivityIndicator,
+  DeviceEventEmitter,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -47,37 +48,6 @@ const PaymentMethodScreen = ({ navigation, route }) => {
   const { user, refreshUser } = useContext(UserContext);
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    const handleDeepLink = async (event) => {
-      if (event.url) {
-        const url = new URL(event.url);
-        if (url.protocol === 'gymxfit:' && url.hostname === 'payment-result') {
-          const params = new URLSearchParams(url.search);
-          const vnp_ResponseCode = params.get('code');
-          const vnp_Message = params.get('message');
-          const vnp_TxnRef = params.get('orderId');
-          
-          setIsLoading(false);
-          if (vnp_ResponseCode === '00') {
-            Alert.alert('Thành công', `Thanh toán gói ${plan.name} thành công! Mã giao dịch: ${vnp_TxnRef}`);
-            if (refreshUser) {
-              await refreshUser();
-            }
-            navigation.goBack();
-          } else {
-            Alert.alert('Thất bại', `Thanh toán gói ${plan.name} thất bại: ${vnp_Message || 'Có lỗi xảy ra.'}`);
-          }
-        }
-      }
-    };
-
-    Linking.addEventListener('url', handleDeepLink);
-
-    return () => {
-      Linking.removeEventListener('url', handleDeepLink);
-    };
-  }, [navigation, plan.name, refreshUser]);
-
   const paymentMethods = [
     {
       id: 'banking',
@@ -88,12 +58,12 @@ const PaymentMethodScreen = ({ navigation, route }) => {
       iconLib: 'MaterialCommunityIcons',
     },
     {
-      id: 'vnpay_token',
-      icon: 'credit-card-check',
-      title: 'Thanh toán thẻ VNPAY',
-      description: 'Lưu thẻ, chọn thẻ và thanh toán OTP',
+      id: 'vnpay_saved_card',
+      icon: 'credit-card',
+      title: 'Thanh toán qua thẻ/VNPAY',
+      description: 'Sử dụng thẻ đã lưu hoặc thêm thẻ mới',
       color: MD3_COLORS.primary,
-      iconLib: 'MaterialCommunityIcons',
+      iconLib: 'MaterialIcons',
     },
     {
       id: 'counter',
@@ -116,46 +86,14 @@ const PaymentMethodScreen = ({ navigation, route }) => {
     setIsLoading(true);
 
     try {
-      if (method.id === 'vnpay_token') {
-        const paymentDetails = {
-          amount: plan.amountDue,
-          orderInfo: `Thanh toan goi ${plan.name} (${plan.billingCycle})`,
-          packageId: plan._id || plan.id,
-          billingCycle: plan.billingCycle,
-          isUpgrade: plan.isUpgrade || false,
-          isTemporary: plan.isTemporary || false,
-          userId: user.id,
-        };
-
-        const response = await createPaymentUrl(paymentDetails);
-        if (response?.vnpUrl) {
-          const vnpUrl = response.vnpUrl;
-          const urlObj = new URL(vnpUrl);
-          const tmnCode = urlObj.searchParams.get('vnp_TmnCode') || process.env.EXPO_PUBLIC_VNP_TMNCODE || '';
-          
-          if (!tmnCode) {
-              Alert.alert('Lỗi', 'Thiếu thông tin Terminal Code (vnp_TmnCode) để mở SDK.');
-              setIsLoading(false);
-              return;
-          }
-
-          launchVnpaySdk({
-              paymentUrl: vnpUrl,
-              scheme: 'gymxfit',
-              tmnCode: tmnCode,
-              isSandbox: true,
-              title: 'Thanh toán GymXFit'
-          });
-        } else {
-          Alert.alert('Lỗi', 'Không thể tạo URL thanh toán VNPAY. Vui lòng thử lại.');
-          setIsLoading(false);
-        }
+      if (method.id === 'vnpay_saved_card') {
+        navigation.navigate('PaymentStack', { screen: 'PaymentCardSelect', params: { plan } });
         return;
       }
 
       if (method.id === 'banking') {
         setIsLoading(false);
-        navigation.navigate('BankTransferScreen', { plan });
+        navigation.navigate('PaymentStack', { screen: 'BankTransferScreen', params: { plan } });
         return;
       }
 

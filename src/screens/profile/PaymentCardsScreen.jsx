@@ -15,6 +15,7 @@ import {
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
 import { Swipeable } from 'react-native-gesture-handler';
+import { useIsFocused } from '@react-navigation/native';
 import { UserContext } from '@context/UserContext';
 import { getVnpayTokens, deleteVnpayToken } from '../../api/paymentApi';
 
@@ -35,27 +36,34 @@ const PaymentCardsScreen = ({ navigation }) => {
   const { user } = useContext(UserContext);
   const [isLoading, setIsLoading] = useState(true);
   const [tokens, setTokens] = useState([]);
+  const isFocused = useIsFocused();
 
-  const fetchTokens = async () => {
+  const fetchTokens = async (showLoading = true) => {
     try {
       if (!user?.id && !user?._id) {
         setTokens([]);
         return;
       }
-      setIsLoading(true);
+      if (showLoading) {
+        setIsLoading(true);
+      }
       const userId = user.id || user._id || user.userId;
       const res = await getVnpayTokens(userId);
       setTokens(res || []);
     } catch (error) {
       console.warn('Không lấy được danh sách thẻ:', error?.message);
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchTokens();
-  }, []);
+    if (isFocused) {
+      fetchTokens();
+    }
+  }, [isFocused]);
 
   const buildCardTypeLabel = (type) => {
     if (type === '01') return 'Thẻ nội địa (ATM)';
@@ -74,16 +82,19 @@ const PaymentCardsScreen = ({ navigation }) => {
   };
 
   const handleSelect = (item) => {
-    navigation.navigate('PaymentTokenScreen', {
-      fromProfile: true,
-      token: item.token,
-      tokenMeta: {
-        bankCode: item.bankCode || item.bankShortName || item.bank || item.bankName,
-        bankName: item.bankName || item.bank || item.bankShortName || item.bankCode,
-        cardMask: item.cardMask || item.mask || item.number,
-        cardType: item.cardType,
-        cardHolderName: item.cardHolderName || item.cardHolder || item.holderName || item.ownerName || item.nameOnCard,
-        cardExpiry: buildExpiry(item),
+    navigation.navigate('PaymentStack', {
+      screen: 'PaymentTokenScreen',
+      params: {
+        fromProfile: true,
+        token: item.token,
+        tokenMeta: {
+          bankCode: item.bankCode || item.bankShortName || item.bank || item.bankName,
+          bankName: item.bankName || item.bank || item.bankShortName || item.bankCode,
+          cardMask: item.cardMask || item.mask || item.number,
+          cardType: item.cardType,
+          cardHolderName: item.cardHolderName || item.cardHolder || item.holderName || item.ownerName || item.nameOnCard,
+          cardExpiry: buildExpiry(item),
+        },
       },
     });
   };
@@ -214,7 +225,7 @@ const PaymentCardsScreen = ({ navigation }) => {
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => navigation.navigate('PaymentTokenScreen', { fromProfile: true })}
+          onPress={() => navigation.navigate('PaymentStack', { screen: 'PaymentTokenization', params: { fromProfile: true } })}
         >
           <Text style={styles.addButtonText}>Thêm thẻ mới</Text>
         </TouchableOpacity>

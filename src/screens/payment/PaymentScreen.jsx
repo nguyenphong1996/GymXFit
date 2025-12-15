@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   StatusBar,
-  Linking
+
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -55,8 +55,6 @@ const PaymentScreen = ({ route, navigation }) => {
   const { user, isLoading: isUserLoading } = useContext(UserContext);
   const [isLoading, setIsLoading] = useState(true);
   const [paymentUrl, setPaymentUrl] = useState('');
-  const [returnUrl, setReturnUrl] = useState('');
-  const [isVerifying, setIsVerifying] = useState(false);
   const webViewRef = React.useRef(null);
   const resolveAmountNumber = () => {
     if (typeof plan?.amountDue === 'number') return plan.amountDue;
@@ -77,76 +75,9 @@ const PaymentScreen = ({ route, navigation }) => {
     return base.replace(/\/+$/, '');
   }, []);
 
-  const extractReturnUrl = (fullPaymentUrl) => {
-    if (!fullPaymentUrl) {
-      return `${defaultApiBaseUrl}/api/v1/payment/vnpay-return`;
-    }
 
-    try {
-      const parsed = new URL(fullPaymentUrl);
-      const encodedReturn = parsed.searchParams.get('vnp_ReturnUrl');
-      if (encodedReturn) {
-        return decodeURIComponent(encodedReturn);
-      }
-    } catch (error) {
-      console.log('Không thể trích xuất returnUrl từ paymentUrl', error);
-    }
 
-    return `${defaultApiBaseUrl}/api/v1/payment/vnpay-return`;
-  };
 
-  useEffect(() => {
-    const handleDeepLink = (event) => {
-        if (event.url) {
-            console.log('Deep link received:', event.url);
-            if (event.url.includes('payment-result')) {
-                handleBackendRedirect(event.url);
-            } else if (event.url.includes('vnpay-return') || event.url.includes('vnp_ResponseCode')) {
-                verifyPaymentFromUrl(event.url);
-            }
-        }
-    };
-
-    const subscription = Linking.addEventListener('url', handleDeepLink);
-
-    return () => {
-        subscription.remove();
-    };
-  }, []);
-
-  const handleBackendRedirect = (url) => {
-    try {
-      const urlObj = new URL(url);
-      const params = Object.fromEntries(urlObj.searchParams.entries());
-      
-      // gymxfit://payment-result?code=00&message=Success&orderId=...&amount=...
-      console.log('Backend redirect params:', params);
-
-      if (params.code === '00') {
-        navigation.navigate('PaymentResult', {
-          status: '00',
-          message: decodeURIComponent(params.message || 'Giao dịch thành công'),
-          amount: params.amount || resolveAmountNumber(),
-          txnRef: params.orderId,
-          method: 'vnpay',
-          planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
-        });
-      } else {
-        navigation.navigate('PaymentResult', {
-          status: params.code || '99',
-          message: decodeURIComponent(params.message || 'Giao dịch thất bại'),
-          amount: params.amount || resolveAmountNumber(),
-          txnRef: params.orderId,
-          method: 'vnpay',
-          planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
-        });
-      }
-    } catch (e) {
-      console.error('Error parsing backend redirect:', e);
-    }
-  };
 
   const openVnpaySdk = (url) => {
       try {
@@ -233,53 +164,6 @@ const PaymentScreen = ({ route, navigation }) => {
     };
   }, [plan, navigation, user, isUserLoading]);
   
-  const verifyPaymentFromUrl = async (url) => {
-    if (isVerifying) return;
-    setIsVerifying(true);
-
-    try {
-      const urlObj = new URL(url);
-      const queryParams = Object.fromEntries(urlObj.searchParams.entries());
-
-      // Only verify if we have response code
-      if (!queryParams.vnp_ResponseCode) {
-         setIsVerifying(false);
-         return;
-      }
-
-      const result = await checkVnpayPaymentStatus(queryParams);
-
-      if (result.code === '00') {
-        navigation.navigate('PaymentResult', {
-          status: '00',
-          message: 'Giao dịch thành công',
-          amount: plan?.price,
-          txnRef: queryParams.vnp_TxnRef,
-          method: 'vnpay',
-          bankCode: queryParams.vnp_BankCode,
-          cardType: queryParams.vnp_CardType,
-          planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
-        });
-      } else {
-        navigation.navigate('PaymentResult', {
-          status: result.code || '99',
-          message: result.message || 'Giao dịch thất bại',
-          amount: plan?.price,
-          txnRef: queryParams.vnp_TxnRef,
-          method: 'vnpay',
-          bankCode: queryParams.vnp_BankCode,
-          cardType: queryParams.vnp_CardType,
-          planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
-        });
-      }
-    } catch (error) {
-      console.error('Lỗi khi xác nhận thanh toán VNPAY:', error);
-      Alert.alert('Lỗi', 'Không thể xác nhận trạng thái thanh toán.');
-      navigation.goBack();
-    }
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -300,12 +184,7 @@ const PaymentScreen = ({ route, navigation }) => {
       </View>
       
       <View style={styles.loaderContainer}>
-          {isVerifying ? (
-             <>
-                <ActivityIndicator size="large" color={MD3_COLORS.primary} />
-                <Text style={styles.loaderText}>Đang xác nhận kết quả...</Text>
-             </>
-          ) : (
+          
              <>
                 <ActivityIndicator size="large" color={MD3_COLORS.primary} />
                 <Text style={styles.loaderText}>Đang mở cổng thanh toán VNPAY...</Text>
@@ -324,7 +203,7 @@ const PaymentScreen = ({ route, navigation }) => {
                     <Text style={{ color: MD3_COLORS.textSecondary, fontWeight: '600' }}>Hủy bỏ</Text>
                 </TouchableOpacity>
              </>
-          )}
+          
       </View>
 
     </SafeAreaView>

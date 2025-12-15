@@ -506,19 +506,22 @@ const CardMembershipScreen = ({ navigation }) => {
     }
 
     try {
-      navigation.navigate('PaymentMethod', {
-        plan: {
-          ...plan,
-          _id: finalPackageId, // Pass correct backend ID
-          id: finalPackageId, // Keep id for compatibility if other parts use it
-          billingCycle,
-          amountDue,
-          creditValue,
-          isUpgrade,
-          isTemporary,
-          priceLabel: formatCurrency(amountDue),
+      navigation.navigate('PaymentStack', {
+        screen: 'PaymentMethod',
+        params: {
+          plan: {
+            ...plan,
+            _id: finalPackageId, // Pass correct backend ID
+            id: finalPackageId, // Keep id for compatibility if other parts use it
+            billingCycle,
+            amountDue,
+            creditValue,
+            isUpgrade,
+            isTemporary,
+            priceLabel: formatCurrency(amountDue),
+          },
+          quote,
         },
-        quote,
       });
     } catch (error) {
       const rawMessage = error?.response?.data?.message || error?.message || '';
