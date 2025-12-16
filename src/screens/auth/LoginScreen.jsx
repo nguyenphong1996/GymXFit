@@ -6,14 +6,15 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
+import { useToast } from '@context/ToastContext';
 import { requestLoginOtp } from '@api/userApi';
 
 const LoginScreen = ({ navigation }) => {
+  const { showToast } = useToast();
   const [mobileNumber, setMobileNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -21,24 +22,37 @@ const LoginScreen = ({ navigation }) => {
     const trimmedNumber = mobileNumber.trim();
 
     if (trimmedNumber === '') {
-      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại của bạn.');
+      showToast({
+        type: 'warning',
+        title: 'Lưu ý',
+        message: 'Vui lòng nhập số điện thoại của bạn.',
+      });
       return;
     }
     if (trimmedNumber.length !== 10) {
-      Alert.alert('Lỗi', 'Số điện thoại phải có 10 chữ số.');
+      showToast({
+        type: 'warning',
+        title: 'Lưu ý',
+        message: 'Số điện thoại phải có 10 chữ số.',
+      });
       return;
     }
 
     setIsLoading(true);
     try {
       await requestLoginOtp(trimmedNumber);
-      Alert.alert(
-        'Thành công',
-        'Mã OTP đã được gửi đến số điện thoại của bạn.',
-      );
+      showToast({
+        type: 'success',
+        title: 'Thành công',
+        message: 'Mã OTP đã được gửi đến số điện thoại của bạn.',
+      });
       navigation.navigate('VerifyLoginScreen', { phone: trimmedNumber });
     } catch (error) {
-      Alert.alert('Đăng nhập thất bại', error.message);
+      showToast({
+        type: 'error',
+        title: 'Đăng nhập thất bại',
+        message: error.message,
+      });
     } finally {
       setIsLoading(false);
     }

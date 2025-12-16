@@ -4,6 +4,7 @@ import { StatusBar, StyleSheet, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { UserProvider } from '@context/UserContext';
+import { ToastProvider } from './src/context/ToastContext.js';
 import AppNavigator from './src/navigation/AppNavigator.js';
 
 function App() {
@@ -14,7 +15,9 @@ function App() {
       <SafeAreaProvider style={styles.container}>
         <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
         <UserProvider>
-          <AppNavigator />
+          <ToastProvider>
+            <AppNavigator />
+          </ToastProvider>
         </UserProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

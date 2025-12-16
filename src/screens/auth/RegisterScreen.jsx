@@ -6,15 +6,16 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons'; // 🟩 Thêm thư viện icon
+import { useToast } from '@context/ToastContext';
 import { requestOTP } from '@api/userApi';
 
 const RegisterScreen = props => {
   const { navigation } = props;
+  const { showToast } = useToast();
   const [mobileNumber, setMobileNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -22,28 +23,41 @@ const RegisterScreen = props => {
     const trimmedNumber = mobileNumber.trim();
 
     if (trimmedNumber === '') {
-      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại.');
+      showToast({
+        type: 'warning',
+        title: 'Lưu ý',
+        message: 'Vui lòng nhập số điện thoại.',
+      });
       return;
     }
 
     if (trimmedNumber.length !== 10) {
-      Alert.alert('Lỗi', 'Số điện thoại phải có 10 chữ số.');
+      showToast({
+        type: 'warning',
+        title: 'Lưu ý',
+        message: 'Số điện thoại phải có 10 chữ số.',
+      });
       return;
     }
 
     setIsLoading(true);
     try {
       await requestOTP(trimmedNumber);
-      Alert.alert(
-        'Thành công',
-        'Mã OTP đã được gửi đến số điện thoại của bạn.',
-      );
+      showToast({
+        type: 'success',
+        title: 'Thành công',
+        message: 'Mã OTP đã được gửi đến số điện thoại của bạn.',
+      });
       navigation.navigate('VerifyRegisterScreen', {
         phone: trimmedNumber,
       });
     } catch (error) {
       const errorMessage = error.response?.data?.error || error.message;
-      Alert.alert('Lỗi', errorMessage);
+      showToast({
+        type: 'error',
+        title: 'Đăng ký thất bại',
+        message: errorMessage,
+      });
     } finally {
       setIsLoading(false);
     }
