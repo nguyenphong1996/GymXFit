@@ -20,6 +20,7 @@ import {
   calculateDaysLeft,
   formatCurrency,
 } from '../../utils/membership';
+import { membershipPlans } from '../../screens/membership/membershipPlans';
 
 const COLORS = {
   primary: '#1F8E4A',
@@ -264,6 +265,44 @@ const ServiceInfoScreen = ({ navigation }) => {
             </View>
           ))}
         </View>
+
+        {/* Available Membership Plans */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.iconTitle}>
+              <Icon name="credit-card" size={22} color={COLORS.primary} />
+              <Text style={styles.cardTitle}>Gói thành viên có sẵn</Text>
+            </View>
+          </View>
+          {membershipPlans.map((plan, idx) => (
+            <View key={plan.id} style={[styles.planCard, idx > 0 && { marginTop: 12 }]}>
+              <View style={styles.planHeader}>
+                <View style={styles.planBadge}>
+                  <Text style={styles.badgeText}>{plan.badge}</Text>
+                </View>
+                <Text style={styles.planPrice}>{plan.price}</Text>
+              </View>
+              <Text style={styles.planName}>{plan.name}</Text>
+              <Text style={styles.planCaption}>{plan.caption}</Text>
+              
+              <View style={styles.planFeatures}>
+                {plan.summary.map((feature, featureIdx) => (
+                  <View key={featureIdx} style={styles.featureRow}>
+                    <Icon name="check" size={14} color={COLORS.success} />
+                    <Text style={styles.featureText}>{feature}</Text>
+                  </View>
+                ))}
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.selectPlanButton}
+                onPress={() => navigation.navigate('CardMembershipScreen', { selectedPlan: plan })}
+              >
+                <Text style={styles.selectPlanText}>Chọn gói này</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
       </ScrollView>
     </View>
   );
@@ -378,4 +417,70 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: { color: COLORS.textSecondary, fontSize: 14 },
+  // Membership Plans Styles
+  planCard: {
+    borderWidth: 1,
+    borderColor: COLORS.outline,
+    borderRadius: 12,
+    padding: 16,
+    backgroundColor: COLORS.surface,
+  },
+  planHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  planBadge: {
+    backgroundColor: COLORS.primary + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  planPrice: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+  },
+  planName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  planCaption: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginBottom: 12,
+  },
+  planFeatures: {
+    marginBottom: 12,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  featureText: {
+    fontSize: 13,
+    color: COLORS.textPrimary,
+    flex: 1,
+  },
+  selectPlanButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  selectPlanText: {
+    color: COLORS.onPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });

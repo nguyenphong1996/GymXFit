@@ -154,7 +154,7 @@ const PaymentCardSelectScreen = ({ navigation, route }) => {
 
       <View style={styles.summaryContainer}>
         <Text style={styles.summaryText}>Gói: <Text style={styles.summaryValue}>{plan?.name}</Text></Text>
-        <Text style={styles.summaryText}>Số tiền: <Text style={styles.summaryValue}>{plan?.price}</Text></Text>
+        <Text style={styles.summaryText}>Số tiền: <Text style={styles.summaryValue}>{plan?.priceLabel || plan?.amountDue?.toLocaleString() || plan?.price}</Text></Text>
       </View>
 
       {isLoading ? (
@@ -177,7 +177,7 @@ const PaymentCardSelectScreen = ({ navigation, route }) => {
       )}
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('PaymentTokenizationScreen', { plan })}>
+        <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('PaymentTokenization', { plan })}>
           <Text style={styles.addButtonText}>Thêm thẻ mới</Text>
         </TouchableOpacity>
       </View>

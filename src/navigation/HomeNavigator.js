@@ -4,6 +4,10 @@ import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+// New Booking Flow
+import BookingNavigator from './BookingNavigator';
+import MyBookingsScreen from '@screens/booking/MyBookingsScreen';
+
 // App screens
 import HomeScreen from '@screens/home/HomeScreen';
 import FavoriteVideosScreen from '@screens/video/FavoriteVideosScreen';
@@ -12,15 +16,13 @@ import QrScannerModal from '@screens/qr/QrScannerModal';
 import UpdateProfileScreen from '@screens/profile/UpdateProfileScreen';
 import PaymentCardsScreen from '@screens/profile/PaymentCardsScreen';
 import GymxfitPolicyScreen from '@screens/profile/GymxfitPolicyScreen';
-import SearchCalendarScreen from '@screens/booking/SearchCalendarScreen';
-import BookScreen from '@screens/booking/BookScreen';
 import NewsScreen from '@screens/home/NewsScreen';
+import SearchCalendarScreen from '@screens/booking/SearchCalendarScreen';
 import PaymentScreen from '@screens/payment/PaymentScreen';
 import PaymentTokenScreen from '@screens/payment/PaymentTokenScreen';
 import PaymentTokenizationScreen from '@screens/payment/PaymentTokenizationScreen';
 import PaymentCardSelectScreen from '@screens/payment/PaymentCardSelectScreen';
 import BankTransferScreen from '@screens/payment/BankTransferScreen';
-import CalendarScreen from '../screens/booking/CalendarScreen';
 import CardMembershipScreen from '../screens/membership/CardMembershipScreen';
 import CardMembershipDetailScreen from '../screens/membership/CardMembershipDetailScreen';
 import FAQScreen from '@screens/membership/FAQScreen';
@@ -32,6 +34,7 @@ import { UserContext } from '@context/UserContext';
 import { scanAttendance } from '@api/classesApi';
 import ServiceInfoScreen from '@screens/profile/ServiceInfoScreen';
 
+// This long function is not relevant to the navigation change, keeping it as is.
 const resolveCheckinWindowMessage = (message = '', code = '') => {
     const normalizedMessage = typeof message === 'string' ? message.toLowerCase() : '';
     const normalizedCode = typeof code === 'string' ? code.toLowerCase() : '';
@@ -61,7 +64,7 @@ const resolveCheckinWindowMessage = (message = '', code = '') => {
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-// Custom Tab Bar với FAB
+// Custom Tab Bar with FAB (no changes needed here)
 const CustomTabBar = ({ state, descriptors, navigation }) => {
     const [showQRScanner, setShowQRScanner] = useState(false);
     const { user } = useContext(UserContext);
@@ -75,7 +78,6 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                 console.log('User Role:', user?.role);
                 console.log('QR Data:', qrData);
                 
-                // Check if user is logged in
                 if (!user) {
                     console.error('User not found - not logged in');
                     return {
@@ -84,11 +86,9 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                     };
                 }
 
-                // Get role, default to 'customer' if not set
                 const role = user.role || 'customer';
                 console.log('Resolved role:', role);
 
-                // Validate role
                 if (role !== 'customer' && role !== 'staff') {
                     console.error('Invalid role:', role);
                     return {
@@ -97,7 +97,6 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                     };
                 }
 
-                // Validate QR data structure
                 if (!qrData || typeof qrData !== 'object') {
                     return {
                         success: false,
@@ -113,7 +112,6 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                     };
                 }
 
-                // Check if QR has expired
                 if (qrData.expiresAt) {
                     const expiryTime = new Date(qrData.expiresAt).getTime();
                     const currentTime = new Date().getTime();
@@ -126,7 +124,6 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                     }
                 }
 
-                // Call check-in API
                 console.log('=== SCAN SUCCESS - CALLING API ===');
                 console.log('QR Data:', qrData);
                 console.log('Class ID:', classId);
@@ -134,7 +131,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                 
                 const response = await scanAttendance({ 
                     classId, 
-                    qrValue: qrData,  // Pass object directly, API will handle it
+                    qrValue: qrData,
                     role 
                 });
 
@@ -143,7 +140,6 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                 console.log('Response.success:', response?.success);
                 console.log('Response.message:', response?.message);
 
-                // Check API response
                 if (response?.success === false) {
                     const errorMsg = response?.message || '';
                     
@@ -158,7 +154,6 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                         };
                     }
                     
-                    // Handle specific errors
                     if (errorMsg.includes('not enrolled') || errorMsg.includes('không đăng ký')) {
                         return {
                             success: false,
@@ -181,7 +176,6 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
 
                 console.log('=== CHECK-IN SUCCESS ===');
                 
-                // Success
                 return {
                     success: true,
                     message: response?.message || 'Quét mã thành công! Đã check-in vào lớp học.',
@@ -199,7 +193,6 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                     };
                 }
                 
-                // Handle specific errors
                 if (errorMsg.includes('not enrolled') || errorMsg.includes('không đăng ký')) {
                     return {
                         success: false,
@@ -225,15 +218,12 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
 
     return (
         <View style={styles.tabContainer}>
-            {/* QR Scanner Modal */}
             <QrScannerModal
                 visible={showQRScanner}
                 onClose={() => setShowQRScanner(false)}
                 onScanSuccess={handleScanSuccess}
                 helperTitle="Quét mã QR để điểm danh vào lớp học"
             />
-
-            {/* Nút Home */}
             <TouchableOpacity
                 style={styles.tabButton}
                 onPress={() => navigation.navigate('HomeStack')}
@@ -247,23 +237,20 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                     Trang chủ
                 </Text>
             </TouchableOpacity>
-
-            {/* Nút Search */}
+            {/* THIS IS THE MODIFIED TAB */}
             <TouchableOpacity
                 style={styles.tabButton}
-                onPress={() => navigation.navigate('SearchCalendarScreen')}
+                onPress={() => navigation.navigate('BookingStack')}
             >
                 <Icon
                     name="assignment"
                     size={24}
-                    color={state.routes[state.index].name === 'SearchCalendarScreen' ? '#fff' : '#ddd'}
+                    color={state.routes[state.index].name === 'BookingStack' ? '#fff' : '#ddd'}
                 />
-                <Text style={[styles.tabLabel, state.routes[state.index].name === 'SearchCalendarScreen' && styles.activeLabel]}>
+                <Text style={[styles.tabLabel, state.routes[state.index].name === 'BookingStack' && styles.activeLabel]}>
                     Đặt lịch
                 </Text>
             </TouchableOpacity>
-
-            {/* FAB - QR Scan ở giữa */}
             <TouchableOpacity
                 style={styles.fabContainer}
                 onPress={() => setShowQRScanner(true)}
@@ -273,8 +260,6 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                 </View>
                 <Text style={styles.fabLabel}>Quét mã</Text>
             </TouchableOpacity>
-
-            {/* Nút Favorites */}
             <TouchableOpacity
                 style={styles.tabButton}
                 onPress={() => navigation.navigate('Favorites')}
@@ -288,8 +273,6 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                     Yêu thích
                 </Text>
             </TouchableOpacity>
-
-            {/* Nút Profile */}
             <TouchableOpacity
                 style={styles.tabButton}
                 onPress={() => navigation.navigate('ProfileStack')}
@@ -307,7 +290,6 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
     );
 };
 
-// Stack riêng cho luồng thanh toán
 const PaymentStack = () => (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name='PaymentMethod' component={PaymentMethodScreen} />
@@ -324,13 +306,13 @@ const HomeStack = () => {
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name='Home' component={HomeScreen} />
             <Stack.Screen name='News' component={NewsScreen} />
-            <Stack.Screen name='CalendarScreen' component={CalendarScreen} />
+            <Stack.Screen name='SearchCalendarScreen' component={SearchCalendarScreen} />
             <Stack.Screen name='CardMembershipScreen' component={CardMembershipScreen} />
             <Stack.Screen name='CardMembershipDetail' component={CardMembershipDetailScreen} />
             <Stack.Screen name='MembershipFAQ' component={FAQScreen} />
             <Stack.Screen name='WorkoutScreen' component={WorkoutScreen} />
             <Stack.Screen name='WorkoutVideo' component={WorkoutVideoScreen} />
-            <Stack.Screen name='BookScreen' component={BookScreen} />
+            <Stack.Screen name='PaymentMethod' component={PaymentMethodScreen} />
         </Stack.Navigator>
     );
 };
@@ -339,6 +321,7 @@ const ProfileStack = () => {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name='Profile' component={ProfileScreen} />
+            <Stack.Screen name='MyBookings' component={MyBookingsScreen} />
             <Stack.Screen name='UpdateProfile' component={UpdateProfileScreen} />
             <Stack.Screen name='PaymentCards' component={PaymentCardsScreen} />
             <Stack.Screen name='MembershipFAQ' component={FAQScreen} />
@@ -348,7 +331,7 @@ const ProfileStack = () => {
     );
 };
 
-// Tab Navigator chính
+// Main Tab Navigator
 const MainTabs = () => (
     <Tab.Navigator
         initialRouteName='HomeStack'
@@ -356,13 +339,12 @@ const MainTabs = () => (
         screenOptions={{ headerShown: false }}
     >
         <Tab.Screen name="HomeStack" component={HomeStack} />
-        <Tab.Screen name="SearchCalendarScreen" component={SearchCalendarScreen} />
+        <Tab.Screen name="BookingStack" component={BookingNavigator} />
         <Tab.Screen name="Favorites" component={FavoriteVideosScreen} />
         <Tab.Screen name="ProfileStack" component={ProfileStack} />
     </Tab.Navigator>
 );
 
-// Root Navigator để quản lý modal
 const RootStack = createNativeStackNavigator();
 
 const HomeNavigator = () => {

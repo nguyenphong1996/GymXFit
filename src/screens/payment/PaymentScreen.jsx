@@ -180,7 +180,7 @@ const PaymentScreen = ({ route, navigation }) => {
       {/* Order Summary */}
       <View style={styles.summaryContainer}>
         <Text style={styles.summaryText}>Gói dịch vụ: <Text style={styles.summaryValue}>{plan.name}</Text></Text>
-        <Text style={styles.summaryText}>Số tiền: <Text style={styles.summaryValue}>{plan.price}</Text></Text>
+        <Text style={styles.summaryText}>Số tiền: <Text style={styles.summaryValue}>{plan.priceLabel || plan.amountDue?.toLocaleString() || plan.price}</Text></Text>
       </View>
       
       <View style={styles.loaderContainer}>

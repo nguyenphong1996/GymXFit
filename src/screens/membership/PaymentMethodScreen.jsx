@@ -45,6 +45,7 @@ const MD3_ELEVATION = {
 
 const PaymentMethodScreen = ({ navigation, route }) => {
   const { plan } = route.params || {};
+  console.log('PaymentMethodScreen - received plan:', plan);
   const { user, refreshUser } = useContext(UserContext);
   const [isLoading, setIsLoading] = useState(false);
 

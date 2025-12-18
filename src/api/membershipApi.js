@@ -28,3 +28,8 @@ export const getAllPackages = async () => get('/packages');
 export const createPaymentUrl = async (paymentDetails) => {
   return post('/v1/payment/create-payment-url', paymentDetails);
 };
+
+// NEW: Activate membership after successful payment
+export const activateMembership = async (membershipData) => {
+  return post('/user/membership/activate', membershipData);
+};

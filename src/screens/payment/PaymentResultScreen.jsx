@@ -198,9 +198,9 @@ const PaymentResultScreen = ({ route, navigation }) => {
       };
     }
     
-    // Format số với khoảng trắng phân cách hàng nghìn
-    // Ví dụ: 49000 -> 49 000 VNĐ
-    const formattedAmount = amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' VNĐ';
+    // Format số với dấu chấm phân cách hàng nghìn (gần gũi hơn)
+    // Ví dụ: 890000 -> 890.000 VNĐ
+    const formattedAmount = amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' VNĐ';
     const wordsAmount = convertNumberToWords(amount);
     
     return {
@@ -304,7 +304,17 @@ const PaymentResultScreen = ({ route, navigation }) => {
               
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Thời gian</Text>
-                <Text style={styles.detailValue}>{paidAt || new Date().toLocaleString('vi-VN')}</Text>
+                <View style={styles.timeContainer}>
+                  <Text style={styles.timeText}>
+                    {new Date(paidAt || new Date()).toLocaleTimeString('vi-VN', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </Text>
+                  <Text style={styles.dateText}>
+                    Ngày {new Date(paidAt || new Date()).toLocaleDateString('vi-VN')}
+                  </Text>
+                </View>
               </View>
               
               <View style={styles.detailRow}>
@@ -426,6 +436,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: MD3_COLORS.textPrimary,
     marginBottom: 4,
+    letterSpacing: 0.5, // Rút ngắn khoảng cách giữa các chữ số
   },
   currencyText: {
     ...MD3_TYPE.bodyLarge,
@@ -460,6 +471,21 @@ const styles = StyleSheet.create({
     color: MD3_COLORS.textPrimary,
     flex: 1.2,
     textAlign: 'right',
+  },
+  timeContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 2,
+    flex: 1.2,
+  },
+  timeText: {
+    ...MD3_TYPE.bodyMedium,
+    fontWeight: '600',
+    color: MD3_COLORS.textPrimary,
+  },
+  dateText: {
+    ...MD3_TYPE.bodySmall,
+    color: MD3_COLORS.textSecondary,
   },
   methodContainer: {
     flexDirection: 'row',

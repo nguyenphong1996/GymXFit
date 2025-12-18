@@ -37,7 +37,7 @@ const BANK_INFO = {
 
 const BankTransferScreen = ({ route, navigation }) => {
   const { plan } = route.params;
-  const priceNumber = parseInt(plan.price.replace(/[^0-9]/g, ''), 10) || 0;
+  const priceNumber = plan?.amountDue || parseInt(plan.price.replace(/[^0-9]/g, ''), 10) || 0;
   const transferContent = `GYM ${plan.id.toUpperCase()} ${Date.now().toString().slice(-6)}`;
   
   // VietQR API URL
@@ -91,7 +91,7 @@ const BankTransferScreen = ({ route, navigation }) => {
             <DetailRow label="Ngân hàng" value={BANK_INFO.bankName} />
             <DetailRow label="Số tài khoản" value={BANK_INFO.accountNo} isCopyable />
             <DetailRow label="Chủ tài khoản" value={BANK_INFO.accountName} />
-            <DetailRow label="Số tiền" value={`${plan.price}`} highlight />
+            <DetailRow label="Số tiền" value={plan.priceLabel || plan.amountDue?.toLocaleString() || plan.price} highlight />
             <DetailRow label="Nội dung CK" value={transferContent} isCopyable />
           </View>
 

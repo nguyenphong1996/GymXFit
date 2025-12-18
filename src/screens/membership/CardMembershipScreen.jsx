@@ -393,7 +393,15 @@ const CardMembershipScreen = ({ navigation }) => {
   };
 
   const handleRegister = async (plan) => {
-    const targetTier = getPlanTier(plan);
+    // Map plan với backend data để lấy _id
+    const backendPlan = displayedPlans.find(p => p.localId === plan.id || p.name === plan.name);
+    const enhancedPlan = backendPlan ? { ...plan, _id: backendPlan._id, id: backendPlan._id } : plan;
+    
+    console.log('[DEBUG] handleRegister - Original plan:', plan);
+    console.log('[DEBUG] handleRegister - Backend plan:', backendPlan);
+    console.log('[DEBUG] handleRegister - Enhanced plan:', enhancedPlan);
+    
+    const targetTier = getPlanTier(enhancedPlan);
     const remainingDays = getRemainingDays(currentMembership);
     const targetDurationDays = getDurationDays(billingCycle);
     const isDowngradeTier = currentTier != null && targetTier != null && targetTier < currentTier;
@@ -404,29 +412,29 @@ const CardMembershipScreen = ({ navigation }) => {
     }
 
     const currentPlanId = membershipPlans.find(p => p.id === currentMembership?.packageId || p.name.toLowerCase() === (currentMembership?.packageName || '').toLowerCase())?.id;
-    const isRenewal = currentMembership && currentPlanId === plan.id;
+    const isRenewal = currentMembership && currentPlanId === enhancedPlan.id;
 
     // Case: Renewal
     if (isRenewal) {
-      proceedToPayment(plan, { isUpgrade: false, isTemporary: false, quoteType: 'permanent' });
+      proceedToPayment(enhancedPlan, { isUpgrade: false, isTemporary: false, quoteType: 'permanent' });
       return;
     }
 
     // Case: New purchase (no active membership or expired)
     if (!currentMembership || currentMembership.status !== 'active' || (currentMembership.endDate && new Date(currentMembership.endDate) < new Date())) {
-      proceedToPayment(plan, { isUpgrade: false, isTemporary: false, quoteType: 'permanent' });
+      proceedToPayment(enhancedPlan, { isUpgrade: false, isTemporary: false, quoteType: 'permanent' });
       return;
     }
 
     // Case: Upgrade (active membership, higher tier)
     const isUpgrade = currentTier != null && targetTier > currentTier; // Explicitly an upgrade
     if (isUpgrade) {
-      const permanentQuote = permanentQuotes[plan.id];
-      const temporaryQuote = temporaryQuotes[plan.id];
+      const permanentQuote = permanentQuotes[enhancedPlan.id];
+      const temporaryQuote = temporaryQuotes[enhancedPlan.id];
 
-      const permanentAmountDue = permanentQuote?.amountDue ?? computeCyclePrice(plan.basePrice, billingCycle);
+      const permanentAmountDue = permanentQuote?.amountDue ?? computeCyclePrice(enhancedPlan.basePrice, billingCycle);
       const permanentCreditValue = permanentQuote?.creditValue || 0;
-      const temporaryAmountDue = temporaryQuote?.amountDue ?? computeCyclePrice(plan.basePrice, billingCycle);
+      const temporaryAmountDue = temporaryQuote?.amountDue ?? computeCyclePrice(enhancedPlan.basePrice, billingCycle);
 
       const actions = [];
 
@@ -442,7 +450,7 @@ const CardMembershipScreen = ({ navigation }) => {
                 `Giá trị còn lại của gói hiện tại (${formatCurrency(permanentCreditValue)}) cao hơn giá của gói mới (${formatCurrency(permanentQuote?.targetPrice || 0)}).\n\nViệc nâng cấp sẽ là MIỄN PHÍ. Tuy nhiên, phần giá trị chênh lệch là ${formatCurrency(permanentCreditValue - (permanentQuote?.targetPrice || 0))} sẽ không được hoàn lại. Bạn có muốn tiếp tục không?`,
                 [
                   { text: 'Hủy', style: 'cancel' },
-                  { text: 'Tiếp tục (Miễn phí)', onPress: () => proceedToPayment(plan, { isUpgrade: true, isTemporary: false, quoteType: 'permanent' }) }
+                  { text: 'Tiếp tục (Miễn phí)', onPress: () => proceedToPayment(enhancedPlan, { isUpgrade: true, isTemporary: false, quoteType: 'permanent' }) }
                 ]
               );
             }
@@ -450,7 +458,7 @@ const CardMembershipScreen = ({ navigation }) => {
         } else {
           actions.push({
             text: `Nâng cấp vĩnh viễn (+${targetDurationDays} ngày) - ${formatCurrency(permanentAmountDue)}`,
-            onPress: () => proceedToPayment(plan, { isUpgrade: true, isTemporary: false, quoteType: 'permanent' })
+            onPress: () => proceedToPayment(enhancedPlan, { isUpgrade: true, isTemporary: false, quoteType: 'permanent' })
           });
         }
       }
@@ -459,7 +467,7 @@ const CardMembershipScreen = ({ navigation }) => {
       if (temporaryQuote) {
         actions.push({
           text: `Mua trải nghiệm (${remainingDays} ngày) - ${formatCurrency(temporaryAmountDue)}`,
-          onPress: () => proceedToPayment(plan, { isUpgrade: true, isTemporary: true, quoteType: 'temporary' })
+          onPress: () => proceedToPayment(enhancedPlan, { isUpgrade: true, isTemporary: true, quoteType: 'temporary' })
         });
       }
 
@@ -468,17 +476,19 @@ const CardMembershipScreen = ({ navigation }) => {
       
       Alert.alert(
         'Lựa chọn nâng cấp',
-        `Bạn đang còn ${remainingDays} ngày ở gói hiện tại. Vui lòng chọn hình thức nâng cấp cho gói ${plan.name}.`,
+        `Bạn đang còn ${remainingDays} ngày ở gói hiện tại. Vui lòng chọn hình thức nâng cấp cho gói ${enhancedPlan.name}.`,
         actions
       );
     } else {
       // Fallback for unexpected cases, treat as permanent upgrade/new purchase
-      proceedToPayment(plan, { isUpgrade: true, isTemporary: false, quoteType: 'permanent' });
+      proceedToPayment(enhancedPlan, { isUpgrade: true, isTemporary: false, quoteType: 'permanent' });
     }
   };
 
   const proceedToPayment = async (plan, { isUpgrade, isTemporary, quoteType }) => {
-    const finalPackageId = plan._id; // ALWAYS use backend _id
+    console.log('[DEBUG] proceedToPayment - Original plan:', plan);
+    const finalPackageId = plan._id || plan.id; // ALWAYS use backend _id
+    console.log('[DEBUG] proceedToPayment - finalPackageId:', finalPackageId);
 
     let quote = null;
     let amountDue = 0;
@@ -505,23 +515,41 @@ const CardMembershipScreen = ({ navigation }) => {
       creditValue = 0;
     }
 
+    const planForNavigation = {
+      ...plan,
+      _id: finalPackageId, // Pass correct backend ID
+      id: finalPackageId, // Keep id for compatibility if other parts use it
+      billingCycle,
+      amountDue,
+      creditValue,
+      isUpgrade,
+      isTemporary,
+      priceLabel: formatCurrency(amountDue),
+      // Ensure all required fields for PaymentMethodScreen
+      localId: plan.localId || plan.id,
+      name: plan.name,
+      caption: plan.caption,
+      badge: plan.badge,
+      basePrice: plan.basePrice,
+      tier: plan.tier,
+      accent: plan.accent,
+      accentText: plan.accentText,
+      cardColor: plan.cardColor,
+      image: plan.image,
+      summary: plan.summary,
+      quickCompare: plan.quickCompare,
+      details: plan.details,
+      perks: plan.perks,
+      restrictions: plan.restrictions,
+      price: plan.price
+    };
+
+    console.log('[DEBUG] proceedToPayment - Plan for navigation:', planForNavigation);
+
     try {
-      navigation.navigate('PaymentStack', {
-        screen: 'PaymentMethod',
-        params: {
-          plan: {
-            ...plan,
-            _id: finalPackageId, // Pass correct backend ID
-            id: finalPackageId, // Keep id for compatibility if other parts use it
-            billingCycle,
-            amountDue,
-            creditValue,
-            isUpgrade,
-            isTemporary,
-            priceLabel: formatCurrency(amountDue),
-          },
-          quote,
-        },
+      navigation.navigate('PaymentMethod', {
+        plan: planForNavigation,
+        quote,
       });
     } catch (error) {
       const rawMessage = error?.response?.data?.message || error?.message || '';
@@ -735,7 +763,7 @@ const styles = StyleSheet.create({
   planCaption: { ...MD3_TYPE.bodyMedium, color: MD3_COLORS.textSecondary },
   planImageWrapper: { width: '100%', height: 180, borderRadius: 16, overflow: 'hidden', marginBottom: 16 },
   planImage: { width: '100%', height: '100%' },
- priceContainer: { marginBottom: 16 },
+  priceContainer: { marginBottom: 16 },
   planPrice: { ...MD3_TYPE.headlineMedium, color: MD3_COLORS.primary },
   subRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   priceSub: { ...MD3_TYPE.bodySmall, color: '#0EA5E9', fontWeight: '700' },

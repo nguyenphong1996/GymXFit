@@ -319,7 +319,7 @@ const QuickActions = ({
           if (onNavigateTrainer) {
             onNavigateTrainer();
           } else {
-            navigation.navigate('BookScreen');
+            navigation.navigate('BookingStack', { screen: 'PtListScreen' });
           }
         }}
         disabled={quickActionLoading === 'trainer'}
@@ -649,16 +649,7 @@ const HomeScreen = ({ navigation }) => {
   const navigateToSearchCalendar = useCallback(
     (params) => {
       const targetParams = params ? { ...params } : {};
-      const parentNavigator = navigation.getParent();
-      if (parentNavigator) {
-        parentNavigator.navigate({
-          name: 'SearchCalendarScreen',
-          params: targetParams,
-          merge: false,
-        });
-      } else {
-        navigation.navigate('SearchCalendarScreen', targetParams);
-      }
+      navigation.navigate('SearchCalendarScreen', targetParams);
     },
     [navigation],
   );
@@ -704,7 +695,7 @@ const HomeScreen = ({ navigation }) => {
   );
 
   const handleNavigateTrainer = useCallback(
-    () => navigation.navigate('BookScreen'),
+    () => navigation.navigate('BookingStack', { screen: 'PtListScreen' }),
     [navigation],
   );
 
