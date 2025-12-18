@@ -133,6 +133,7 @@ const PaymentScreen = ({ route, navigation }) => {
           billingCycle: plan?.billingCycle || 'month',
           isUpgrade: plan?.isUpgrade || false,
           isTemporary: plan?.isTemporary || false,
+          creditValue: plan?.creditValue || 0,
         };
 
         const response = await createVnpayPaymentUrl(paymentDetails);

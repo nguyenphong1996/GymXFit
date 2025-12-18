@@ -152,10 +152,15 @@ const PaymentMethodScreen = ({ navigation, route }) => {
           <View style={styles.planCard}>
             <View style={styles.planCardContent}>
               <Text style={styles.planCardTitle}>{plan.name} {plan.isUpgrade && plan.creditValue > 0 ? ' (Nâng cấp)' : ''}</Text>
-              {plan.isUpgrade && plan.creditValue > 0 && (
-                <Text style={styles.planCardSubText}>Đã khấu trừ từ gói cũ: {plan.priceLabel || '0đ'}</Text>
+              {plan.isUpgrade && plan.creditValue > 0 ? (
+                <>
+                  <Text style={styles.planCardSubText}>Giá gốc: {plan.originalPrice ? `${plan.originalPrice.toLocaleString()}đ` : plan.price}</Text>
+                  <Text style={styles.planCardSubText}>Đã khấu trừ: -{plan.creditValue.toLocaleString()}đ</Text>
+                  <Text style={styles.planCardPrice}>Số tiền phải trả: {plan.priceLabel || '0đ'}</Text>
+                </>
+              ) : (
+                <Text style={styles.planCardPrice}>Tổng tiền: {plan.priceLabel || '0đ'}</Text>
               )}
-              <Text style={styles.planCardPrice}>Tổng tiền: {plan.priceLabel || '0đ'}</Text>
             </View>
           </View>
         )}
@@ -350,3 +355,4 @@ const styles = StyleSheet.create({
     color: MD3_COLORS.onSurface,
   },
 });
+

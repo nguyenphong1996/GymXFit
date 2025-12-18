@@ -97,7 +97,10 @@ const PaymentTokenScreen = ({ route, navigation }) => {
         userId,
         orderInfo: plan ? `Thanh toan ${plan.name}` : 'Luu the VNPAY',
         cardType,
-        billingCycle: plan?.billingCycle || 'month', // Add billingCycle
+        billingCycle: plan?.billingCycle || 'month',
+        creditValue: plan?.creditValue || 0,
+        isUpgrade: plan?.isUpgrade || false,
+        isTemporary: plan?.isTemporary || false,
       };
       
       // Xử lý khác nhau cho membership và PT session

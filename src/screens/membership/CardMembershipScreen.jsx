@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useContext } from 'react';
 import {
   Alert,
+  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -19,6 +20,7 @@ import { membershipPlans, MEMBERSHIP_CONTACT } from './membershipPlans';
 import { formatCurrency, computeCyclePrice, cycleMultipliers } from '../../utils/membership';
 import { getPermanentUpgradeQuote, getTemporaryUpgradeQuote, getMembershipInfo, getUserMe, getProfile, getAllPackages } from '@api/membershipApi';
 import { UserContext } from '@context/UserContext';
+import { useToast } from '@context/ToastContext';
 import SpecialUtilities from './SpecialUtilities';
 import { normalizeMembership } from '../../utils/membership';
 
@@ -211,6 +213,7 @@ const MembershipCard = ({ plan, onShowDetails, onRegister, priceLabel, discountL
 
 const CardMembershipScreen = ({ navigation }) => {
   const { user } = useContext(UserContext); // Get user from Context
+  const { showToast } = useToast(); // Get toast function
   const scrollViewRef = useRef(null);
   const [billingCycle, setBillingCycle] = useState('quarter'); // month | quarter | year
   const [currentMembership, setCurrentMembership] = useState(null);
@@ -219,6 +222,10 @@ const CardMembershipScreen = ({ navigation }) => {
   const [permanentQuotes, setPermanentQuotes] = useState({});
   const [temporaryQuotes, setTemporaryQuotes] = useState({});
   const [isLoading, setIsLoading] = useState(true);
+  const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
+  const [upgradeModalData, setUpgradeModalData] = useState(null);
+  const [freeUpgradeConfirmVisible, setFreeUpgradeConfirmVisible] = useState(false);
+  const [freeUpgradeConfirmData, setFreeUpgradeConfirmData] = useState(null);
   const cycleOptions = useMemo(
     () => [
       { id: 'month', label: 'Tháng', discount: 0 },
@@ -242,23 +249,100 @@ const CardMembershipScreen = ({ navigation }) => {
 
       try {
         const packagesRes = await getAllPackages();
-        const backendPackages = packagesRes?.data?.data || [];
+        console.log('[DEBUG] packagesRes structure:', {
+          hasData: !!packagesRes?.data,
+          hasSuccess: !!packagesRes?.data?.success,
+          dataArray: Array.isArray(packagesRes?.data?.data),
+          dataLength: packagesRes?.data?.data?.length,
+          data: packagesRes?.data
+        });
+        
+        // Fix: Extract correct data structure from backend response
+        let backendPackages = [];
+        if (packagesRes?.data?.success && Array.isArray(packagesRes?.data?.data)) {
+          backendPackages = packagesRes.data.data;
+        } else if (Array.isArray(packagesRes?.data)) {
+          backendPackages = packagesRes.data;
+        } else if (Array.isArray(packagesRes)) {
+          backendPackages = packagesRes;
+        } else {
+          console.warn('[DEBUG] Unexpected packages response structure');
+          backendPackages = [];
+        }
+        
+        console.log('[DEBUG] Extracted backend packages count:', backendPackages.length);
         
         // Merge backend data with local static data
-        const mergedPlans = backendPackages
-          .map(pkg => {
-            const localPlan = membershipPlans.find(
-              p => p.name.toLowerCase() === (pkg.name || '').toLowerCase(),
-            );
-            if (!localPlan) return null; // Ignore if no local counterpart
+        console.log('[DEBUG] Backend packages names:', backendPackages.map(p => p.name));
+        console.log('[DEBUG] Local plan names:', membershipPlans.map(p => p.name));
+        
+        // Debug each package individually
+        backendPackages.forEach((pkg, index) => {
+          console.log(`[DEBUG] Backend package ${index}:`, {
+            name: pkg.name,
+            type: typeof pkg.name,
+            length: pkg.name?.length,
+            _id: pkg._id,
+            price: pkg.price
+          });
+        });
+        
+        // FALLBACK: If merge fails, use direct mapping approach
+        let mergedPlans = [];
+        
+        try {
+          mergedPlans = backendPackages
+            .map(pkg => {
+              console.log(`[DEBUG] Looking for local plan matching: '${pkg.name}'`);
+              
+              // More detailed matching logic
+              const localPlan = membershipPlans.find(p => {
+                const isMatch = p.name.toLowerCase() === (pkg.name || '').toLowerCase();
+                console.log(`[DEBUG] Comparing: '${p.name}' (${p.name.length}) vs '${pkg.name}' (${pkg.name?.length}) = ${isMatch}`);
+                return isMatch;
+              });
+              
+              console.log(`[DEBUG] Found local plan:`, localPlan);
+              if (!localPlan) {
+                console.log(`[DEBUG] No local plan found for '${pkg.name}', returning null`);
+                return null; // Ignore if no local counterpart
+              }
+              
+              const merged = {
+                ...localPlan, // static data: images, captions, summary
+                ...pkg,       // backend data: price, durationDays, tier
+                id: pkg._id,  // IMPORTANT: Overwrite id with backend _id
+                localId: localPlan.id, // Keep local id for quotes mapping
+              };
+              console.log(`[DEBUG] Merged plan for '${pkg.name}':`, {
+                id: merged.id,
+                localId: merged.localId,
+                name: merged.name,
+                tier: merged.tier,
+                price: merged.price
+              });
+              return merged;
+            })
+            .filter(Boolean); // Remove null entries
+        } catch (error) {
+          console.error('[DEBUG] Merge error:', error);
+          // FALLBACK: Manual mapping if automated merge fails
+          mergedPlans = backendPackages.map(pkg => {
+            const localPlan = membershipPlans.find(p => p.name === pkg.name) || 
+                             membershipPlans.find(p => p.name.toLowerCase() === pkg.name?.toLowerCase()) ||
+                             membershipPlans[0]; // Fallback to first plan
+            
             return {
-              ...localPlan, // static data: images, captions, summary
-              ...pkg,       // backend data: price, durationDays, tier
-              id: pkg._id,  // IMPORTANT: Overwrite id with backend _id
-              localId: localPlan.id, // Keep local id for quotes mapping
+              ...localPlan,
+              ...pkg,
+              id: pkg._id,
+              localId: localPlan?.id || pkg.name.toLowerCase(),
             };
-          })
-          .filter(Boolean); // Remove null entries
+          });
+        }
+        
+        console.log('[DEBUG] Final mergedPlans count:', mergedPlans.length);
+        console.log('[DEBUG] Final mergedPlans:', mergedPlans.map(p => ({ name: p.name, id: p.id, localId: p.localId })));
         
         setDisplayedPlans(mergedPlans);
 
@@ -272,29 +356,60 @@ const CardMembershipScreen = ({ navigation }) => {
         }
         setCurrentTier(tier);
 
+        console.log('[DEBUG] membershipData:', membershipData);
+        console.log('[DEBUG] current tier:', tier);
+        console.log('[DEBUG] mergedPlans:', mergedPlans);
+        
         if (membershipData && tier != null) {
             const newPermanentQuotes = {};
             const newTemporaryQuotes = {};
 
             await Promise.all(
                 mergedPlans.map(async (plan) => {
-                    if (plan.tier <= tier) return;
-                    
+                    console.log(`[DEBUG] Checking plan ${plan.name} - tier: ${plan.tier}, currentTier: ${tier}`);
+                    if (plan.tier <= tier) {
+                        console.log(`[DEBUG] Skipping plan ${plan.name} (tier <= currentTier)`);
+                        return;
+                    }
+                    console.log(`[DEBUG] Fetching quote for plan ${plan.name}`);
                     try {
                         const permResponse = await getPermanentUpgradeQuote({ packageId: plan.id, billingCycle });
-                        if (permResponse?.data?.quote) newPermanentQuotes[plan.localId] = permResponse.data.quote;
+                        console.log(`[DEBUG] Permanent quote response for ${plan.name}:`, permResponse);
+                        console.log(`[DEBUG] Full response structure:`, JSON.stringify(permResponse, null, 2));
+                        console.log(`[DEBUG] Checking conditions:`);
+                        console.log(`  - permResponse exists:`, !!permResponse);
+                        console.log(`  - permResponse.ok:`, permResponse?.ok);
+                        console.log(`  - permResponse.quote exists:`, !!permResponse?.quote);
+                        console.log(`  - permResponse.quote is object:`, typeof permResponse?.quote === 'object');
+                        
+                        // FIXED: Backend returns response directly, not wrapped in data
+                        if (permResponse?.ok && permResponse?.quote) {
+                            console.log(`[DEBUG] ✅ Saving permanent quote for ${plan.name}:`, permResponse.quote);
+                            newPermanentQuotes[plan.id] = permResponse.quote;
+                        } else {
+                            console.log(`[DEBUG] ❌ No permanent quote for ${plan.name} - conditions failed`);
+                        }
                     } catch (e) {
                         console.error(`Failed to get permanent quote for ${plan.name}:`, e);
                     }
-                    
                     try {
                         const tempResponse = await getTemporaryUpgradeQuote({ packageId: plan.id, billingCycle });
-                        if (tempResponse?.data?.quote) newTemporaryQuotes[plan.localId] = tempResponse.data.quote;
+                        console.log(`[DEBUG] Temporary quote response for ${plan.name}:`, tempResponse);
+                        if (tempResponse?.ok && tempResponse?.quote) {
+                            console.log(`[DEBUG] Saving temporary quote for ${plan.name}:`, tempResponse.quote);
+                            newTemporaryQuotes[plan.id] = tempResponse.quote;
+                        } else {
+                            console.log(`[DEBUG] No temporary quote for ${plan.name}`);
+                        }
                     } catch (e) {
-                        console.error(`Failed to get temporary quote for ${plan.name}:`, e);
+                        console.log(`[DEBUG] Temporary quote not available for ${plan.name} (API may not be implemented):`, e.message);
+                        // Don't show error for temporary quotes since API might not be implemented
                     }
                 })
             );
+
+            console.log('[DEBUG] Final permanent quotes:', newPermanentQuotes);
+            console.log('[DEBUG] Final temporary quotes:', newTemporaryQuotes);
 
             setPermanentQuotes(newPermanentQuotes);
             setTemporaryQuotes(newTemporaryQuotes);
@@ -304,7 +419,11 @@ const CardMembershipScreen = ({ navigation }) => {
         }
 
       } catch (e) {
-        Alert.alert('Lỗi', 'Không thể tải dữ liệu gói thành viên. Vui lòng thử lại.');
+        showToast({
+          type: 'error',
+          title: 'Lỗi tải dữ liệu',
+          message: 'Không thể tải dữ liệu gói thành viên. Vui lòng thử lại.',
+        });
         console.error('Failed to fetch membership data:', e);
       } finally {
         setIsLoading(false);
@@ -407,7 +526,11 @@ const CardMembershipScreen = ({ navigation }) => {
     const isDowngradeTier = currentTier != null && targetTier != null && targetTier < currentTier;
     
     if (isDowngradeTier) {
-      Alert.alert('Không thể hạ gói', 'Bạn đang ở gói cao hơn. Vui lòng chọn gói ngang hoặc cao hơn.');
+      showToast({
+        type: 'warning',
+        title: 'Không thể hạ gói',
+        message: 'Bạn đang ở gói cao hơn. Vui lòng chọn gói ngang hoặc cao hơn.',
+      });
       return;
     }
 
@@ -445,14 +568,13 @@ const CardMembershipScreen = ({ navigation }) => {
           actions.push({
             text: 'Nâng cấp miễn phí',
             onPress: () => {
-              Alert.alert(
-                'Xác nhận Nâng cấp Đặc biệt',
-                `Giá trị còn lại của gói hiện tại (${formatCurrency(permanentCreditValue)}) cao hơn giá của gói mới (${formatCurrency(permanentQuote?.targetPrice || 0)}).\n\nViệc nâng cấp sẽ là MIỄN PHÍ. Tuy nhiên, phần giá trị chênh lệch là ${formatCurrency(permanentCreditValue - (permanentQuote?.targetPrice || 0))} sẽ không được hoàn lại. Bạn có muốn tiếp tục không?`,
-                [
-                  { text: 'Hủy', style: 'cancel' },
-                  { text: 'Tiếp tục (Miễn phí)', onPress: () => proceedToPayment(enhancedPlan, { isUpgrade: true, isTemporary: false, quoteType: 'permanent' }) }
-                ]
-              );
+              // Hiển thị modal xác nhận
+              setFreeUpgradeConfirmData({
+                plan: enhancedPlan,
+                creditValue: permanentCreditValue,
+                message: `Bạn đang có ${formatCurrency(permanentCreditValue)} từ gói Basic hiện tại. Nâng cấp lên gói ${enhancedPlan.name} sẽ miễn phí hoàn toàn!\n\n⚠️ Lưu ý: Gói hiện tại sẽ KHÔNG hoàn trả giá trị chênh lệch còn lại.`
+              });
+              setFreeUpgradeConfirmVisible(true);
             }
           });
         } else {
@@ -463,22 +585,22 @@ const CardMembershipScreen = ({ navigation }) => {
         }
       }
 
-      // Option 2: Temporary Upgrade
-      if (temporaryQuote) {
-        actions.push({
-          text: `Mua trải nghiệm (${remainingDays} ngày) - ${formatCurrency(temporaryAmountDue)}`,
-          onPress: () => proceedToPayment(enhancedPlan, { isUpgrade: true, isTemporary: true, quoteType: 'temporary' })
-        });
-      }
-
-      // Add Cancel option
-      actions.push({ text: 'Hủy', style: 'cancel' });
+      // Option 2: Temporary Upgrade (always available with local calculation)
+      // Calculate temporary upgrade pricing locally since API may not be available
+      const tempRemainingDays = getRemainingDays(currentMembership);
+      const tempTargetDurationDays = getDurationDays(billingCycle);
+      const tempProratedPrice = (enhancedPlan.basePrice * tempRemainingDays) / tempTargetDurationDays;
+      const tempCurrentPackagePrice = currentMembership?.packagePrice || enhancedPlan.basePrice;
+      const tempCreditValue = Math.max(0, tempCurrentPackagePrice - tempProratedPrice);
+      const tempAmountDue = Math.max(0, tempProratedPrice - tempCreditValue);
       
-      Alert.alert(
-        'Lựa chọn nâng cấp',
-        `Bạn đang còn ${remainingDays} ngày ở gói hiện tại. Vui lòng chọn hình thức nâng cấp cho gói ${enhancedPlan.name}.`,
-        actions
-      );
+      actions.push({
+        text: `${billingCycle === 'month' ? 'Tháng' : billingCycle === 'quarter' ? 'Quý' : 'Năm'} - Chênh lệch ${formatCurrency(tempAmountDue)}`,
+        onPress: () => proceedToPayment(enhancedPlan, { isUpgrade: true, isTemporary: true, quoteType: 'temporary' })
+      });
+      
+      // Show upgrade options modal
+      showUpgradeOptionsModal(enhancedPlan, actions, permanentAmountDue, permanentCreditValue, remainingDays, targetDurationDays);
     } else {
       // Fallback for unexpected cases, treat as permanent upgrade/new purchase
       proceedToPayment(enhancedPlan, { isUpgrade: true, isTemporary: false, quoteType: 'permanent' });
@@ -496,18 +618,38 @@ const CardMembershipScreen = ({ navigation }) => {
 
     if (isUpgrade) {
       if (isTemporary) {
-        quote = temporaryQuotes[plan.localId];
-      } else {
-        quote = permanentQuotes[plan.localId];
-      }
-      if (quote) {
+        // Temporary upgrade: Calculate based on remaining days
+        const remainingDays = getRemainingDays(currentMembership);
+        const targetDurationDays = getDurationDays(billingCycle);
+        const proratedPrice = (plan.basePrice * remainingDays) / targetDurationDays;
+        const currentPackagePrice = currentMembership?.packagePrice || plan.basePrice;
+        const tempCreditValue = Math.max(0, currentPackagePrice - proratedPrice);
+        
+        quote = {
+          amountDue: Math.max(0, proratedPrice - tempCreditValue),
+          creditValue: tempCreditValue,
+          targetPrice: proratedPrice,
+          billingCycle: billingCycle,
+          discount: 0,
+          remainingDays: remainingDays,
+          durationDays: targetDurationDays,
+          isTemporary: true
+        };
+        
         amountDue = quote.amountDue;
         creditValue = quote.creditValue;
       } else {
-        // Fallback if quote is missing for some reason
-        const pricing = priceForPlan(plan, quoteType);
-        amountDue = pricing.number;
-        creditValue = 0;
+        // Permanent upgrade: Use stored quote
+        quote = permanentQuotes[plan.id];
+        if (quote) {
+          amountDue = quote.amountDue;
+          creditValue = quote.creditValue;
+        } else {
+          // Fallback if quote is missing
+          const pricing = priceForPlan(plan, quoteType);
+          amountDue = pricing.number;
+          creditValue = 0;
+        }
       }
     } else {
       const pricing = priceForPlan(plan, quoteType);
@@ -553,7 +695,11 @@ const CardMembershipScreen = ({ navigation }) => {
       });
     } catch (error) {
       const rawMessage = error?.response?.data?.message || error?.message || '';
-      Alert.alert('Không thể mua/nâng cấp', rawMessage || 'Vui lòng thử lại.');
+      showToast({
+        type: 'error',
+        title: 'Không thể mua/nâng cấp',
+        message: rawMessage || 'Vui lòng thử lại.',
+      });
     }
   };
 
@@ -563,7 +709,148 @@ const CardMembershipScreen = ({ navigation }) => {
       trainers: '50+ lớp học đa dạng:\n\n• Yoga & Pilates\n• HIIT & Cardio\n• Dance Fitness\n• Strength Training\n• Spinning & Cycling\n\nLịch linh hoạt từ sáng đến tối!',
       freeze: 'Mở cửa 24/7 tại hầu hết chi nhánh:\n\n• Tự do lịch trình\n• Tập bất kỳ lúc nào\n• Thiết bị hiện đại\n• An toàn 24/7\n\nLiên hệ chi nhánh cụ thể để biết chi tiết!',
     };
-    Alert.alert('Chi tiết', messages[statType]);
+    showToast({
+      type: 'info',
+      title: 'Chi tiết',
+      message: messages[statType].replace(/\\n/g, '\n'),
+    });
+  };
+
+  const showUpgradeOptionsModal = (plan, actions, permanentAmountDue, permanentCreditValue, remainingDays, targetDurationDays) => {
+    setUpgradeModalData({
+      plan,
+      actions,
+      permanentAmountDue,
+      permanentCreditValue,
+      remainingDays,
+      targetDurationDays
+    });
+    setUpgradeModalVisible(true);
+  };
+
+  const UpgradeOptionsModal = () => {
+    if (!upgradeModalVisible || !upgradeModalData) return null;
+
+    const { plan, actions, permanentAmountDue, permanentCreditValue, remainingDays } = upgradeModalData;
+
+    return (
+      <Modal
+        visible={upgradeModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setUpgradeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Lựa chọn hình thức nâng cấp</Text>
+              <TouchableOpacity 
+                style={styles.modalClose}
+                onPress={() => setUpgradeModalVisible(false)}
+              >
+                <MaterialIcons name="close" size={24} color={MD3_COLORS.onSurface} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.modalSubtitle}>
+              Gói hiện tại: {currentMembership?.packageName || 'Basic'} ({remainingDays} ngày còn lại) - <Text style={styles.priceHighlight}>{formatCurrency((currentMembership?.packagePrice || 690000) * remainingDays / 30)} VNĐ</Text>
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              Nâng cấp lên gói: {plan.name}
+            </Text>
+
+            <View style={styles.upgradeOptions}>
+              {actions.map((action, index) => {
+                let optionStyle = styles.upgradeOption;
+                let optionTextStyle = styles.upgradeOptionText;
+                
+                if (action.text.includes('miễn phí')) {
+                  optionStyle = [styles.upgradeOption, styles.freeUpgradeOption];
+                  optionTextStyle = [styles.upgradeOptionText, styles.freeUpgradeText];
+                } else if (action.text.includes('trải nghiệm')) {
+                  optionStyle = [styles.upgradeOption, styles.trialUpgradeOption];
+                  optionTextStyle = [styles.upgradeOptionText, styles.trialUpgradeText];
+                }
+                
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={optionStyle}
+                    onPress={() => {
+                      setUpgradeModalVisible(false);
+                      action.onPress();
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={optionTextStyle}>{action.text}</Text>
+                    <MaterialIcons name="chevron-right" size={20} color={MD3_COLORS.onSurface} />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  const FreeUpgradeConfirmModal = () => {
+    if (!freeUpgradeConfirmVisible || !freeUpgradeConfirmData) return null;
+
+    const { plan, creditValue, message } = freeUpgradeConfirmData;
+
+    return (
+      <Modal
+        visible={freeUpgradeConfirmVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setFreeUpgradeConfirmVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 420 }]}>
+            <View style={styles.confirmHeader}>
+              <View style={styles.confirmIcon}>
+                <MaterialIcons name="info" size={32} color={MD3_COLORS.warning} />
+              </View>
+              <Text style={styles.confirmTitle}>Xác nhận nâng cấp miễn phí</Text>
+              <TouchableOpacity 
+                style={styles.modalClose}
+                onPress={() => setFreeUpgradeConfirmVisible(false)}
+              >
+                <MaterialIcons name="close" size={24} color={MD3_COLORS.onSurface} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.confirmMessage}>{message}</Text>
+            
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.cancelConfirmButton]}
+                onPress={() => setFreeUpgradeConfirmVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelConfirmButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.acceptConfirmButton]}
+                onPress={() => {
+                  setFreeUpgradeConfirmVisible(false);
+                  showToast({
+                    type: 'success',
+                    title: 'Nâng cấp Miễn phí',
+                    message: `Bạn đang có ${formatCurrency(creditValue)} từ gói Basic hiện tại. Nâng cấp lên gói ${plan.name} sẽ miễn phí hoàn toàn!`,
+                  });
+                  proceedToPayment(plan, { isUpgrade: true, isTemporary: false, quoteType: 'permanent' });
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.acceptConfirmButtonText}>Đồng ý nâng cấp</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
   };
 
   return (
@@ -701,6 +988,12 @@ const CardMembershipScreen = ({ navigation }) => {
 
         <View style={{ height: 32 }} />
       </ScrollView>
+      
+      {/* Upgrade Options Modal */}
+      <UpgradeOptionsModal />
+      
+      {/* Free Upgrade Confirmation Modal */}
+      <FreeUpgradeConfirmModal />
     </SafeAreaView>
   );
 };
@@ -805,4 +1098,159 @@ const styles = StyleSheet.create({
   supportContent: { alignItems: 'center', gap: 8 },
   supportTitle: { ...MD3_TYPE.titleLarge, color: MD3_COLORS.onSurface, textAlign: 'center' },
   supportDescription: { ...MD3_TYPE.bodyMedium, color: MD3_COLORS.textSecondary, textAlign: 'center', lineHeight: 22 },
+  
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: MD3_COLORS.surface,
+    borderRadius: 20,
+    padding: 24,
+    margin: 20,
+    maxWidth: 400,
+    width: '90%',
+    ...MD3_ELEVATION.level3,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    ...MD3_TYPE.headlineSmall,
+    color: MD3_COLORS.onSurface,
+    flex: 1,
+  },
+  modalClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: MD3_COLORS.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSubtitle: {
+    ...MD3_TYPE.bodyMedium,
+    color: MD3_COLORS.textSecondary,
+    marginBottom: 8,
+  },
+  upgradeOptions: {
+    marginTop: 16,
+  },
+  upgradeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: MD3_COLORS.surfaceContainerHigh,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  upgradeOptionText: {
+    ...MD3_TYPE.bodyLarge,
+    color: MD3_COLORS.onSurface,
+    fontWeight: '600',
+    flex: 1,
+  },
+  freeUpgradeOption: {
+    backgroundColor: MD3_COLORS.primaryContainer,
+    borderWidth: 1,
+    borderColor: MD3_COLORS.primary,
+  },
+  freeUpgradeText: {
+    color: MD3_COLORS.onPrimaryContainer,
+    fontWeight: '700',
+  },
+  trialUpgradeOption: {
+    backgroundColor: MD3_COLORS.secondaryContainer,
+    borderWidth: 1,
+    borderColor: MD3_COLORS.secondary,
+  },
+  trialUpgradeText: {
+    color: MD3_COLORS.onSecondaryContainer,
+    fontWeight: '600',
+  },
+  cancelOption: {
+    backgroundColor: MD3_COLORS.surfaceContainer,
+    borderWidth: 1,
+    borderColor: MD3_COLORS.outlineVariant,
+  },
+  cancelText: {
+    color: MD3_COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  priceHighlight: {
+    color: '#D32F2F',
+    fontWeight: '700',
+  },
+  
+  // Confirm Modal Styles
+  confirmHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  confirmIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: MD3_COLORS.warning + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  confirmTitle: {
+    ...MD3_TYPE.titleMedium,
+    color: MD3_COLORS.onSurface,
+    textAlign: 'center',
+    fontWeight: '600',
+    flex: 1,
+  },
+  confirmMessage: {
+    ...MD3_TYPE.bodyMedium,
+    color: MD3_COLORS.textSecondary,
+    textAlign: 'left',
+    lineHeight: 20,
+    marginBottom: 20,
+    flexWrap: 'wrap',
+    flexShrink: 1,
+    width: '100%',
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  confirmButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelConfirmButton: {
+    backgroundColor: MD3_COLORS.surfaceContainer,
+    borderWidth: 1,
+    borderColor: MD3_COLORS.outlineVariant,
+  },
+  cancelConfirmButtonText: {
+    ...MD3_TYPE.labelLarge,
+    color: MD3_COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  acceptConfirmButton: {
+    backgroundColor: MD3_COLORS.primary,
+  },
+  acceptConfirmButtonText: {
+    ...MD3_TYPE.labelLarge,
+    color: MD3_COLORS.onPrimary,
+    fontWeight: '700',
+  },
 });

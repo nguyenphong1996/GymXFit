@@ -91,7 +91,15 @@ const BankTransferScreen = ({ route, navigation }) => {
             <DetailRow label="Ngân hàng" value={BANK_INFO.bankName} />
             <DetailRow label="Số tài khoản" value={BANK_INFO.accountNo} isCopyable />
             <DetailRow label="Chủ tài khoản" value={BANK_INFO.accountName} />
-            <DetailRow label="Số tiền" value={plan.priceLabel || plan.amountDue?.toLocaleString() || plan.price} highlight />
+            {plan?.isUpgrade && plan?.creditValue > 0 ? (
+              <>
+                <DetailRow label="Giá gốc" value={plan.originalPrice ? `${plan.originalPrice.toLocaleString()}đ` : plan.price} />
+                <DetailRow label="Đã khấu trừ" value={`-${plan.creditValue.toLocaleString()}đ`} discount />
+                <DetailRow label="Số tiền phải trả" value={plan.priceLabel || plan.amountDue?.toLocaleString() || plan.price} highlight />
+              </>
+            ) : (
+              <DetailRow label="Số tiền" value={plan.priceLabel || plan.amountDue?.toLocaleString() || plan.price} highlight />
+            )}
             <DetailRow label="Nội dung CK" value={transferContent} isCopyable />
           </View>
 
@@ -113,13 +121,14 @@ const BankTransferScreen = ({ route, navigation }) => {
   );
 };
 
-const DetailRow = ({ label, value, highlight, isCopyable }) => (
+const DetailRow = ({ label, value, highlight, isCopyable, discount }) => (
   <View style={styles.row}>
     <Text style={styles.label}>{label}</Text>
     <View style={styles.valueContainer}>
       <Text style={[
         styles.value, 
-        highlight && styles.highlightValue
+        highlight && styles.highlightValue,
+        discount && styles.discountValue
       ]}>{value}</Text>
       {isCopyable && (
         <TouchableOpacity onPress={() => Alert.alert('Đã sao chép', value)}>
@@ -217,6 +226,11 @@ const styles = StyleSheet.create({
   },
   highlightValue: {
     color: MD3_COLORS.primary,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  discountValue: {
+    color: '#C2410C',
     fontWeight: '700',
     fontSize: 16,
   },

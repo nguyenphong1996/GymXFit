@@ -154,7 +154,15 @@ const PaymentCardSelectScreen = ({ navigation, route }) => {
 
       <View style={styles.summaryContainer}>
         <Text style={styles.summaryText}>Gói: <Text style={styles.summaryValue}>{plan?.name}</Text></Text>
-        <Text style={styles.summaryText}>Số tiền: <Text style={styles.summaryValue}>{plan?.priceLabel || plan?.amountDue?.toLocaleString() || plan?.price}</Text></Text>
+        {plan?.isUpgrade && plan?.creditValue > 0 ? (
+          <>
+            <Text style={styles.summaryText}>Giá gốc: <Text style={styles.summaryOriginalPrice}>{plan?.originalPrice ? `${plan.originalPrice.toLocaleString()}đ` : plan?.price}</Text></Text>
+            <Text style={styles.summaryText}>Đã khấu trừ: <Text style={styles.summaryDiscount}>-{plan.creditValue.toLocaleString()}đ</Text></Text>
+            <Text style={styles.summaryText}>Số tiền phải trả: <Text style={styles.summaryValue}>{plan?.priceLabel || plan?.amountDue?.toLocaleString() || plan?.price}</Text></Text>
+          </>
+        ) : (
+          <Text style={styles.summaryText}>Số tiền: <Text style={styles.summaryValue}>{plan?.priceLabel || plan?.amountDue?.toLocaleString() || plan?.price}</Text></Text>
+        )}
       </View>
 
       {isLoading ? (
@@ -202,6 +210,8 @@ const styles = StyleSheet.create({
   summaryContainer: { padding: 16, backgroundColor: MD3_COLORS.surface, borderBottomWidth: 1, borderBottomColor: MD3_COLORS.outline },
   summaryText: { fontSize: 14, color: MD3_COLORS.textSecondary, marginBottom: 4 },
   summaryValue: { fontSize: 15, fontWeight: '700', color: MD3_COLORS.textPrimary },
+  summaryOriginalPrice: { fontSize: 15, fontWeight: '400', color: MD3_COLORS.textSecondary, textDecorationLine: 'line-through' },
+  summaryDiscount: { fontSize: 15, fontWeight: '700', color: '#C2410C' },
   loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
   loaderText: { fontSize: 14, color: MD3_COLORS.textSecondary, textAlign: 'center' },
   card: {
