@@ -190,8 +190,10 @@ export const UserProvider = ({ children }) => {
           await login(token);
         }
       } catch (error) {
-        // The login function already handles unauthorized errors
-        console.error('Lỗi khi kiểm tra trạng thái đăng nhập:', error);
+        // Chỉ log lỗi nghiêm trọng, không log khi token expired (trường hợp bình thường)
+        if (!isUnauthorizedError(error)) {
+          console.error('Lỗi khi kiểm tra trạng thái đăng nhập:', error);
+        }
       } finally {
         setIsLoading(false);
       }

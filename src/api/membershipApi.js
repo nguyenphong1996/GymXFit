@@ -1,4 +1,4 @@
-import createAxiosInstance from './axiosInstance';
+ import createAxiosInstance from './axiosInstance';
 
 const get = async (endpoint, params = {}) => {
   const client = createAxiosInstance();
@@ -16,9 +16,6 @@ export const getPermanentUpgradeQuote = async ({ packageId, billingCycle }) => {
   return post(`/user/membership/quote`, { packageId, billingCycle });
 };
 
-export const getTemporaryUpgradeQuote = async ({ packageId, billingCycle }) => {
-  return get(`/user/membership/temporary-quote`, { packageId, billingCycle });
-};
 
 export const getMembershipInfo = async () => get('/user/membership');
 export const getUserMe = async () => get('/user/me');

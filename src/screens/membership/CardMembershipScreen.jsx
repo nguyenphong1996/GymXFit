@@ -18,7 +18,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { membershipPlans, MEMBERSHIP_CONTACT } from './membershipPlans';
 import { formatCurrency, computeCyclePrice, cycleMultipliers } from '../../utils/membership';
-import { getPermanentUpgradeQuote, getTemporaryUpgradeQuote, getMembershipInfo, getUserMe, getProfile, getAllPackages } from '@api/membershipApi';
+import { getPermanentUpgradeQuote, getMembershipInfo, getUserMe, getProfile, getAllPackages } from '@api/membershipApi';
 import { UserContext } from '@context/UserContext';
 import { useToast } from '@context/ToastContext';
 import SpecialUtilities from './SpecialUtilities';
@@ -220,7 +220,6 @@ const CardMembershipScreen = ({ navigation }) => {
   const [currentTier, setCurrentTier] = useState(null);
   const [displayedPlans, setDisplayedPlans] = useState([]);
   const [permanentQuotes, setPermanentQuotes] = useState({});
-  const [temporaryQuotes, setTemporaryQuotes] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
   const [upgradeModalData, setUpgradeModalData] = useState(null);
@@ -242,7 +241,6 @@ const CardMembershipScreen = ({ navigation }) => {
         setCurrentTier(null);
         setCurrentMembership(null);
         setPermanentQuotes({});
-        setTemporaryQuotes({});
         setIsLoading(false);
         return;
       }
@@ -362,7 +360,6 @@ const CardMembershipScreen = ({ navigation }) => {
         
         if (membershipData && tier != null) {
             const newPermanentQuotes = {};
-            const newTemporaryQuotes = {};
 
             await Promise.all(
                 mergedPlans.map(async (plan) => {
@@ -392,30 +389,15 @@ const CardMembershipScreen = ({ navigation }) => {
                     } catch (e) {
                         console.error(`Failed to get permanent quote for ${plan.name}:`, e);
                     }
-                    try {
-                        const tempResponse = await getTemporaryUpgradeQuote({ packageId: plan.id, billingCycle });
-                        console.log(`[DEBUG] Temporary quote response for ${plan.name}:`, tempResponse);
-                        if (tempResponse?.ok && tempResponse?.quote) {
-                            console.log(`[DEBUG] Saving temporary quote for ${plan.name}:`, tempResponse.quote);
-                            newTemporaryQuotes[plan.id] = tempResponse.quote;
-                        } else {
-                            console.log(`[DEBUG] No temporary quote for ${plan.name}`);
-                        }
-                    } catch (e) {
-                        console.log(`[DEBUG] Temporary quote not available for ${plan.name} (API may not be implemented):`, e.message);
-                        // Don't show error for temporary quotes since API might not be implemented
-                    }
+
                 })
             );
 
             console.log('[DEBUG] Final permanent quotes:', newPermanentQuotes);
-            console.log('[DEBUG] Final temporary quotes:', newTemporaryQuotes);
 
             setPermanentQuotes(newPermanentQuotes);
-            setTemporaryQuotes(newTemporaryQuotes);
         } else {
              setPermanentQuotes({});
-             setTemporaryQuotes({});
         }
 
       } catch (e) {
@@ -437,11 +419,11 @@ const CardMembershipScreen = ({ navigation }) => {
 
   const handleShowDetails = plan => navigation.navigate('CardMembershipDetail', { planId: plan?.id });
 
-  const priceForPlan = (plan, type = 'permanent') => {
-    const quote = type === 'permanent' ? permanentQuotes[plan.id] : temporaryQuotes[plan.id];
+  const priceForPlan = (plan) => {
+    const quote = permanentQuotes[plan.id];
     const cycleCfg = cycleMultipliers[billingCycle] || cycleMultipliers.month;
 
-    console.log(`[DEBUG] priceForPlan for ${plan.id}, type=${type}, quote:`, quote);
+    console.log(`[DEBUG] priceForPlan for ${plan.id}, quote:`, quote);
 
     let priceNumber = computeCyclePrice(plan.basePrice, billingCycle);
 
@@ -534,12 +516,32 @@ const CardMembershipScreen = ({ navigation }) => {
       return;
     }
 
-    const currentPlanId = membershipPlans.find(p => p.id === currentMembership?.packageId || p.name.toLowerCase() === (currentMembership?.packageName || '').toLowerCase())?.id;
-    const isRenewal = currentMembership && currentPlanId === enhancedPlan.id;
+    // So sánh package ID - Support cả backend ID và local ID
+    const currentPackageId = currentMembership?.packageId; // Backend ID từ API
+    const isRenewal = currentMembership && (
+      currentPackageId === enhancedPlan.id ||           // So sánh backend ID
+      currentPackageId === enhancedPlan._id ||          // Backup so sánh _id
+      currentTier === targetTier                         // Fallback: cùng tier = renewal
+    );
 
-    // Case: Renewal
+    console.log('[DEBUG] Renewal check:', {
+      currentPackageId,
+      enhancedPlanId: enhancedPlan.id,
+      enhancedPlan_Id: enhancedPlan._id,
+      currentTier,
+      targetTier,
+      isRenewal
+    });
+
+    // Case: Renewal (cùng gói - cộng dồn thời gian)
     if (isRenewal) {
-      proceedToPayment(enhancedPlan, { isUpgrade: false, isTemporary: false, quoteType: 'permanent' });
+      console.log('[DEBUG] ✅ Renewal detected - Same tier/package:', { currentTier, targetTier, packageName: enhancedPlan.name });
+      proceedToPayment(enhancedPlan, { 
+        isUpgrade: false, 
+        isTemporary: false, 
+        isRenewal: true,  // Flag rõ ràng cho backend
+        quoteType: 'permanent' 
+      });
       return;
     }
 
@@ -553,11 +555,9 @@ const CardMembershipScreen = ({ navigation }) => {
     const isUpgrade = currentTier != null && targetTier > currentTier; // Explicitly an upgrade
     if (isUpgrade) {
       const permanentQuote = permanentQuotes[enhancedPlan.id];
-      const temporaryQuote = temporaryQuotes[enhancedPlan.id];
 
       const permanentAmountDue = permanentQuote?.amountDue ?? computeCyclePrice(enhancedPlan.basePrice, billingCycle);
       const permanentCreditValue = permanentQuote?.creditValue || 0;
-      const temporaryAmountDue = temporaryQuote?.amountDue ?? computeCyclePrice(enhancedPlan.basePrice, billingCycle);
 
       const actions = [];
 
@@ -585,14 +585,23 @@ const CardMembershipScreen = ({ navigation }) => {
         }
       }
 
-      // Option 2: Temporary Upgrade (always available with local calculation)
-      // Calculate temporary upgrade pricing locally since API may not be available
-      const tempRemainingDays = getRemainingDays(currentMembership);
-      const tempTargetDurationDays = getDurationDays(billingCycle);
-      const tempProratedPrice = (enhancedPlan.basePrice * tempRemainingDays) / tempTargetDurationDays;
-      const tempCurrentPackagePrice = currentMembership?.packagePrice || enhancedPlan.basePrice;
-      const tempCreditValue = Math.max(0, tempCurrentPackagePrice - tempProratedPrice);
-      const tempAmountDue = Math.max(0, tempProratedPrice - tempCreditValue);
+      // Option 2: Temporary Upgrade - Tính chênh lệch giá 2 gói CÙNG CHU KỲ
+      // Logic: Giá gói mới (theo cycle) - Giá gói cũ (theo cycle)
+      const cycleCfg = cycleMultipliers[billingCycle] || cycleMultipliers.month;
+      
+      // Tính giá gói đích (có discount)
+      const tempTargetPrice = Math.round(enhancedPlan.basePrice * cycleCfg.months * (1 - (cycleCfg.discount || 0)));
+      
+      // Tìm giá gói hiện tại từ membershipPlans (dùng basePrice local, không dùng backend price)
+      const currentPlanLocal = membershipPlans.find(p => 
+        p.id === currentMembership?.packageId || 
+        p.name?.toLowerCase() === currentMembership?.packageName?.toLowerCase()
+      );
+      const currentBasePrice = currentPlanLocal?.basePrice || 490000; // Default Basic price
+      const currentCyclePrice = Math.round(currentBasePrice * cycleCfg.months * (1 - (cycleCfg.discount || 0)));
+      
+      // Chênh lệch = Giá gói mới - Giá gói cũ (cùng chu kỳ)
+      const tempAmountDue = Math.max(0, tempTargetPrice - currentCyclePrice);
       
       actions.push({
         text: `${billingCycle === 'month' ? 'Tháng' : billingCycle === 'quarter' ? 'Quý' : 'Năm'} - Chênh lệch ${formatCurrency(tempAmountDue)}`,
@@ -607,8 +616,9 @@ const CardMembershipScreen = ({ navigation }) => {
     }
   };
 
-  const proceedToPayment = async (plan, { isUpgrade, isTemporary, quoteType }) => {
+  const proceedToPayment = async (plan, { isUpgrade, isTemporary, isRenewal = false, quoteType }) => {
     console.log('[DEBUG] proceedToPayment - Original plan:', plan);
+    console.log('[DEBUG] proceedToPayment - Flags:', { isUpgrade, isTemporary, isRenewal });
     const finalPackageId = plan._id || plan.id; // ALWAYS use backend _id
     console.log('[DEBUG] proceedToPayment - finalPackageId:', finalPackageId);
 
@@ -618,19 +628,32 @@ const CardMembershipScreen = ({ navigation }) => {
 
     if (isUpgrade) {
       if (isTemporary) {
-        // Temporary upgrade: Calculate based on remaining days
+        // Temporary upgrade: Tính chênh lệch giá 2 gói CÙNG CHU KỲ
         const remainingDays = getRemainingDays(currentMembership);
         const targetDurationDays = getDurationDays(billingCycle);
-        const proratedPrice = (plan.basePrice * remainingDays) / targetDurationDays;
-        const currentPackagePrice = currentMembership?.packagePrice || plan.basePrice;
-        const tempCreditValue = Math.max(0, currentPackagePrice - proratedPrice);
+        
+        // Tính giá gói đích (có discount)
+        const cycleCfg = cycleMultipliers[billingCycle] || cycleMultipliers.month;
+        const targetPrice = Math.round(plan.basePrice * cycleCfg.months * (1 - (cycleCfg.discount || 0)));
+        
+        // Tìm giá gói hiện tại từ membershipPlans (dùng basePrice local)
+        const currentPlanLocal = membershipPlans.find(p => 
+          p.id === currentMembership?.packageId || 
+          p.name?.toLowerCase() === currentMembership?.packageName?.toLowerCase()
+        );
+        const currentBasePrice = currentPlanLocal?.basePrice || 490000;
+        const currentCyclePrice = Math.round(currentBasePrice * cycleCfg.months * (1 - (cycleCfg.discount || 0)));
+        
+        // Chênh lệch = Giá gói mới - Giá gói cũ (cùng chu kỳ)
+        const tempAmountDue = Math.max(0, targetPrice - currentCyclePrice);
         
         quote = {
-          amountDue: Math.max(0, proratedPrice - tempCreditValue),
-          creditValue: tempCreditValue,
-          targetPrice: proratedPrice,
+          amountDue: tempAmountDue,
+          creditValue: currentCyclePrice,
+          targetPrice: targetPrice,
+          currentCyclePrice: currentCyclePrice,
           billingCycle: billingCycle,
-          discount: 0,
+          discount: cycleCfg.discount || 0,
           remainingDays: remainingDays,
           durationDays: targetDurationDays,
           isTemporary: true
@@ -646,7 +669,7 @@ const CardMembershipScreen = ({ navigation }) => {
           creditValue = quote.creditValue;
         } else {
           // Fallback if quote is missing
-          const pricing = priceForPlan(plan, quoteType);
+          const pricing = priceForPlan(plan);
           amountDue = pricing.number;
           creditValue = 0;
         }
@@ -666,6 +689,9 @@ const CardMembershipScreen = ({ navigation }) => {
       creditValue,
       isUpgrade,
       isTemporary,
+      isRenewal,  // Flag rõ ràng: cùng gói → cộng dồn
+      currentTier,  // Tier hiện tại (để backend validate)
+      targetTier: plan.tier,  // Tier đích (để backend validate)
       priceLabel: formatCurrency(amountDue),
       // Ensure all required fields for PaymentMethodScreen
       localId: plan.localId || plan.id,

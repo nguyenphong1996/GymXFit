@@ -101,7 +101,23 @@ const PaymentTokenScreen = ({ route, navigation }) => {
         creditValue: plan?.creditValue || 0,
         isUpgrade: plan?.isUpgrade || false,
         isTemporary: plan?.isTemporary || false,
+        isRenewal: plan?.isRenewal || false,  // Flag: cùng gói → renewal
+        currentTier: plan?.currentTier,  // Tier hiện tại
+        targetTier: plan?.targetTier || plan?.tier,  // Tier đích
       };
+      
+      console.log('[DEBUG] PaymentTokenScreen - Building payload:', {
+        planName: plan?.name,
+        targetTier: plan?.targetTier || plan?.tier,
+        currentTier: plan?.currentTier,
+        isUpgrade: plan?.isUpgrade,
+        isTemporary: plan?.isTemporary,
+        isRenewal: plan?.isRenewal,
+        billingCycle: plan?.billingCycle,
+        amountDue: plan?.amountDue,
+        creditValue: plan?.creditValue,
+        logic: plan?.isRenewal ? '→ RENEWAL (cộng dồn)' : (plan?.isUpgrade ? '→ UPGRADE (khấu trừ credit)' : '→ NEW')
+      });
       
       // Xử lý khác nhau cho membership và PT session
       if (plan?.type === 'pt_session') {
@@ -208,7 +224,7 @@ const PaymentTokenScreen = ({ route, navigation }) => {
           cardHolderName: tokenMeta?.cardHolderName,
           cardExpiry: tokenMeta?.cardExpiry,
           planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
+          paidAt: result.paidAt || new Date().toISOString()
         });
         return;
       }
@@ -226,7 +242,7 @@ const PaymentTokenScreen = ({ route, navigation }) => {
           cardHolderName: tokenMeta?.cardHolderName,
           cardExpiry: tokenMeta?.cardExpiry,
           planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
+          paidAt: result.paidAt || new Date().toISOString()
         });
         return;
       }
@@ -274,7 +290,9 @@ const PaymentTokenScreen = ({ route, navigation }) => {
       const urlObj = new URL(url);
       const params = Object.fromEntries(urlObj.searchParams.entries());
       
-      // gymxfit://payment-result?code=00&message=Success&orderId=...&amount=...
+      // gymxfit://payment-result?code=00&message=Success&orderId=...&amount=...&paidAt=...
+      // Parse paidAt từ backend (ISO format) - Tối ưu cho báo cáo/thống kê
+      const paidAt = params.paidAt || new Date().toISOString();
       
       if (params.code === '00') {
         navigation.navigate('PaymentResult', {
@@ -290,7 +308,7 @@ const PaymentTokenScreen = ({ route, navigation }) => {
           cardHolderName: tokenMeta?.cardHolderName,
           cardExpiry: tokenMeta?.cardExpiry,
           planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
+          paidAt: paidAt
         });
       } else {
         navigation.navigate('PaymentResult', {
@@ -306,7 +324,7 @@ const PaymentTokenScreen = ({ route, navigation }) => {
           cardHolderName: tokenMeta?.cardHolderName,
           cardExpiry: tokenMeta?.cardExpiry,
           planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
+          paidAt: paidAt
         });
       }
     } catch (e) {
@@ -400,7 +418,7 @@ const PaymentTokenScreen = ({ route, navigation }) => {
           cardHolderName: resolvedCardHolder,
           cardExpiry: resolvedCardExpiry,
           planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
+          paidAt: result.paidAt || new Date().toISOString()
         });
       } else {
         navigation.navigate('PaymentResult', {
@@ -416,7 +434,7 @@ const PaymentTokenScreen = ({ route, navigation }) => {
           cardHolderName: resolvedCardHolder,
           cardExpiry: resolvedCardExpiry,
           planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
+          paidAt: result.paidAt || new Date().toISOString()
         });
       }
     } catch (error) {
