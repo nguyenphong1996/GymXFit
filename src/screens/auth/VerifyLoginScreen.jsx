@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   Keyboard,
   ActivityIndicator,
 } from 'react-native';
@@ -14,9 +13,11 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useRoute } from '@react-navigation/native';
 import { verifyLoginOtp, requestLoginOtp } from '@api/userApi';
 import { UserContext } from '@context/UserContext';
+import { useToast } from '@context/ToastContext';
 
 const VerifyLoginScreen = ({ navigation }) => {
   const route = useRoute();
+  const { showToast } = useToast();
   const { phone } = route.params || {}; // ✅ Ngăn lỗi undefined
 
   const [code, setCode] = useState(['', '', '', '']);
@@ -65,16 +66,21 @@ const VerifyLoginScreen = ({ navigation }) => {
 
   const handleContinue = async () => {
     if (!phone) {
-      Alert.alert(
-        'Lỗi',
-        'Không có thông tin số điện thoại. Vui lòng quay lại.',
-      );
+      showToast({
+        type: 'error',
+        title: 'Lỗi',
+        message: 'Không có thông tin số điện thoại. Vui lòng quay lại.',
+      });
       return;
     }
 
     const otp = code.join('');
     if (otp.length !== 4) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đủ 4 chữ số mã xác thực.');
+      showToast({
+        type: 'warning',
+        title: 'Lưu ý',
+        message: 'Vui lòng nhập đủ 4 chữ số mã xác thực.',
+      });
       return;
     }
 
@@ -85,13 +91,22 @@ const VerifyLoginScreen = ({ navigation }) => {
       const response = await verifyLoginOtp(phone, otp);
       if (response.ok && response.token) {
         await login(response.token, response.user);
+        showToast({
+          type: 'success',
+          title: 'Thành công',
+          message: 'Đăng nhập thành công!',
+        });
         // UserContext sẽ tự động điều hướng sau khi login
         // Không cần navigate thủ công
       } else {
         throw new Error(response.message || 'Xác thực thất bại');
       }
     } catch (error) {
-      Alert.alert('Đăng nhập thất bại', error.message);
+      showToast({
+        type: 'error',
+        title: 'Đăng nhập thất bại',
+        message: error.message,
+      });
     } finally {
       setIsVerifying(false);
     }
@@ -99,15 +114,26 @@ const VerifyLoginScreen = ({ navigation }) => {
 
   const handleResendCode = async () => {
     if (countdown > 0 || isResending) return;
-    if (!phone) return Alert.alert('Lỗi', 'Thiếu số điện thoại để gửi lại mã.');
+    if (!phone) {
+      showToast({
+        type: 'error',
+        title: 'Lỗi',
+        message: 'Thiếu số điện thoại để gửi lại mã.',
+      });
+      return;
+    }
 
     setIsResending(true);
     try {
       await requestLoginOtp(phone);
-      Alert.alert('Thành công', 'Mã xác thực đã được gửi lại!');
+      showToast({
+        type: 'success',
+        title: 'Thành công',
+        message: 'Mã xác thực đã được gửi lại!',
+      });
       setCountdown(60);
     } catch (error) {
-      Alert.alert('Lỗi', error.message);
+      showToast({ type: 'error', title: 'Lỗi', message: error.message });
     } finally {
       setIsResending(false);
     }

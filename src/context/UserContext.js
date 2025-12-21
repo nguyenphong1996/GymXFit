@@ -1,7 +1,7 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { getProfile } from '@api/userApi';
+import { getProfile, getMembershipInfo } from '@api/userApi';
 
 const getErrorMessage = (error, fallbackMessage = 'Đã có lỗi xảy ra.') => {
   if (!error) {
@@ -42,9 +42,10 @@ const isUnauthorizedError = (error) => {
   return unauthorizedKeywords.some(keyword => message.includes(keyword));
 };
 
-const clearStoredAuthState = async (setUser, setUserToken) => {
+const clearStoredAuthState = async (setUser, setUserToken, setMembership) => {
   setUser(null);
   setUserToken(null);
+  setMembership(null); // Clear membership on logout
   await AsyncStorage.removeItem('token');
 };
 
@@ -75,7 +76,29 @@ export const UserContext = createContext();
 export const UserProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [userToken, setUserToken] = useState(null);
+  const [membership, setMembership] = useState(null); // New state for membership
   const [isLoading, setIsLoading] = useState(true);
+
+  const fetchMembership = useCallback(async () => {
+    try {
+      console.log('🔄 UserContext: Fetching membership info...');
+      const response = await getMembershipInfo();
+      if (response?.ok && response?.membership) {
+        setMembership(response.membership);
+        console.log('✅ UserContext: Membership loaded successfully', response.membership);
+      } else {
+        setMembership(null); // Set to null if no active membership
+        console.log('ℹ️ UserContext: No active membership found.');
+      }
+    } catch (error) {
+      console.error('❌ UserContext: Membership fetch failed:', error.message);
+      setMembership(null); // Clear on error
+      if (isUnauthorizedError(error)) {
+        // Logout will be handled by the parent function that catches this
+        throw error;
+      }
+    }
+  }, []);
 
   /**
    * Persist the token, optionally prime user state, then refresh profile from API.
@@ -99,61 +122,62 @@ export const UserProvider = ({ children }) => {
 
     try {
       console.log('🔄 UserContext login: Fetching profile after setting token...');
-      // Pass the token directly to getProfile to avoid race conditions with AsyncStorage
       const response = await getProfile(resolvedToken);
       if (response?.ok && response?.user) {
         setUser(response.user);
         console.log('✅ UserContext login: Profile loaded successfully');
+        
+        // Fetch membership info right after getting profile
+        await fetchMembership();
+
         return response.user;
       }
       console.warn('⚠️ UserContext login: Profile response not ok or no user data');
       return null;
     } catch (error) {
       if (isUnauthorizedError(error)) {
-        await clearStoredAuthState(setUser, setUserToken);
-        // console.warn('Token không hợp lệ hoặc đã hết hạn sau khi đăng nhập:', error);
+        await clearStoredAuthState(setUser, setUserToken, setMembership);
         console.warn('⚠️ UserContext login: Token invalid after login, cleared state');
         throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
       }
 
       console.error('❌ UserContext login: Profile fetch failed:', error.message);
-      // For network errors, allow login to continue but warn user
       if (error.message.includes('Network Error') || !error.response) {
         console.warn('🔄 UserContext login: Network error detected, allowing login without profile');
-        // Don't throw, allow login to complete
         return null;
       }
       throw new Error(getErrorMessage(error, 'Không thể tải thông tin cá nhân.'));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [fetchMembership]);
 
   /**
    * Xóa token khỏi AsyncStorage và reset toàn bộ state.
    */
   const logout = useCallback(async () => {
     setIsLoading(true);
-    await clearStoredAuthState(setUser, setUserToken);
+    await clearStoredAuthState(setUser, setUserToken, setMembership);
     setIsLoading(false);
   }, []);
 
   /**
-   * Tải lại thông tin profile của user hiện tại.
+   * Tải lại thông tin profile và membership của user hiện tại.
    */
   const refreshUser = useCallback(async () => {
     try {
-      const response = await getProfile();
-      if (response?.ok && response?.user) {
-        setUser(response.user);
+      const profileResponse = await getProfile();
+      if (profileResponse?.ok && profileResponse?.user) {
+        setUser(profileResponse.user);
       }
+      await fetchMembership();
     } catch (error) {
       console.error('Lỗi khi làm mới thông tin user:', error);
       if (isUnauthorizedError(error)) {
-        await clearStoredAuthState(setUser, setUserToken);
+        await clearStoredAuthState(setUser, setUserToken, setMembership);
       }
     }
-  }, []);
+  }, [fetchMembership]);
 
   /**
    * Khi app khởi động, kiểm tra xem đã có token lưu sẵn không.
@@ -164,13 +188,10 @@ export const UserProvider = ({ children }) => {
         const token = await AsyncStorage.getItem('token');
         if (token) {
           await login(token);
-          return;
         }
       } catch (error) {
-        if (isUnauthorizedError(error)) {
-          await clearStoredAuthState(setUser, setUserToken);
-          console.log('Token cũ đã hết hạn, tự động đăng xuất.');
-        } else {
+        // Chỉ log lỗi nghiêm trọng, không log khi token expired (trường hợp bình thường)
+        if (!isUnauthorizedError(error)) {
           console.error('Lỗi khi kiểm tra trạng thái đăng nhập:', error);
         }
       } finally {
@@ -186,10 +207,12 @@ export const UserProvider = ({ children }) => {
       value={{
         user,
         userToken,
+        membership, // Expose membership state
         isLoading,
         login,
         logout,
         refreshUser,
+        fetchMembership, // Expose refresh function
       }}
     >
       {children}

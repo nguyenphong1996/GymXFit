@@ -8,22 +8,79 @@ import {
   StatusBar,
   ScrollView,
   Dimensions,
+  Image,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
-const THEME = {
+// Material Design 3 Color Tokens
+const MD3_COLORS = {
   primary: '#1F8E4A',
-  primaryGradient: ['#1F8E4A', '#15723A'],
-  success: '#1F8E4A',
-  error: '#BA1A1A',
-  background: '#F5F7F6',
+  onPrimary: '#FFFFFF',
+  primaryContainer: '#C2F0D4',
+  onPrimaryContainer: '#00210A',
+  secondary: '#3A5B4C',
+  onSecondary: '#FFFFFF',
+  secondaryContainer: '#BDE1CD',
+  onSecondaryContainer: '#002110',
+  tertiary: '#2196F3',
+  onTertiary: '#FFFFFF',
+  tertiaryContainer: '#BBDEFB',
   surface: '#FFFFFF',
+  surfaceDim: '#DDE3DD',
+  surfaceBright: '#F9F9F9',
+  surfaceContainerLowest: '#FFFFFF',
+  surfaceContainerLow: '#F3F4F0',
+  surfaceContainer: '#EDF1EC',
+  surfaceContainerHigh: '#E7EBE6',
+  surfaceContainerHighest: '#E1E5E0',
+  background: '#F5F7F6',
+  onBackground: '#191C19',
+  outline: '#72796F',
+  outlineVariant: '#C1C9BF',
   textPrimary: '#10241A',
   textSecondary: '#47614F',
-  border: '#E5E7EB',
+  textTertiary: '#6B7B73',
+  onSurfaceVariant: '#404943',
+  error: '#BA1A1A',
+  onError: '#FFFFFF',
+  errorContainer: '#FFDAD6',
+  success: '#34D399',
+  warning: '#F59E0B',
+  scrim: 'rgba(0, 0, 0, 0.32)',
+  // Payment specific colors based on design
+  paymentGreen: '#00C853',
+  paymentLightGreen: '#E8F5E8',
+  paymentGray: '#F5F5F5',
+};
+
+// Material Design 3 Elevation Tokens
+const MD3_ELEVATION = {
+  level0: { shadowColor: 'transparent', shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 }, elevation: 0 },
+  level1: { shadowColor: MD3_COLORS.scrim, shadowOpacity: 0.15, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+  level2: { shadowColor: MD3_COLORS.scrim, shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
+  level3: { shadowColor: MD3_COLORS.scrim, shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+};
+
+// MD3 Typography Scale
+const MD3_TYPE = {
+  displayLarge: { fontSize: 57, lineHeight: 64, fontWeight: '400' },
+  displayMedium: { fontSize: 45, lineHeight: 52, fontWeight: '400' },
+  displaySmall: { fontSize: 36, lineHeight: 44, fontWeight: '400' },
+  headlineLarge: { fontSize: 32, lineHeight: 40, fontWeight: '600' },
+  headlineMedium: { fontSize: 28, lineHeight: 36, fontWeight: '600' },
+  headlineSmall: { fontSize: 24, lineHeight: 32, fontWeight: '600' },
+  titleLarge: { fontSize: 22, lineHeight: 28, fontWeight: '700' },
+  titleMedium: { fontSize: 16, lineHeight: 24, fontWeight: '600' },
+  titleSmall: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
+  bodyLarge: { fontSize: 16, lineHeight: 24, fontWeight: '400' },
+  bodyMedium: { fontSize: 14, lineHeight: 20, fontWeight: '400' },
+  bodySmall: { fontSize: 12, lineHeight: 16, fontWeight: '400' },
+  labelLarge: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
+  labelMedium: { fontSize: 12, lineHeight: 16, fontWeight: '600' },
+  labelSmall: { fontSize: 11, lineHeight: 16, fontWeight: '600' },
 };
 
 const PaymentResultScreen = ({ route, navigation }) => {
@@ -45,8 +102,8 @@ const PaymentResultScreen = ({ route, navigation }) => {
 
   const isSuccess = status === '00';
   const iconName = isSuccess ? 'check-circle' : 'error';
-  const iconColor = isSuccess ? THEME.success : THEME.error;
-  const title = isSuccess ? 'Giao dịch thành công' : 'Giao dịch thất bại';
+  const iconColor = isSuccess ? MD3_COLORS.success : MD3_COLORS.error;
+  const title = isSuccess ? 'Thanh toán thành công!' : 'Thanh toán thất bại!';
 
   const getCardTypeLabel = (type) => {
     if (!type) return '';
@@ -69,6 +126,87 @@ const PaymentResultScreen = ({ route, navigation }) => {
       default:
         return type;
     }
+  };
+
+  // Function đọc số tiền thành chữ tiếng Việt
+  const convertNumberToWords = (number) => {
+    if (!number || isNaN(number)) return 'Không đồng';
+    
+    const units = ['', 'nghìn', 'triệu', 'tỷ', 'nghìn tỷ', 'triệu tỷ'];
+    const numbers = ['không', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+    
+    const readThreeDigits = (num) => {
+      let result = '';
+      const hundred = Math.floor(num / 100);
+      const ten = Math.floor((num % 100) / 10);
+      const unit = num % 10;
+      
+      if (hundred > 0) {
+        result += numbers[hundred] + ' trăm';
+        if (ten === 0 && unit > 0) {
+          result += ' lẻ';
+        }
+      }
+      
+      if (ten > 0) {
+        if (ten === 1) {
+          result += (hundred > 0 ? ' mười' : ' mười');
+        } else {
+          result += (hundred > 0 ? ' ' : '') + numbers[ten] + ' mươi';
+        }
+      }
+      
+      if (unit > 0) {
+        if (ten === 0) {
+          result += (hundred > 0 ? ' lẻ ' : '') + numbers[unit];
+        } else if (unit === 1) {
+          result += ' mốt';
+        } else if (unit === 5) {
+          result += ' lăm';
+        } else {
+          result += ' ' + numbers[unit];
+        }
+      }
+      
+      return result.trim();
+    };
+    
+    let num = Math.floor(Math.abs(number));
+    if (num === 0) return 'Không đồng';
+    
+    let result = '';
+    let unitIndex = 0;
+    
+    while (num > 0) {
+      const threeDigits = num % 1000;
+      if (threeDigits > 0) {
+        const threeDigitsText = readThreeDigits(threeDigits);
+        result = threeDigitsText + (units[unitIndex] ? ' ' + units[unitIndex] : '') + (result ? ' ' + result : '');
+      }
+      num = Math.floor(num / 1000);
+      unitIndex++;
+    }
+    
+    return result + ' đồng';
+  };
+
+  const formatAmountWithWords = (amount) => {
+    if (!amount || isNaN(amount)) {
+      return {
+        formatted: '0 VNĐ',
+        words: 'Không đồng'
+      };
+    }
+    
+    // Format số với dấu chấm phân cách hàng nghìn (gần gũi hơn)
+    // Ví dụ: 890000 -> 890.000 VNĐ
+    const formattedAmount = amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' VNĐ';
+    const wordsAmount = convertNumberToWords(amount);
+    
+    return {
+      formatted: formattedAmount,
+      words: wordsAmount
+    };
   };
 
   const methodIcon =
@@ -95,29 +233,29 @@ const PaymentResultScreen = ({ route, navigation }) => {
 
   const getServiceColor = (name) => {
     const n = name?.toLowerCase() || '';
-    if (n.includes('premium')) return ['#DA22FF', '#9733EE']; // Purple
-    if (n.includes('plus')) return ['#00C6FF', '#0072FF']; // Blue
-    if (n.includes('basic')) return ['#FFB75E', '#ED8F03']; // Orange/Gold
-    return THEME.primaryGradient; // Default Green
+    if (n.includes('premium')) return ['#8B5CF6', '#7C3AED']; // Purple
+    if (n.includes('plus')) return ['#3B82F6', '#2563EB']; // Blue
+    if (n.includes('basic')) return ['#F59E0B', '#D97706']; // Orange/Gold
+    return [MD3_COLORS.primary, '#15723A']; // Default Green
   };
 
   const handleGoHome = () => {
     navigation.reset({
       index: 0,
-      routes: [{ name: 'Home' }],
+      routes: [{ name: 'Main' }],
     });
   };
 
   return (
     <View style={styles.container}>
       <StatusBar
-        barStyle="light-content"
-        backgroundColor={THEME.primary}
+        barStyle="dark-content"
+        backgroundColor={MD3_COLORS.surface}
       />
       
       {/* Header Background */}
       <LinearGradient
-        colors={THEME.primaryGradient}
+        colors={[MD3_COLORS.paymentGreen, '#00A344']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.headerBackground}
@@ -130,103 +268,100 @@ const PaymentResultScreen = ({ route, navigation }) => {
           showsVerticalScrollIndicator={false}
         >
           
-          {/* Result Card */}
-          <View style={styles.resultCard}>
-            <View style={styles.iconContainer}>
-              <MaterialIcons name={iconName} size={64} color={iconColor} />
+          {/* Success Card - Theo thiết kế mẫu */}
+          <View style={styles.successCard}>
+            {/* Success Icon */}
+            <View style={styles.successIconContainer}>
+              <LinearGradient
+                colors={[MD3_COLORS.paymentLightGreen, '#D4EDDA']}
+                style={styles.successIconBackground}
+              >
+                <MaterialIcons name="check-circle" size={64} color={MD3_COLORS.paymentGreen} />
+              </LinearGradient>
             </View>
             
-            <Text style={[styles.title, { color: iconColor }]}>{title}</Text>
-            <Text style={styles.amount}>
-              {typeof amount === 'number' 
-                ? `${amount.toLocaleString('vi-VN')} VND` 
-                : amount || '0 VND'}
-            </Text>
-            <Text style={styles.message}>{message}</Text>
-
-            <View style={styles.dashedDivider}>
-              <View style={styles.halfCircleLeft} />
-              <View style={styles.dashedLine} />
-              <View style={styles.halfCircleRight} />
+            {/* Title */}
+            <Text style={styles.successTitle}>Thanh toán thành công!</Text>
+            
+            {/* Amount Display */}
+            <View style={styles.amountSection}>
+              <Text style={styles.amountLabel}>Số tiền</Text>
+              <Text style={styles.amountValue}>
+                {formatAmountWithWords(amount).formatted.replace(' VNĐ', '')}
+                <Text style={styles.currencyText}> VNĐ</Text>
+              </Text>
+              <Text style={styles.amountWords}>
+                {formatAmountWithWords(amount).words}
+              </Text>
             </View>
 
-            {/* Details */}
-            <View style={styles.detailsContainer}>
-              <View style={[styles.row, { alignItems: 'center' }]}>
-                <Text style={styles.label}>Dịch vụ</Text>
-                <LinearGradient
-                  colors={getServiceColor(planName)}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.serviceBadge}
-                >
-                  <Text style={styles.serviceText}>{planName || 'Thanh toán GymXFit'}</Text>
-                </LinearGradient>
+            {/* Transaction Details */}
+            <View style={styles.detailsSection}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Mã giao dịch</Text>
+                <Text style={styles.detailValue}>{txnRef || '—'}</Text>
               </View>
               
-              <View style={styles.row}>
-                <Text style={styles.label}>Mã giao dịch</Text>
-                <Text style={styles.value}>{txnRef || '—'}</Text>
-              </View>
-
-              <View style={styles.row}>
-                <Text style={styles.label}>Thời gian</Text>
-                <Text style={styles.value}>{paidAt || new Date().toLocaleString('vi-VN')}</Text>
-              </View>
-
-              <View style={[styles.row, { alignItems: 'center' }]}>
-                <Text style={styles.label}>Phương thức</Text>
-                <View style={[styles.methodChip, { marginBottom: 0 }]}>
-                  <MaterialIcons name={methodIcon} size={16} color={THEME.success} />
-                  <Text style={styles.methodChipText}>{getMethodLabel()}</Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Thời gian</Text>
+                <View style={styles.timeContainer}>
+                  <Text style={styles.timeText}>
+                    {new Date(paidAt || new Date()).toLocaleTimeString('vi-VN', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </Text>
+                  <Text style={styles.dateText}>
+                    Ngày {new Date(paidAt || new Date()).toLocaleDateString('vi-VN')}
+                  </Text>
                 </View>
               </View>
-
-              {bankLabel ? (
-                <View style={styles.row}>
-                  <Text style={styles.label}>Ngân hàng</Text>
-                  <Text style={styles.value}>{bankLabel}</Text>
+              
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Phương thức</Text>
+                <View style={styles.methodContainer}>
+                  <MaterialIcons name={methodIcon} size={16} color={MD3_COLORS.paymentGreen} style={styles.methodIcon} />
+                  <Text style={styles.methodText}>{getMethodLabel()}</Text>
                 </View>
-              ) : null}
+              </View>
 
-              {cardTypeLabel ? (
-                <View style={styles.row}>
-                  <Text style={styles.label}>Loại thẻ</Text>
-                  <Text style={styles.value}>{cardTypeLabel}</Text>
+              {bankLabel && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Ngân hàng</Text>
+                  <Text style={styles.detailValue}>{bankLabel}</Text>
                 </View>
-              ) : null}
+              )}
 
-              {cardMask ? (
-                <View style={styles.row}>
-                  <Text style={styles.label}>Số thẻ</Text>
-                  <Text style={styles.value}>{cardMask}</Text>
+              {cardTypeLabel && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Loại thẻ</Text>
+                  <Text style={styles.detailValue}>{cardTypeLabel}</Text>
                 </View>
-              ) : null}
+              )}
 
-              {cardHolderName ? (
-                <View style={styles.row}>
-                  <Text style={styles.label}>Chủ thẻ</Text>
-                  <Text style={styles.value}>{cardHolderName}</Text>
+              {cardMask && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Số thẻ</Text>
+                  <Text style={styles.detailValue}>{cardMask}</Text>
                 </View>
-              ) : null}
+              )}
             </View>
           </View>
 
         </ScrollView>
 
-        {/* Footer Buttons */}
+        {/* Footer Action Button */}
         <View style={styles.footer}>
           <TouchableOpacity
-            style={styles.primaryButton}
+            style={styles.actionButton}
             onPress={handleGoHome}
           >
             <LinearGradient
-            colors={THEME.primaryGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.gradientButton}
-          >
-              <Text style={styles.primaryButtonText}>Về trang chủ</Text>
+              colors={[MD3_COLORS.paymentGreen, '#00A344']}
+              style={styles.actionButtonGradient}
+            >
+              <Text style={styles.actionButtonText}>Về trang chủ</Text>
+              <MaterialIcons name="arrow-forward" size={20} color={MD3_COLORS.onPrimary} />
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -238,14 +373,14 @@ const PaymentResultScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.background,
+    backgroundColor: MD3_COLORS.paymentGray,
   },
   headerBackground: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 200,
+    height: 120,
   },
   safeArea: {
     flex: 1,
@@ -255,184 +390,140 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingTop: 24,
+    paddingTop: 20,
     paddingBottom: 20,
-    alignItems: 'center',
   },
-  resultCard: {
-    backgroundColor: THEME.surface,
-    borderRadius: 16,
+  successCard: {
+    backgroundColor: MD3_COLORS.surface,
+    borderRadius: 24,
     width: '100%',
-    paddingVertical: 32,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
+    padding: 24,
+    ...MD3_ELEVATION.level2,
     marginBottom: 20,
   },
-  iconContainer: {
-    marginBottom: 16,
+  successIconContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  amount: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: THEME.textPrimary,
-    marginBottom: 8,
-  },
-  message: {
-    fontSize: 14,
-    color: THEME.textSecondary,
-    textAlign: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 20,
-  },
-  dashedDivider: {
-    width: '100%',
-    height: 20,
-    flexDirection: 'row',
+  successIconBackground: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  successTitle: {
+    ...MD3_TYPE.headlineMedium,
+    fontWeight: '700',
+    color: MD3_COLORS.textPrimary,
+    textAlign: 'center',
     marginBottom: 24,
-    position: 'relative',
   },
-  dashedLine: {
-    flex: 1,
-    height: 1,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderStyle: 'dashed',
-    marginHorizontal: 10,
-  },
-  halfCircleLeft: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: THEME.background,
-    position: 'absolute',
-    left: -10,
-  },
-  halfCircleRight: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: THEME.background,
-    position: 'absolute',
-    right: -10,
-  },
-  detailsContainer: {
-    width: '100%',
-    paddingHorizontal: 24,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    color: THEME.textSecondary,
-    flex: 1,
-  },
-  value: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: THEME.textPrimary,
-    flex: 2,
-    textAlign: 'right',
-  },
-  methodRow: {
-    alignItems: 'flex-start',
-  },
-  methodValueContainer: {
-    flex: 2,
-    alignItems: 'flex-end',
-  },
-  methodChip: {
-    flexDirection: 'row',
+  amountSection: {
+    backgroundColor: MD3_COLORS.paymentLightGreen,
+    borderRadius: 16,
+    padding: 20,
     alignItems: 'center',
-    alignSelf: 'flex-end',
-    backgroundColor: '#E8F3EC',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    marginBottom: 24,
+  },
+  amountLabel: {
+    ...MD3_TYPE.bodyMedium,
+    color: MD3_COLORS.textSecondary,
     marginBottom: 8,
   },
-  methodChipText: {
-    marginLeft: 6,
-    fontSize: 13,
+  amountValue: {
+    ...MD3_TYPE.displaySmall,
     fontWeight: '700',
-    color: THEME.textPrimary,
-  },
-  methodMeta: {
-    alignItems: 'flex-end',
-  },
-  methodMetaText: {
-    fontSize: 12,
-    color: THEME.textSecondary,
+    color: MD3_COLORS.textPrimary,
     marginBottom: 4,
-    textAlign: 'right',
-    includeFontPadding: false,
+    letterSpacing: 0.5, // Rút ngắn khoảng cách giữa các chữ số
   },
-  methodMetaValue: {
-    color: THEME.textPrimary,
-    fontWeight: '700',
-    fontSize: 12,
+  currencyText: {
+    ...MD3_TYPE.bodyLarge,
+    fontWeight: '500',
+    color: MD3_COLORS.textPrimary,
+  },
+  amountWords: {
+    ...MD3_TYPE.bodySmall,
+    color: MD3_COLORS.textSecondary,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  detailsSection: {
+    width: '100%',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: MD3_COLORS.outlineVariant,
+  },
+  detailLabel: {
+    ...MD3_TYPE.bodyMedium,
+    color: MD3_COLORS.textSecondary,
+    flex: 0.8,
+  },
+  detailValue: {
+    ...MD3_TYPE.bodyMedium,
+    fontWeight: '600',
+    color: MD3_COLORS.textPrimary,
+    flex: 1.2,
     textAlign: 'right',
-    fontFamily: 'monospace',
-    letterSpacing: 0.5,
+  },
+  timeContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 2,
+    flex: 1.2,
+  },
+  timeText: {
+    ...MD3_TYPE.bodyMedium,
+    fontWeight: '600',
+    color: MD3_COLORS.textPrimary,
+  },
+  dateText: {
+    ...MD3_TYPE.bodySmall,
+    color: MD3_COLORS.textSecondary,
+  },
+  methodContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  methodIcon: {
+    marginRight: 4,
+  },
+  methodText: {
+    ...MD3_TYPE.bodyMedium,
+    fontWeight: '600',
+    color: MD3_COLORS.textPrimary,
+    textAlign: 'right',
   },
   footer: {
     padding: 16,
-    backgroundColor: THEME.background,
-    marginBottom: 10,
+    paddingBottom: 32,
   },
-  primaryButton: {
-    borderRadius: 8,
+  actionButton: {
+    borderRadius: 20,
     overflow: 'hidden',
-    marginBottom: 12,
+    ...MD3_ELEVATION.level1,
   },
-  gradientButton: {
-    paddingVertical: 14,
+  actionButtonGradient: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    gap: 8,
   },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+  actionButtonText: {
+    color: MD3_COLORS.onPrimary,
+    ...MD3_TYPE.labelLarge,
     fontWeight: '600',
-  },
-  secondaryButton: {
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: THEME.border,
-  },
-  secondaryButtonText: {
-    color: THEME.textSecondary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  serviceBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  serviceText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
   },
 });
 

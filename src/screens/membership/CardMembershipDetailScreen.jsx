@@ -88,7 +88,22 @@ const CardMembershipDetailScreen = ({ navigation, route }) => {
   };
   
   const handleRegister = () => {
-    navigation.navigate('PaymentMethod', { plan });
+    // Navigate qua PaymentStack để có context đầy đủ
+    navigation.navigate('PaymentStack', {
+      screen: 'PaymentMethod',
+      params: {
+        plan: {
+          ...plan,
+          id: plan.id || plan.localId, // Đảm bảo có id
+          billingCycle: 'quarter', // Mặc định quarter cho detail screen
+          amountDue: plan.basePrice * 3, // Tạm tính 3 tháng
+          priceLabel: `${(plan.basePrice * 3).toLocaleString()}đ/3 tháng`,
+          isUpgrade: false,
+          isTemporary: false,
+          creditValue: 0
+        }
+      }
+    });
   };
 
   // Ghép details + perks thành "Bao gồm gì?"

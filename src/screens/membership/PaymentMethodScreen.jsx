@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -8,9 +8,15 @@ import {
   TouchableOpacity,
   View,
   Alert,
+  Linking,
+  ActivityIndicator,
+  DeviceEventEmitter,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { createPaymentUrl } from '@api/membershipApi';
+import { UserContext } from '@context/UserContext';
+import { launchVnpaySdk } from '../../utils/vnpaySdk';
 
 const MD3_COLORS = {
   primary: '#1F8E4A',
@@ -39,6 +45,9 @@ const MD3_ELEVATION = {
 
 const PaymentMethodScreen = ({ navigation, route }) => {
   const { plan } = route.params || {};
+  console.log('PaymentMethodScreen - received plan:', plan);
+  const { user, refreshUser } = useContext(UserContext);
+  const [isLoading, setIsLoading] = useState(false);
 
   const paymentMethods = [
     {
@@ -50,12 +59,12 @@ const PaymentMethodScreen = ({ navigation, route }) => {
       iconLib: 'MaterialCommunityIcons',
     },
     {
-      id: 'vnpay_token',
-      icon: 'credit-card-check',
-      title: 'Thanh toán thẻ VNPAY',
-      description: 'Lưu thẻ, chọn thẻ và thanh toán OTP',
+      id: 'vnpay_saved_card',
+      icon: 'credit-card',
+      title: 'Thanh toán qua thẻ/VNPAY',
+      description: 'Sử dụng thẻ đã lưu hoặc thêm thẻ mới',
       color: MD3_COLORS.primary,
-      iconLib: 'MaterialCommunityIcons',
+      iconLib: 'MaterialIcons',
     },
     {
       id: 'counter',
@@ -67,49 +76,65 @@ const PaymentMethodScreen = ({ navigation, route }) => {
     },
   ];
 
-  const handlePaymentMethodSelect = (method) => {
-    if (method.id === 'vnpay_token') {
-      navigation.navigate('PaymentCardSelect', { plan });
+  const handlePaymentMethodSelect = async (method) => {
+    if (isLoading) return;
+
+    if (!user || !user.id) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.');
       return;
     }
 
-    if (method.id === 'banking') {
-      navigation.navigate('BankTransferScreen', { plan });
-      return;
-    }
+    setIsLoading(true);
 
-    const messages = {
-      counter: 'Vui lòng mang CMND/CCCD đến chi nhánh gần nhất. Nhân viên sẽ hỗ trợ hoàn tất thủ tục trong 10 phút.',
-    };
+    try {
+      if (method.id === 'vnpay_saved_card') {
+        navigation.navigate('PaymentStack', { screen: 'PaymentCardSelect', params: { plan } });
+        return;
+      }
 
-    Alert.alert(
-      'Xác nhận',
-      `Phương thức: ${method.title}\n\n${messages[method.id] || ''}`,
-      [
-        {
-          text: 'Hủy',
-          onPress: () => {},
-          style: 'cancel',
-        },
-        {
-          text: 'Xác nhận',
-          onPress: () => {
-            Alert.alert('Thành công', `Đã chọn phương thức: ${method.title}`);
-            // Sau khi xác nhận, quay lại hoặc chuyển sang màn hình confirm
-            setTimeout(() => {
-              navigation.goBack();
-            }, 1500);
+      if (method.id === 'banking') {
+        setIsLoading(false);
+        navigation.navigate('PaymentStack', { screen: 'BankTransferScreen', params: { plan } });
+        return;
+      }
+
+      const messages = {
+        counter: 'Vui lòng mang CMND/CCCD đến chi nhánh gần nhất. Nhân viên sẽ hỗ trợ hoàn tất thủ tục trong 10 phút.',
+      };
+
+      Alert.alert(
+        'Xác nhận',
+        `Phương thức: ${method.title}\n\n${messages[method.id] || ''}`,
+        [
+          {
+            text: 'Hủy',
+            onPress: () => setIsLoading(false),
+            style: 'cancel',
           },
-        },
-      ]
-    );
+          {
+            text: 'Xác nhận',
+            onPress: () => {
+              Alert.alert('Thành công', `Đã chọn phương thức: ${method.title}`);
+              setTimeout(() => {
+                setIsLoading(false);
+                navigation.goBack();
+              }, 1500);
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      setIsLoading(false);
+      const errorMessage = error?.response?.data?.message || error?.message || 'Đã xảy ra lỗi không xác định.';
+      Alert.alert('Lỗi thanh toán', errorMessage);
+      console.error('Payment error:', error);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor={MD3_COLORS.surface} />
 
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -123,17 +148,23 @@ const PaymentMethodScreen = ({ navigation, route }) => {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Plan Info Card */}
         {plan && (
           <View style={styles.planCard}>
             <View style={styles.planCardContent}>
-              <Text style={styles.planCardTitle}>{plan.name}</Text>
-              <Text style={styles.planCardPrice}>{plan.price}</Text>
+              <Text style={styles.planCardTitle}>{plan.name} {plan.isUpgrade && plan.creditValue > 0 ? ' (Nâng cấp)' : ''}</Text>
+              {plan.isUpgrade && plan.creditValue > 0 ? (
+                <>
+                  <Text style={styles.planCardSubText}>Giá gốc: {plan.originalPrice ? `${plan.originalPrice.toLocaleString()}đ` : plan.price}</Text>
+                  <Text style={styles.planCardSubText}>Đã khấu trừ: -{plan.creditValue.toLocaleString()}đ</Text>
+                  <Text style={styles.planCardPrice}>Số tiền phải trả: {plan.priceLabel || '0đ'}</Text>
+                </>
+              ) : (
+                <Text style={styles.planCardPrice}>Tổng tiền: {plan.priceLabel || '0đ'}</Text>
+              )}
             </View>
           </View>
         )}
 
-        {/* Payment Methods */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Chọn phương thức thanh toán</Text>
           <View style={styles.methodsGrid}>
@@ -145,7 +176,7 @@ const PaymentMethodScreen = ({ navigation, route }) => {
                 activeOpacity={0.85}
               >
                 <View
-                  style={[
+                  style={[ 
                     styles.methodIconContainer,
                     { backgroundColor: method.color + '15' },
                   ]}
@@ -167,7 +198,6 @@ const PaymentMethodScreen = ({ navigation, route }) => {
           </View>
         </View>
 
-        {/* Info Box */}
         <View style={styles.infoBox}>
           <MaterialIcons
             name="info-outline"
@@ -182,6 +212,13 @@ const PaymentMethodScreen = ({ navigation, route }) => {
 
         <View style={{ height: 24 }} />
       </ScrollView>
+
+      {isLoading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color={MD3_COLORS.primary} />
+          <Text style={styles.loadingText}>Đang xử lý thanh toán...</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -193,8 +230,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: MD3_COLORS.background,
   },
-
-  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -220,15 +255,11 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-
-  // Content
   content: {
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 24,
   },
-
-  // Plan Card
   planCard: {
     backgroundColor: MD3_COLORS.primary,
     borderRadius: 16,
@@ -244,13 +275,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: MD3_COLORS.onPrimary,
   },
+  planCardSubText: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: MD3_COLORS.onPrimary,
+    opacity: 0.8,
+  },
   planCardPrice: {
     fontSize: 24,
     fontWeight: '700',
     color: MD3_COLORS.onPrimary,
   },
-
-  // Section
   section: {
     marginBottom: 24,
   },
@@ -260,8 +295,6 @@ const styles = StyleSheet.create({
     color: MD3_COLORS.onSurface,
     marginBottom: 16,
   },
-
-  // Payment Methods Grid
   methodsGrid: {
     gap: 12,
   },
@@ -292,8 +325,6 @@ const styles = StyleSheet.create({
     color: MD3_COLORS.textSecondary,
     lineHeight: 20,
   },
-
-  // Info Box
   infoBox: {
     backgroundColor: '#E8F5E9',
     borderRadius: 12,
@@ -307,4 +338,21 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     flex: 1,
   },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: MD3_COLORS.onSurface,
+  },
 });
+

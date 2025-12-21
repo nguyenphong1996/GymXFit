@@ -15,47 +15,87 @@ import {
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
 import { Swipeable } from 'react-native-gesture-handler';
+import { useIsFocused } from '@react-navigation/native';
 import { UserContext } from '@context/UserContext';
 import { getVnpayTokens, deleteVnpayToken } from '../../api/paymentApi';
+import { useToast } from '@context/ToastContext';
 
 const { width } = Dimensions.get('window');
 
 const MD3_COLORS = {
+  // Primary colors
   primary: '#1F8E4A',
   onPrimary: '#FFFFFF',
+  primaryContainer: '#E8F5E8',
+  onPrimaryContainer: '#002D16',
+  
+  // Secondary colors
+  secondary: '#47614F',
+  onSecondary: '#FFFFFF',
+  secondaryContainer: '#DCE4DD',
+  onSecondaryContainer: '#243628',
+  
+  // Surface colors
   surface: '#FFFFFF',
+  onSurface: '#1A1C1A',
+  surfaceVariant: '#F5F7F6',
+  onSurfaceVariant: '#44483E',
+  
+  // Error colors
+  error: '#D32F2F',
+  onError: '#FFFFFF',
+  
+  // Neutral colors
+  outline: '#C8D0C8',
+  outlineVariant: '#BBC4BB',
   background: '#F5F7F6',
-  onSurface: '#191C19',
-  textPrimary: '#10241A',
-  textSecondary: '#47614F',
-  outline: '#C1C9BF',
+  scrim: 'rgba(0, 0, 0, 0.32)',
+  
+  // Text colors
+  textPrimary: '#1A1C1A',
+  textSecondary: '#44483E',
+  textTertiary: '#73756F',
+  
+  // State layers
+  hoverOpacity: 0.08,
+  focusOpacity: 0.12,
+  pressedOpacity: 0.12,
+  disabledOpacity: 0.38,
 };
 
 const PaymentCardsScreen = ({ navigation }) => {
   const { user } = useContext(UserContext);
+  const { showToast } = useToast();
+  const isFocused = useIsFocused();
   const [isLoading, setIsLoading] = useState(true);
   const [tokens, setTokens] = useState([]);
 
-  const fetchTokens = async () => {
+  const fetchTokens = async (showLoading = true) => {
     try {
       if (!user?.id && !user?._id) {
         setTokens([]);
         return;
       }
-      setIsLoading(true);
+      if (showLoading) {
+        setIsLoading(true);
+      }
       const userId = user.id || user._id || user.userId;
       const res = await getVnpayTokens(userId);
       setTokens(res || []);
     } catch (error) {
       console.warn('Không lấy được danh sách thẻ:', error?.message);
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchTokens();
-  }, []);
+    if (isFocused) {
+      fetchTokens();
+    }
+  }, [isFocused]);
 
   const buildCardTypeLabel = (type) => {
     if (type === '01') return 'Thẻ nội địa (ATM)';
@@ -74,16 +114,19 @@ const PaymentCardsScreen = ({ navigation }) => {
   };
 
   const handleSelect = (item) => {
-    navigation.navigate('PaymentTokenScreen', {
-      fromProfile: true,
-      token: item.token,
-      tokenMeta: {
-        bankCode: item.bankCode || item.bankShortName || item.bank || item.bankName,
-        bankName: item.bankName || item.bank || item.bankShortName || item.bankCode,
-        cardMask: item.cardMask || item.mask || item.number,
-        cardType: item.cardType,
-        cardHolderName: item.cardHolderName || item.cardHolder || item.holderName || item.ownerName || item.nameOnCard,
-        cardExpiry: buildExpiry(item),
+    navigation.navigate('PaymentStack', {
+      screen: 'PaymentTokenScreen',
+      params: {
+        fromProfile: true,
+        token: item.token,
+        tokenMeta: {
+          bankCode: item.bankCode || item.bankShortName || item.bank || item.bankName,
+          bankName: item.bankName || item.bank || item.bankShortName || item.bankCode,
+          cardMask: item.cardMask || item.mask || item.number,
+          cardType: item.cardType,
+          cardHolderName: item.cardHolderName || item.cardHolder || item.holderName || item.ownerName || item.nameOnCard,
+          cardExpiry: buildExpiry(item),
+        },
       },
     });
   };
@@ -102,6 +145,13 @@ const PaymentCardsScreen = ({ navigation }) => {
               setIsLoading(true);
               await deleteVnpayToken(item._id);
               await fetchTokens(); // Refresh list
+              
+              // Success toast
+              showToast({
+                type: 'success',
+                title: 'Thành công',
+                message: `Đã xóa thẻ ${item.bankCode || ''} thành công`,
+              });
             } catch (error) {
               Alert.alert('Lỗi', 'Không thể xóa thẻ. Vui lòng thử lại.');
             } finally {
@@ -115,8 +165,8 @@ const PaymentCardsScreen = ({ navigation }) => {
 
   const renderRightActions = (progress, dragX, item) => {
     const scale = dragX.interpolate({
-      inputRange: [-80, 0],
-      outputRange: [1, 0],
+      inputRange: [-100, -16, 0],
+      outputRange: [1, 0.9, 0],
       extrapolate: 'clamp',
     });
 
@@ -125,8 +175,14 @@ const PaymentCardsScreen = ({ navigation }) => {
         style={styles.deleteAction}
         onPress={() => handleDelete(item)}
       >
-        <Animated.View style={{ transform: [{ scale }] }}>
-          <MaterialIcons name="delete-outline" size={30} color="#fff" />
+        <Animated.View style={{ 
+          transform: [{ scale }],
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <View style={styles.deleteIconContainer}>
+            <MaterialIcons name="delete" size={24} color={MD3_COLORS.onError} />
+          </View>
           <Text style={styles.deleteText}>Xóa</Text>
         </Animated.View>
       </TouchableOpacity>
@@ -214,7 +270,7 @@ const PaymentCardsScreen = ({ navigation }) => {
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => navigation.navigate('PaymentTokenScreen', { fromProfile: true })}
+          onPress={() => navigation.navigate('PaymentStack', { screen: 'PaymentTokenization', params: { fromProfile: true } })}
         >
           <Text style={styles.addButtonText}>Thêm thẻ mới</Text>
         </TouchableOpacity>
@@ -235,59 +291,145 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: MD3_COLORS.outline,
   },
-  backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '600', color: MD3_COLORS.onSurface },
-  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
-  loaderText: { fontSize: 14, color: MD3_COLORS.textSecondary, textAlign: 'center' },
+  backButton: { 
+    width: 40, 
+    height: 40, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+    borderRadius: 20,
+  },
+  headerTitle: { 
+    fontSize: 18, 
+    fontWeight: '600', 
+    color: MD3_COLORS.onSurface,
+    letterSpacing: 0.1,
+  },
+  loaderContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    padding: 24,
+  },
+  loaderText: { 
+    fontSize: 14, 
+    color: MD3_COLORS.textSecondary, 
+    textAlign: 'center',
+    lineHeight: 20,
+    marginTop: 12,
+  },
   card: {
-    borderRadius: 14,
+    borderRadius: 12,
     overflow: 'hidden',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    backgroundColor: '#fff',
+    elevation: 1,
+    shadowColor: MD3_COLORS.textPrimary,
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    backgroundColor: MD3_COLORS.surface,
+    borderWidth: 1,
+    borderColor: MD3_COLORS.outline,
   },
   swipeContainer: {
-    marginBottom: 14,
-    borderRadius: 14,
+    marginBottom: 12,
+    borderRadius: 12,
     overflow: 'hidden',
   },
   deleteAction: {
-    backgroundColor: '#EF4444',
+    backgroundColor: MD3_COLORS.error,
     justifyContent: 'center',
     alignItems: 'center',
-    width: 80,
+    width: 96,
     height: '100%',
-    borderTopRightRadius: 14,
-    borderBottomRightRadius: 14,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+  },
+  deleteIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
   deleteText: {
-    color: '#fff',
-    fontWeight: '600',
+    color: MD3_COLORS.onError,
+    fontWeight: '500',
     fontSize: 12,
-    marginTop: 4,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
-  cardGradient: { padding: 16 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  cardGradient: { 
+    padding: 16,
+    backgroundColor: 'linear-gradient(135deg, #7A2E2A 0%, #FF6633 100%)',
+  },
+  cardHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
   bankBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.14)',
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: 16,
   },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: '#fff', letterSpacing: 0.3 },
-  cardMask: { marginTop: 14, fontSize: 18, fontWeight: '700', color: '#fff', letterSpacing: 0.6 },
-  cardMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  cardMetaText: { fontSize: 13, color: '#ffe8e0', fontWeight: '600' },
-  footer: { padding: 16, backgroundColor: MD3_COLORS.surface, borderTopWidth: 1, borderTopColor: '#e5e5e5' },
-  addButton: { backgroundColor: MD3_COLORS.primary, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  addButtonText: { color: MD3_COLORS.onPrimary, fontSize: 16, fontWeight: '600' },
+  cardTitle: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    color: '#FFFFFF',
+    letterSpacing: 0.1,
+  },
+  cardMask: { 
+    fontSize: 20, 
+    fontWeight: '700', 
+    color: '#FFFFFF', 
+    letterSpacing: 1.2,
+    marginBottom: 8,
+  },
+  cardMetaRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+  },
+  metaItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 6,
+  },
+  cardMetaText: { 
+    fontSize: 12, 
+    color: '#FFE8E0', 
+    fontWeight: '500',
+    letterSpacing: 0.1,
+  },
+  footer: { 
+    padding: 16, 
+    backgroundColor: MD3_COLORS.surface, 
+    borderTopWidth: 1, 
+    borderTopColor: MD3_COLORS.outline,
+  },
+  addButton: { 
+    backgroundColor: MD3_COLORS.primary, 
+    paddingVertical: 14, 
+    borderRadius: 20, 
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: MD3_COLORS.primary,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  addButtonText: { 
+    color: MD3_COLORS.onPrimary, 
+    fontSize: 16, 
+    fontWeight: '600',
+    letterSpacing: 0.1,
+  },
 });
 
 export default PaymentCardsScreen;

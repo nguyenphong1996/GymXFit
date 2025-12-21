@@ -12,6 +12,7 @@ import {
   Linking,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserContext } from '@context/UserContext';
 import { createVnpayTokenInitUrl, createVnpayTokenPayUrl, checkVnpayPaymentStatus, getVnpayTransactionStatus } from '../../api/paymentApi';
 import { isVnpaySdkAvailable, launchVnpaySdk } from '../../utils/vnpaySdk';
@@ -37,6 +38,7 @@ const resolveUserId = (user) => {
 const PaymentTokenScreen = ({ route, navigation }) => {
   const { plan, token, fromProfile, tokenMeta } = route.params || {};
   console.log('PaymentTokenScreen params:', { tokenMeta, token, plan });
+  console.log('PaymentTokenScreen - amountDue:', plan?.amountDue, 'billingCycle:', plan?.billingCycle);
   const { user, isLoading: isUserLoading } = useContext(UserContext);
   
   const [isLoading, setIsLoading] = useState(false);
@@ -76,20 +78,64 @@ const PaymentTokenScreen = ({ route, navigation }) => {
         return;
       }
 
-      const priceNumber = plan?.price ? (parseInt(plan.price.replace(/[^0-9]/g, ''), 10) || 0) : 0;
+      const priceNumber = plan?.amountDue || (plan?.price ? (parseInt(plan.price.replace(/[^0-9]/g, ''), 10) || 0) : 0);
+      
+      // Map plan name to backend package ID
+      const getPackageId = (planName) => {
+        const packageMap = {
+          'Basic': '69316923fcbc342ddf4e86a2',
+          'Plus': '69316923fcbc342ddf4e86a3', 
+          'Premium': '69316923fcbc342ddf4e86a4'
+        };
+        return packageMap[planName] || plan?.id;
+      };
+      
+      const packageId = getPackageId(plan?.name);
+      
       const basePayload = {
         amount: priceNumber,
         userId,
-        packageId: plan?.id,
-        orderInfo: plan ? `Thanh toan goi ${plan.name}` : 'Luu the VNPAY',
+        orderInfo: plan ? `Thanh toan ${plan.name}` : 'Luu the VNPAY',
         cardType,
+        billingCycle: plan?.billingCycle || 'month',
+        creditValue: plan?.creditValue || 0,
+        isUpgrade: plan?.isUpgrade || false,
+        isTemporary: plan?.isTemporary || false,
+        isRenewal: plan?.isRenewal || false,  // Flag: cùng gói → renewal
+        currentTier: plan?.currentTier,  // Tier hiện tại
+        targetTier: plan?.targetTier || plan?.tier,  // Tier đích
       };
+      
+      console.log('[DEBUG] PaymentTokenScreen - Building payload:', {
+        planName: plan?.name,
+        targetTier: plan?.targetTier || plan?.tier,
+        currentTier: plan?.currentTier,
+        isUpgrade: plan?.isUpgrade,
+        isTemporary: plan?.isTemporary,
+        isRenewal: plan?.isRenewal,
+        billingCycle: plan?.billingCycle,
+        amountDue: plan?.amountDue,
+        creditValue: plan?.creditValue,
+        logic: plan?.isRenewal ? '→ RENEWAL (cộng dồn)' : (plan?.isUpgrade ? '→ UPGRADE (khấu trừ credit)' : '→ NEW')
+      });
+      
+      // Xử lý khác nhau cho membership và PT session
+      if (plan?.type === 'pt_session') {
+        // PT session không có packageId, chỉ có amount và orderInfo
+        basePayload.orderInfo = plan.orderInfo || `Thanh toan ${plan.name}`;
+        // Không gửi packageId cho PT session
+      } else {
+        // Membership packages
+        const packageId = getPackageId(plan?.name);
+        basePayload.packageId = packageId;
+      }
       const isTokenPay = Boolean(token) && !forceNewToken;
       console.log('VNPAY token payload:', {
         ...basePayload,
         mode: isTokenPay ? 'pay' : (fromProfile ? 'token_create' : 'pay_and_create'),
         hasToken: !!token,
         forceNewToken,
+        resolvedPackageId: packageId, // Add for debugging
       });
 
       const apiCall = isTokenPay ? createVnpayTokenPayUrl : createVnpayTokenInitUrl;
@@ -105,6 +151,41 @@ const PaymentTokenScreen = ({ route, navigation }) => {
         setPaymentUrl(response.vnpUrl);
         if (response.txnRef) {
           setTxnRef(response.txnRef);
+        }
+
+        // LƯU PENDING DATA VÀO ASYNC STORAGE
+        if (plan) {
+          if (plan.type === 'pt_session') {
+            // PT session - lưu pending booking
+            const pendingBooking = {
+              staffId: plan.staffId,
+              date: plan.date,
+              slotKey: plan.slotKey,
+              txnRef: response.txnRef,
+              paymentMethod: 'vnpay_token',
+              amount: priceNumber,
+              userId,
+              createdAt: new Date().toISOString()
+            };
+            await AsyncStorage.setItem('pendingBooking', JSON.stringify(pendingBooking));
+            console.log('Saved pendingBooking:', pendingBooking);
+          } else {
+            // Membership - lưu pending membership
+            const packageId = getPackageId(plan?.name);
+            if (packageId) {
+              const pendingMembership = {
+                packageId: packageId,
+                packageName: plan.name,
+                amount: priceNumber,
+                txnRef: response.txnRef,
+                paymentMethod: 'vnpay_token',
+                userId,
+                createdAt: new Date().toISOString()
+              };
+              await AsyncStorage.setItem('pendingMembership', JSON.stringify(pendingMembership));
+              console.log('Saved pendingMembership:', pendingMembership);
+            }
+          }
         }
 
         openVnpaySdkSession(response.vnpUrl, response.txnRef);
@@ -133,7 +214,7 @@ const PaymentTokenScreen = ({ route, navigation }) => {
         navigation.navigate('PaymentResult', {
           status: '00',
           message: 'Giao dịch thành công',
-          amount: plan?.price,
+          amount: plan?.amountDue || plan?.price,
           txnRef: ref,
           method: 'token',
           bankCode: tokenMeta?.bankCode,
@@ -143,16 +224,16 @@ const PaymentTokenScreen = ({ route, navigation }) => {
           cardHolderName: tokenMeta?.cardHolderName,
           cardExpiry: tokenMeta?.cardExpiry,
           planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
+          paidAt: result.paidAt || new Date().toISOString()
         });
         return;
       }
       if (result?.status === 'failed') {
         navigation.navigate('PaymentResult', {
-          status: '99',
-          message: 'Giao dịch thất bại',
-          amount: plan?.price,
-          txnRef: ref,
+          status: result.code || '99',
+          message: result.message || 'Giao dịch thất bại',
+          amount: plan?.amountDue || plan?.price,
+          txnRef: queryParams.vnp_TxnRef || txnRef,
           method: 'token',
           bankCode: tokenMeta?.bankCode,
           bankName: tokenMeta?.bankName,
@@ -161,7 +242,7 @@ const PaymentTokenScreen = ({ route, navigation }) => {
           cardHolderName: tokenMeta?.cardHolderName,
           cardExpiry: tokenMeta?.cardExpiry,
           planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
+          paidAt: result.paidAt || new Date().toISOString()
         });
         return;
       }
@@ -209,13 +290,15 @@ const PaymentTokenScreen = ({ route, navigation }) => {
       const urlObj = new URL(url);
       const params = Object.fromEntries(urlObj.searchParams.entries());
       
-      // gymxfit://payment-result?code=00&message=Success&orderId=...&amount=...
+      // gymxfit://payment-result?code=00&message=Success&orderId=...&amount=...&paidAt=...
+      // Parse paidAt từ backend (ISO format) - Tối ưu cho báo cáo/thống kê
+      const paidAt = params.paidAt || new Date().toISOString();
       
       if (params.code === '00') {
         navigation.navigate('PaymentResult', {
           status: '00',
           message: decodeURIComponent(params.message || 'Giao dịch thành công'),
-          amount: params.amount || plan?.price,
+          amount: plan?.amountDue || params.amount || plan?.price,
           txnRef: params.orderId,
           method: 'token',
           bankCode: tokenMeta?.bankCode,
@@ -225,13 +308,13 @@ const PaymentTokenScreen = ({ route, navigation }) => {
           cardHolderName: tokenMeta?.cardHolderName,
           cardExpiry: tokenMeta?.cardExpiry,
           planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
+          paidAt: paidAt
         });
       } else {
         navigation.navigate('PaymentResult', {
           status: params.code || '99',
           message: decodeURIComponent(params.message || 'Giao dịch thất bại'),
-          amount: params.amount || plan?.price,
+          amount: plan?.amountDue || params.amount || plan?.price,
           txnRef: params.orderId,
           method: 'token',
           bankCode: tokenMeta?.bankCode,
@@ -241,7 +324,7 @@ const PaymentTokenScreen = ({ route, navigation }) => {
           cardHolderName: tokenMeta?.cardHolderName,
           cardExpiry: tokenMeta?.cardExpiry,
           planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
+          paidAt: paidAt
         });
       }
     } catch (e) {
@@ -325,7 +408,7 @@ const PaymentTokenScreen = ({ route, navigation }) => {
         navigation.navigate('PaymentResult', {
           status: '00',
           message: 'Giao dịch thành công',
-          amount: plan?.price,
+          amount: plan?.amountDue || plan?.price,
           txnRef: queryParams.vnp_TxnRef || txnRef,
           method: 'token',
           bankCode: resolvedBankCode,
@@ -335,13 +418,13 @@ const PaymentTokenScreen = ({ route, navigation }) => {
           cardHolderName: resolvedCardHolder,
           cardExpiry: resolvedCardExpiry,
           planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
+          paidAt: result.paidAt || new Date().toISOString()
         });
       } else {
         navigation.navigate('PaymentResult', {
           status: result.code || '99',
           message: result.message || 'Giao dịch thất bại',
-          amount: plan?.price,
+          amount: plan?.amountDue || plan?.price,
           txnRef: queryParams.vnp_TxnRef || txnRef,
           method: 'token',
           bankCode: resolvedBankCode,
@@ -351,7 +434,7 @@ const PaymentTokenScreen = ({ route, navigation }) => {
           cardHolderName: resolvedCardHolder,
           cardExpiry: resolvedCardExpiry,
           planName: plan?.name,
-          paidAt: new Date().toLocaleString('vi-VN')
+          paidAt: result.paidAt || new Date().toISOString()
         });
       }
     } catch (error) {
@@ -412,7 +495,7 @@ const PaymentTokenScreen = ({ route, navigation }) => {
     ? 'Thanh toán & tạo token mới'
     : fromProfile
       ? 'Liên kết thẻ ngay'
-      : `Thanh toán ${plan?.price || ''}`;
+      : `Thanh toán ${plan?.priceLabel || plan?.amountDue?.toLocaleString() || plan?.price || ''}`;
 
   // Render Card Design UI
   return (
@@ -448,7 +531,7 @@ const PaymentTokenScreen = ({ route, navigation }) => {
             <View style={styles.divider} />
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Số tiền</Text>
-              <Text style={styles.priceValue}>{plan.price}</Text>
+              <Text style={styles.priceValue}>{plan.priceLabel || plan.amountDue?.toLocaleString() || plan.price}</Text>
             </View>
           </View>
         )}

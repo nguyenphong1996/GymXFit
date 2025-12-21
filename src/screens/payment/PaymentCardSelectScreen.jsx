@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import LinearGradient from 'react-native-linear-gradient';
+import { useIsFocused } from '@react-navigation/native';
 import { UserContext } from '@context/UserContext';
 import { getVnpayTokens } from '../../api/paymentApi';
 
@@ -30,6 +31,7 @@ const PaymentCardSelectScreen = ({ navigation, route }) => {
   const { user } = useContext(UserContext);
   const [isLoading, setIsLoading] = useState(true);
   const [tokens, setTokens] = useState([]);
+  const isFocused = useIsFocused();
 
   const buildExpiry = (token) => {
     const monthRaw = token.expMonth || token.expiryMonth || token.cardExpMonth || token.expireMonth;
@@ -43,27 +45,39 @@ const PaymentCardSelectScreen = ({ navigation, route }) => {
     return token.cardExpiry || token.cardExpiration || token.expiry || token.expireDate || token.expDate || token.expiration || token.expirationDate;
   };
 
-  const fetchTokens = async () => {
+  const fetchTokens = async (showLoading = true) => {
     try {
       if (!user?.id && !user?._id) {
         setTokens([]);
         return;
       }
-      setIsLoading(true);
+      if (showLoading) {
+        setIsLoading(true);
+      }
       const userId = user.id || user._id || user.userId;
       const res = await getVnpayTokens(userId);
       console.log('VNPAY tokens response:', res);
-      setTokens(res || []);
+      if (res && res.length > 0) {
+        setTokens(res);
+      } else {
+        setTokens([]);
+        // Navigate to add new card screen if no cards are saved
+        navigation.replace('PaymentStack', { screen: 'PaymentTokenization', params: { plan, fromPaymentFlow: true } });
+      }
     } catch (error) {
       console.warn('Không lấy được danh sách thẻ:', error?.message);
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchTokens();
-  }, []);
+    if (isFocused) {
+      fetchTokens();
+    }
+  }, [isFocused]);
 
   const buildCardTypeLabel = (type) => {
     if (type === '01') return 'Thẻ nội địa (ATM)';
@@ -140,7 +154,15 @@ const PaymentCardSelectScreen = ({ navigation, route }) => {
 
       <View style={styles.summaryContainer}>
         <Text style={styles.summaryText}>Gói: <Text style={styles.summaryValue}>{plan?.name}</Text></Text>
-        <Text style={styles.summaryText}>Số tiền: <Text style={styles.summaryValue}>{plan?.price}</Text></Text>
+        {plan?.isUpgrade && plan?.creditValue > 0 ? (
+          <>
+            <Text style={styles.summaryText}>Giá gốc: <Text style={styles.summaryOriginalPrice}>{plan?.originalPrice ? `${plan.originalPrice.toLocaleString()}đ` : plan?.price}</Text></Text>
+            <Text style={styles.summaryText}>Đã khấu trừ: <Text style={styles.summaryDiscount}>-{plan.creditValue.toLocaleString()}đ</Text></Text>
+            <Text style={styles.summaryText}>Số tiền phải trả: <Text style={styles.summaryValue}>{plan?.priceLabel || plan?.amountDue?.toLocaleString() || plan?.price}</Text></Text>
+          </>
+        ) : (
+          <Text style={styles.summaryText}>Số tiền: <Text style={styles.summaryValue}>{plan?.priceLabel || plan?.amountDue?.toLocaleString() || plan?.price}</Text></Text>
+        )}
       </View>
 
       {isLoading ? (
@@ -163,7 +185,7 @@ const PaymentCardSelectScreen = ({ navigation, route }) => {
       )}
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('PaymentTokenScreen', { plan })}>
+        <TouchableOpacity style={styles.addButton} onPress={() => navigation.navigate('PaymentTokenization', { plan })}>
           <Text style={styles.addButtonText}>Thêm thẻ mới</Text>
         </TouchableOpacity>
       </View>
@@ -188,6 +210,8 @@ const styles = StyleSheet.create({
   summaryContainer: { padding: 16, backgroundColor: MD3_COLORS.surface, borderBottomWidth: 1, borderBottomColor: MD3_COLORS.outline },
   summaryText: { fontSize: 14, color: MD3_COLORS.textSecondary, marginBottom: 4 },
   summaryValue: { fontSize: 15, fontWeight: '700', color: MD3_COLORS.textPrimary },
+  summaryOriginalPrice: { fontSize: 15, fontWeight: '400', color: MD3_COLORS.textSecondary, textDecorationLine: 'line-through' },
+  summaryDiscount: { fontSize: 15, fontWeight: '700', color: '#C2410C' },
   loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
   loaderText: { fontSize: 14, color: MD3_COLORS.textSecondary, textAlign: 'center' },
   card: {
