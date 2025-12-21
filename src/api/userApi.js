@@ -290,3 +290,31 @@ export const getMembershipUpgradeQuote = async ({ packageId, billingCycle, isTem
     throw error;
   }
 };
+/**
+ * Get user activity logs
+ * @param {Object} params - Query parameters
+ * @param {Number} params.limit - Number of logs to return (default: 50)
+ * @param {Number} params.skip - Pagination offset (default: 0)
+ * @param {String} params.type - Filter by log type (optional)
+ * @returns {Promise<Object>} Response with logs array and total count
+ */
+export const getUserActivityLogs = async (params = {}) => {
+  const client = createAxiosInstance();
+  try {
+    const { limit = 50, skip = 0, type } = params;
+    const queryParams = new URLSearchParams({
+      limit: limit.toString(),
+      skip: skip.toString(),
+    });
+    
+    if (type) {
+      queryParams.append('type', type);
+    }
+    
+    const response = await client.get(`/api/user/activity-logs?${queryParams.toString()}`);
+    return response;
+  } catch (error) {
+    console.error('❌ getUserActivityLogs: Failed', error.response?.data || error.message);
+    throw error;
+  }
+};

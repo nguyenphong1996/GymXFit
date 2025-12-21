@@ -139,7 +139,7 @@ const FavoriteVideosScreen = ({ navigation }) => {
                 {isUpdating ? (
                   <ActivityIndicator size="small" color="#f0c419" />
                 ) : (
-                  <MaterialIcons name="star" size={22} color="#f0c419" />
+                  <MaterialIcons name="favorite" size={22} color="#f0c419" />
                 )}
               </TouchableOpacity>
             </View>
@@ -180,7 +180,7 @@ const FavoriteVideosScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <MaterialIcons name="star" size={22} color="#fff" />
+        <MaterialIcons name="favorite" size={22} color="#fff" />
         <Text style={styles.headerTitle}>Bài tập yêu thích</Text>
         <View style={{ width: 22 }} />
       </View>

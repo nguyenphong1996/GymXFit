@@ -795,16 +795,16 @@ const HomeScreen = ({ navigation }) => {
             <TouchableOpacity
               style={styles.headerActionIcon}
               onPress={handleSearchIconPress}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <MaterialIcons name="search" size={24} color="#145724" />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.headerActionIcon}
-              onPress={() => navigation.navigate('Favorites')}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              onPress={() => navigation.navigate('ActivityLogs')}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <MaterialIcons name="star-border" size={24} color="#145724" />
+              <MaterialIcons name="notifications-none" size={24} color="#145724" />
             </TouchableOpacity>
           </View>
         ) : null}
@@ -913,10 +913,10 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 8,
   },
   headerActionIcon: {
-    padding: 6,
+    padding: 8,
     borderRadius: 12,
     backgroundColor: '#e7f4eb',
   },

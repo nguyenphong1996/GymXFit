@@ -265,44 +265,6 @@ const ServiceInfoScreen = ({ navigation }) => {
             </View>
           ))}
         </View>
-
-        {/* Available Membership Plans */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={styles.iconTitle}>
-              <Icon name="credit-card" size={22} color={COLORS.primary} />
-              <Text style={styles.cardTitle}>Gói thành viên có sẵn</Text>
-            </View>
-          </View>
-          {membershipPlans.map((plan, idx) => (
-            <View key={plan.id} style={[styles.planCard, idx > 0 && { marginTop: 12 }]}>
-              <View style={styles.planHeader}>
-                <View style={styles.planBadge}>
-                  <Text style={styles.badgeText}>{plan.badge}</Text>
-                </View>
-                <Text style={styles.planPrice}>{plan.price}</Text>
-              </View>
-              <Text style={styles.planName}>{plan.name}</Text>
-              <Text style={styles.planCaption}>{plan.caption}</Text>
-              
-              <View style={styles.planFeatures}>
-                {plan.summary.map((feature, featureIdx) => (
-                  <View key={featureIdx} style={styles.featureRow}>
-                    <Icon name="check" size={14} color={COLORS.success} />
-                    <Text style={styles.featureText}>{feature}</Text>
-                  </View>
-                ))}
-              </View>
-              
-              <TouchableOpacity 
-                style={styles.selectPlanButton}
-                onPress={() => navigation.navigate('CardMembershipScreen', { selectedPlan: plan })}
-              >
-                <Text style={styles.selectPlanText}>Chọn gói này</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
       </ScrollView>
     </View>
   );

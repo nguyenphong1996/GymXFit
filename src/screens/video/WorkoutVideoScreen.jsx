@@ -43,8 +43,6 @@ const WorkoutVideoScreen = ({ navigation }) => {
   const [error, setError] = useState(null);
   const [isFavorite, setIsFavorite] = useState(initialFavorite);
   const [isSyncingFavorite, setIsSyncingFavorite] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
     const fetchVideoDetails = async () => {
@@ -205,29 +203,7 @@ const WorkoutVideoScreen = ({ navigation }) => {
           </TouchableOpacity>
 
           <Text style={styles.headerText}>{videoData.level || 'Bài tập'}</Text>
-
-          <View style={styles.headerRight}>
-            <TouchableOpacity activeOpacity={0.8} onPress={() => setShowSearch(prev => !prev)}>
-              <Icon name="search" size={26} color="#20B24A" style={styles.rightIcon} />
-            </TouchableOpacity>
-            <TouchableOpacity activeOpacity={0.8}>
-              <Icon name="notifications-none" size={26} color="#20B24A" style={styles.rightIcon} />
-            </TouchableOpacity>
-            <TouchableOpacity activeOpacity={0.8}>
-              <Icon name="person-outline" size={26} color="#20B24A" style={styles.rightIcon} />
-            </TouchableOpacity>
-          </View>
         </View>
-
-        {showSearch ? (
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Tìm kiếm trong mô tả bài tập..."
-            placeholderTextColor="#888"
-            value={searchText}
-            onChangeText={setSearchText}
-          />
-        ) : null}
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -251,9 +227,9 @@ const WorkoutVideoScreen = ({ navigation }) => {
             disabled={isSyncingFavorite}
           >
             {isSyncingFavorite ? (
-              <ActivityIndicator size="small" color="#FFD700" />
+              <ActivityIndicator size="small" color="#FF0000" />
             ) : (
-              <Icon name={isFavorite ? 'star' : 'star-border'} size={32} color={isFavorite ? '#FFD700' : '#20B24A'} />
+              <Icon name={isFavorite ? 'favorite' : 'favorite-border'} size={32} color={isFavorite ? '#FF0000' : '#20B24A'} />
             )}
           </TouchableOpacity>
         </View>
@@ -309,24 +285,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: '#111',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  rightIcon: {
-    marginLeft: 14,
-  },
-  searchInput: {
-    marginTop: 10,
-    backgroundColor: '#f1f1f1',
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    fontSize: 16,
-    color: '#000',
-    borderWidth: 1,
-    borderColor: '#ddd',
   },
   scrollContent: {
     paddingHorizontal: 18,

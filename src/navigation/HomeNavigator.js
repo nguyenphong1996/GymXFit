@@ -30,6 +30,7 @@ import PaymentMethodScreen from '@screens/membership/PaymentMethodScreen';
 import PaymentResultScreen from '@screens/payment/PaymentResultScreen';
 import WorkoutScreen from '@screens/workouts/WorkoutScreen';
 import WorkoutVideoScreen from '@screens/video/WorkoutVideoScreen';
+import ActivityLogsScreen from '@screens/profile/ActivityLogsScreen';
 import { UserContext } from '@context/UserContext';
 import { scanAttendance } from '@api/classesApi';
 import ServiceInfoScreen from '@screens/profile/ServiceInfoScreen';
@@ -265,7 +266,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                 onPress={() => navigation.navigate('Favorites')}
             >
                 <Icon
-                    name="star"
+                    name="favorite"
                     size={24}
                     color={state.routes[state.index].name === 'Favorites' ? '#fff' : '#ddd'}
                 />
@@ -313,6 +314,7 @@ const HomeStack = () => {
             <Stack.Screen name='WorkoutScreen' component={WorkoutScreen} />
             <Stack.Screen name='WorkoutVideo' component={WorkoutVideoScreen} />
             <Stack.Screen name='PaymentMethod' component={PaymentMethodScreen} />
+            <Stack.Screen name='ActivityLogs' component={ActivityLogsScreen} />
         </Stack.Navigator>
     );
 };
@@ -327,6 +329,7 @@ const ProfileStack = () => {
             <Stack.Screen name='MembershipFAQ' component={FAQScreen} />
             <Stack.Screen name='GymxfitPolicy' component={GymxfitPolicyScreen} />
             <Stack.Screen name='ServiceInfo' component={ServiceInfoScreen} />
+            <Stack.Screen name='ActivityLogs' component={ActivityLogsScreen} />
         </Stack.Navigator>
     );
 };
